@@ -14,7 +14,8 @@ export default function Login() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!email || !password) {
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail || !password) {
       setError('Please fill in both email and password.');
       return;
     }
@@ -23,12 +24,12 @@ export default function Login() {
     setError('');
 
     try {
-      await login(email, password);
+      await login(trimmedEmail, password);
       setLoading(false);
       navigate('/dashboard');
     } catch (err) {
       console.error('Login error:', err);
-      setError(err.response?.data?.message || 'Invalid credentials or server unavailable.');
+      setError(err.response?.data?.message || err.message || 'Invalid credentials or server unavailable.');
       setLoading(false);
     }
   };

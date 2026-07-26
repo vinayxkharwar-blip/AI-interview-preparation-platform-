@@ -16,8 +16,17 @@ export default function Register() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!name || !email || !password) {
+    const trimmedName = name.trim();
+    const trimmedEmail = email.trim();
+    const trimmedRole = targetRole.trim();
+
+    if (!trimmedName || !trimmedEmail || !password) {
       setError('Please fill in all required fields.');
+      return;
+    }
+
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters long.');
       return;
     }
 
@@ -25,7 +34,7 @@ export default function Register() {
     setError('');
 
     try {
-      await register(name, email, password, targetRole);
+      await register(trimmedName, trimmedEmail, password, trimmedRole || 'Full Stack Engineer');
       setLoading(false);
       navigate('/dashboard');
     } catch (err) {
