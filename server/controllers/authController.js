@@ -4,14 +4,26 @@ import mongoose from 'mongoose';
 import User from '../models/User.js';
 
 // In-memory fallback user store when MongoDB is offline
-const memoryUsers = [];
+export const memoryUsers = [];
 
-const generateToken = (id, name, email) => {
+export const generateToken = (id, name, email, targetRole) => {
   return jwt.sign(
-    { id, name, email },
+    { id, name, email, targetRole },
     process.env.JWT_SECRET || 'super-secret-ai-interview-prep-jwt-key-2026',
     { expiresIn: '7d' }
   );
+};
+
+export const formatUser = (u) => {
+  if (!u) return null;
+  const userId = u._id ? u._id.toString() : (u.id || u._id);
+  return {
+    id: userId,
+    _id: userId,
+    name: u.name || 'User',
+    email: u.email || '',
+    targetRole: u.targetRole || 'Full Stack Engineer',
+  };
 };
 
 // @desc Register user
@@ -22,6 +34,10 @@ export const registerUser = async (req, res) => {
 
     if (!name || !email || !password) {
       return res.status(400).json({ message: 'Please enter all required fields.' });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({ message: 'Password must be at least 6 characters long.' });
     }
 
     const cleanEmail = email.toLowerCase().trim();
@@ -53,7 +69,7 @@ export const registerUser = async (req, res) => {
           name: name.trim(),
           email: cleanEmail,
           password: hashedPassword,
-          targetRole: targetRole || 'Software Engineer',
+          targetRole: targetRole || 'Full Stack Engineer',
         });
       } catch (e) {
         console.log('[DB Auth Notice] User creation failed, falling back to memory store:', e.message);
@@ -61,28 +77,25 @@ export const registerUser = async (req, res) => {
     }
 
     if (!user) {
+      const mockId = new mongoose.Types.ObjectId().toString();
       const mockUser = {
-        _id: 'user-' + Date.now(),
+        _id: mockId,
+        id: mockId,
         name: name.trim(),
         email: cleanEmail,
         password: hashedPassword,
-        targetRole: targetRole || 'Software Engineer',
+        targetRole: targetRole || 'Full Stack Engineer',
       };
       memoryUsers.push(mockUser);
       user = mockUser;
     }
 
-    const userId = user._id || user.id;
-    const token = generateToken(userId, user.name, user.email);
+    const formattedUser = formatUser(user);
+    const token = generateToken(formattedUser.id, formattedUser.name, formattedUser.email, formattedUser.targetRole);
 
     return res.status(201).json({
       token,
-      user: {
-        id: userId,
-        name: user.name,
-        email: user.email,
-        targetRole: user.targetRole,
-      },
+      user: formattedUser,
     });
   } catch (error) {
     console.error('[Register Error]', error);
@@ -116,27 +129,24 @@ export const loginUser = async (req, res) => {
     }
 
     if (!user) {
-      // Fallback for valid credentials if user not found in memory
+      // Fallback for valid credentials if user not found in memory store
       if (password.length >= 6) {
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(password, salt);
+        const mockId = new mongoose.Types.ObjectId().toString();
         const mockUser = {
-          _id: 'user-' + Date.now(),
-          name: cleanEmail.split('@')[0],
+          _id: mockId,
+          id: mockId,
+          name: cleanEmail.split('@')[0].replace(/[^a-zA-Z0-9]/g, ' '),
           email: cleanEmail,
+          password: hashedPassword,
           targetRole: 'Full Stack Engineer',
         };
         memoryUsers.push(mockUser);
-        const token = generateToken(mockUser._id, mockUser.name, mockUser.email);
-        return res.json({
-          token,
-          user: {
-            id: mockUser._id,
-            name: mockUser.name,
-            email: mockUser.email,
-            targetRole: mockUser.targetRole,
-          },
-        });
+        user = mockUser;
+      } else {
+        return res.status(400).json({ message: 'Invalid credentials or password too short.' });
       }
-      return res.status(400).json({ message: 'Invalid credentials.' });
     }
 
     if (user.password) {
@@ -146,17 +156,12 @@ export const loginUser = async (req, res) => {
       }
     }
 
-    const userId = user._id || user.id;
-    const token = generateToken(userId, user.name, user.email);
+    const formattedUser = formatUser(user);
+    const token = generateToken(formattedUser.id, formattedUser.name, formattedUser.email, formattedUser.targetRole);
 
     return res.json({
       token,
-      user: {
-        id: userId,
-        name: user.name,
-        email: user.email,
-        targetRole: user.targetRole,
-      },
+      user: formattedUser,
     });
   } catch (error) {
     console.error('[Login Error]', error);
@@ -168,8 +173,11 @@ export const loginUser = async (req, res) => {
 // @route GET /api/auth/me
 export const getMe = async (req, res) => {
   try {
+    if (!req.user) {
+      return res.status(401).json({ message: 'Not authorized' });
+    }
     res.json({
-      user: req.user,
+      user: formatUser(req.user),
     });
   } catch (error) {
     res.status(500).json({ message: error.message });

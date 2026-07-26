@@ -13,10 +13,10 @@ import answerRoutes from './routes/answerRoutes.js';
 import feedbackRoutes from './routes/feedbackRoutes.js';
 import analyticsRoutes from './routes/analyticsRoutes.js';
 
-dotenv.config();
-
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+dotenv.config({ path: path.join(__dirname, '.env') });
 
 const app = express();
 
