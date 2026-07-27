@@ -27,17 +27,17 @@ export default function SessionDetail() {
 
   if (loading) {
     return (
-      <div className="min-h-[70vh] flex items-center justify-center text-slate-400">
-        <Loader2 className="w-8 h-8 animate-spin text-indigo-500 mb-2" />
+      <div className="min-h-[70vh] flex items-center justify-center text-[#0F1E1B] font-medium">
+        <Loader2 className="w-8 h-8 animate-spin text-[#C1440E] mb-2" />
       </div>
     );
   }
 
   if (!data || !data.session) {
     return (
-      <div className="max-w-4xl mx-auto py-12 px-4 text-center space-y-4">
-        <h2 className="text-xl font-bold text-white">Session Not Found</h2>
-        <Link to="/dashboard" className="text-indigo-400 font-semibold text-sm underline">
+      <div className="max-w-4xl mx-auto py-12 px-4 text-center space-y-4 font-sans-body">
+        <h2 className="font-serif-headline text-2xl font-bold text-[#0F1E1B]">Session Not Found</h2>
+        <Link to="/dashboard" className="text-[#C1440E] font-bold text-sm underline">
           Back to Dashboard
         </Link>
       </div>
@@ -51,7 +51,7 @@ export default function SessionDetail() {
       {/* Back Button */}
       <Link
         to="/dashboard"
-        className="inline-flex items-center space-x-2 text-xs font-bold text-slate-400 hover:text-white transition-colors"
+        className="inline-flex items-center space-x-2 text-xs font-bold text-[#0F1E1B] hover:text-[#C1440E] transition-colors"
       >
         <ArrowLeft className="w-4 h-4" />
         <span>Back to Dashboard</span>
@@ -64,8 +64,8 @@ export default function SessionDetail() {
       {improvementPlan && <ImprovementPlanCard plan={improvementPlan} />}
 
       {/* Detailed Q&A Breakdown */}
-      <div className="glass-panel p-6 sm:p-8 rounded-2xl border border-slate-800 space-y-6">
-        <h3 className="text-xl font-bold text-white">Questions & Evaluated Answers ({questions.length})</h3>
+      <div className="bg-[#FDFBF3] text-[#0F1E1B] p-6 sm:p-8 rounded-3xl border-3 border-[#0F1E1B] editorial-shadow-lg space-y-6">
+        <h3 className="font-serif-headline text-2xl font-bold text-[#0F1E1B]">Evaluated Questions & Responses ({questions.length})</h3>
 
         <div className="space-y-8">
           {questions.map((q, idx) => {
@@ -73,27 +73,27 @@ export default function SessionDetail() {
             const fb = feedback.find((f) => String(f.answer) === String(ans?._id));
 
             return (
-              <div key={q._id} className="p-6 bg-slate-900/90 rounded-2xl border border-slate-800 space-y-4">
+              <div key={q._id} className="p-6 bg-[#F5F2E6] rounded-2xl border-2 border-[#0F1E1B] space-y-4 shadow-xs">
                 <div className="flex items-start justify-between gap-4">
                   <div>
-                    <span className="text-xs font-bold text-indigo-400 uppercase tracking-wider">
+                    <span className="text-xs font-bold text-[#C1440E] uppercase tracking-wider">
                       Question {idx + 1} • {q.category}
                     </span>
-                    <h4 className="text-base font-bold text-white mt-1">{q.questionText}</h4>
+                    <h4 className="font-serif-headline text-lg font-bold text-[#0F1E1B] mt-1">"{q.questionText}"</h4>
                   </div>
                   {fb && (
-                    <span className="px-3 py-1 bg-indigo-600/20 border border-indigo-500/30 text-indigo-300 font-mono font-bold text-sm rounded-lg shrink-0">
-                      {fb.score} / 10
+                    <span className="px-3 py-1 bg-[#F5D90A] border-2 border-[#0F1E1B] text-[#0F1E1B] font-bold text-sm rounded-xl shrink-0 shadow-xs">
+                      {fb.score > 10 ? fb.score : fb.score * 10} / 100
                     </span>
                   )}
                 </div>
 
                 {ans && (
-                  <div className="p-4 bg-slate-950/80 rounded-xl border border-slate-800/80">
-                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                      Candidate Response Transcript ({ans.answerType}):
+                  <div className="p-4 bg-[#FDFBF3] rounded-xl border border-[#0F1E1B]">
+                    <span className="text-[11px] font-bold text-[#0F1E1B]/70 uppercase tracking-wider block mb-1">
+                      Candidate Transcript ({ans.answerType}):
                     </span>
-                    <p className="text-xs text-slate-200 leading-relaxed">{ans.transcript}</p>
+                    <p className="text-xs text-[#0F1E1B] leading-relaxed font-medium">{ans.transcript}</p>
                   </div>
                 )}
 

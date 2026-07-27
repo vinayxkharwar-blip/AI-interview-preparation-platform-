@@ -8,7 +8,8 @@ import {
   PlayCircle, 
   LogOut, 
   User, 
-  LayoutDashboard 
+  LayoutDashboard,
+  Home
 } from 'lucide-react';
 
 export default function Navbar() {
@@ -24,73 +25,70 @@ export default function Navbar() {
   const isActive = (path) => location.pathname === path;
 
   return (
-    <nav className="sticky top-0 z-50 glass-panel border-b border-slate-800/80 bg-slate-950/80">
+    <nav className="sticky top-0 z-50 bg-[#FDFBF3]/95 backdrop-blur-md border-b-2 border-[#0F1E1B] text-[#0F1E1B] shadow-sm">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           
           {/* Logo */}
-          <Link to={user ? "/dashboard" : "/login"} className="flex items-center space-x-3 group">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 via-purple-600 to-pink-500 flex items-center justify-center shadow-lg shadow-indigo-500/20 group-hover:scale-105 transition-transform duration-200">
-              <Sparkles className="w-5 h-5 text-white" />
+          <Link to={user ? "/dashboard" : "/"} className="flex items-center space-x-3 group">
+            <div className="w-9 h-9 rounded-xl bg-[#0F1E1B] text-[#FDFBF3] flex items-center justify-center font-bold text-lg group-hover:scale-105 transition-transform shadow-md">
+              <Sparkles className="w-4 h-4 text-[#F5D90A]" />
             </div>
             <div>
-              <span className="font-bold text-lg text-white tracking-tight group-hover:text-indigo-400 transition-colors">
-                AI Interview Prep
-              </span>
-              <span className="block text-[10px] uppercase tracking-widest text-indigo-400 font-semibold">
-                MERN + OpenAI
+              <span className="font-serif-headline text-2xl font-black tracking-tight text-[#0F1E1B]">
+                PrepPulse<span className="text-[#C1440E]">.ai</span>
               </span>
             </div>
           </Link>
 
           {/* Navigation Links */}
           {user && (
-            <div className="hidden md:flex items-center space-x-1">
+            <div className="hidden md:flex items-center space-x-2">
               <Link
                 to="/dashboard"
-                className={`px-3 py-2 rounded-lg text-sm font-medium transition-all flex items-center space-x-2 ${
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 border-2 ${
                   isActive('/dashboard')
-                    ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/30'
-                    : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
+                    ? 'bg-[#0F1E1B] text-[#FDFBF3] border-[#0F1E1B] editorial-shadow-sm'
+                    : 'border-transparent text-[#0F1E1B]/80 hover:border-[#0F1E1B]/30 hover:bg-[#F5F2E6]'
                 }`}
               >
-                <LayoutDashboard className="w-4 h-4" />
+                <LayoutDashboard className="w-3.5 h-3.5" />
                 <span>Dashboard</span>
               </Link>
 
               <Link
                 to="/new-session"
-                className={`px-3 py-2 rounded-lg text-sm font-medium transition-all flex items-center space-x-2 ${
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 border-2 ${
                   isActive('/new-session')
-                    ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/30'
-                    : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
+                    ? 'bg-[#0F1E1B] text-[#FDFBF3] border-[#0F1E1B] editorial-shadow-sm'
+                    : 'border-transparent text-[#0F1E1B]/80 hover:border-[#0F1E1B]/30 hover:bg-[#F5F2E6]'
                 }`}
               >
-                <PlayCircle className="w-4 h-4" />
+                <PlayCircle className="w-3.5 h-3.5 text-[#F5D90A]" />
                 <span>Start Practice</span>
               </Link>
 
               <Link
                 to="/resumes"
-                className={`px-3 py-2 rounded-lg text-sm font-medium transition-all flex items-center space-x-2 ${
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 border-2 ${
                   isActive('/resumes')
-                    ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/30'
-                    : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
+                    ? 'bg-[#0F1E1B] text-[#FDFBF3] border-[#0F1E1B] editorial-shadow-sm'
+                    : 'border-transparent text-[#0F1E1B]/80 hover:border-[#0F1E1B]/30 hover:bg-[#F5F2E6]'
                 }`}
               >
-                <FileText className="w-4 h-4" />
-                <span>Resumes</span>
+                <FileText className="w-3.5 h-3.5" />
+                <span>My Resumes</span>
               </Link>
 
               <Link
                 to="/analytics"
-                className={`px-3 py-2 rounded-lg text-sm font-medium transition-all flex items-center space-x-2 ${
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 border-2 ${
                   isActive('/analytics')
-                    ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/30'
-                    : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
+                    ? 'bg-[#0F1E1B] text-[#FDFBF3] border-[#0F1E1B] editorial-shadow-sm'
+                    : 'border-transparent text-[#0F1E1B]/80 hover:border-[#0F1E1B]/30 hover:bg-[#F5F2E6]'
                 }`}
               >
-                <BarChart3 className="w-4 h-4" />
+                <BarChart3 className="w-3.5 h-3.5" />
                 <span>Analytics</span>
               </Link>
             </div>
@@ -98,32 +96,43 @@ export default function Navbar() {
 
           {/* User Profile & Actions */}
           {user ? (
-            <div className="flex items-center space-x-4">
-              <div className="hidden sm:flex items-center space-x-2 px-3 py-1.5 rounded-full bg-slate-900 border border-slate-800 text-xs">
-                <User className="w-3.5 h-3.5 text-indigo-400" />
-                <span className="text-slate-300 font-medium">{user.name}</span>
+            <div className="flex items-center space-x-3">
+              <Link
+                to="/"
+                className="hidden lg:flex items-center space-x-1 text-xs font-bold text-[#0F1E1B]/70 hover:text-[#0F1E1B] px-2.5 py-1 rounded-lg hover:bg-[#F5F2E6]"
+                title="View Public Landing Page"
+              >
+                <Home className="w-3.5 h-3.5" />
+                <span>Landing Page</span>
+              </Link>
+              <div className="hidden sm:flex items-center space-x-2 px-3 py-1.5 rounded-xl bg-[#F5F2E6] border-2 border-[#0F1E1B] text-xs font-bold shadow-xs">
+                <User className="w-3.5 h-3.5 text-[#C1440E]" />
+                <span className="text-[#0F1E1B]">{user.name}</span>
+                <span className="bg-[#F5D90A] text-[#0F1E1B] px-1.5 py-0.2 rounded text-[10px] uppercase font-black">
+                  {user.targetRole ? user.targetRole.split(' ')[0] : 'Pro'}
+                </span>
               </div>
               <button
                 onClick={handleLogout}
-                className="p-2 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors"
+                className="p-2 text-[#0F1E1B]/70 hover:text-[#C1440E] hover:bg-[#F5F2E6] rounded-xl border-2 border-transparent hover:border-[#0F1E1B]/20 transition-all"
                 title="Logout"
               >
-                <LogOut className="w-5 h-5" />
+                <LogOut className="w-4 h-4" />
               </button>
             </div>
           ) : (
             <div className="flex items-center space-x-3">
               <Link
                 to="/login"
-                className="px-4 py-2 text-sm font-medium text-slate-300 hover:text-white transition-colors"
+                className="px-4 py-1.5 text-xs font-bold text-[#0F1E1B] border-2 border-[#0F1E1B] rounded-xl hover:bg-[#0F1E1B] hover:text-[#FDFBF3] transition-all"
               >
                 Log In
               </Link>
               <Link
                 to="/register"
-                className="px-4 py-2 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg shadow-md shadow-indigo-600/20 transition-all hover:scale-[1.02]"
+                className="px-4 py-1.5 text-xs font-bold text-[#FDFBF3] bg-[#0F1E1B] hover:bg-[#1A332E] rounded-xl editorial-shadow-sm transition-all"
               >
-                Sign Up
+                Try Free
               </Link>
             </div>
           )}

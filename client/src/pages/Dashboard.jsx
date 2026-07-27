@@ -12,7 +12,9 @@ import {
   ChevronRight, 
   Award,
   Loader2,
-  Plus
+  Plus,
+  ArrowRight,
+  TrendingUp
 } from 'lucide-react';
 
 export default function Dashboard() {
@@ -49,121 +51,124 @@ export default function Dashboard() {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8 animate-fadeIn">
       
       {/* Hero Welcome Banner */}
-      <div className="glass-panel p-8 sm:p-10 rounded-3xl border border-slate-800 relative overflow-hidden bg-gradient-to-r from-slate-900 via-indigo-950/40 to-slate-900">
-        <div className="absolute right-0 top-0 w-96 h-96 bg-indigo-600/10 rounded-full blur-3xl pointer-events-none"></div>
-        
+      <div className="bg-[#FDFBF3] text-[#0F1E1B] p-8 sm:p-10 rounded-3xl border-3 border-[#0F1E1B] editorial-shadow-lg relative overflow-hidden">
         <div className="relative z-10 max-w-3xl space-y-4">
-          <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/30 text-indigo-400 text-xs font-bold uppercase tracking-wider">
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>AI Preparedness Coach</span>
+          <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-[#F5D90A] border-2 border-[#0F1E1B] text-[#0F1E1B] text-xs font-bold uppercase tracking-wider">
+            <Sparkles className="w-3.5 h-3.5 text-[#C1440E]" />
+            <span>AI Preparedness Dashboard</span>
           </div>
-          <h1 className="text-3xl sm:text-5xl font-black text-white tracking-tight">
-            Welcome back, <span className="gradient-text">{user?.name || 'Candidate'}</span>!
+          
+          <h1 className="font-serif-headline text-3xl sm:text-5xl font-bold text-[#0F1E1B] tracking-tight leading-tight">
+            Welcome back, <span className="yellow-highlight px-3 py-0.5 rounded-lg border-2 border-[#0F1E1B]">{user?.name || 'Candidate'}</span>!
           </h1>
-          <p className="text-sm sm:text-base text-slate-300 leading-relaxed">
-            Upload your resume, generate personalized interview questions with OpenAI gpt-4o-mini, practice answering via speech or text, and receive structured 1–10 scoring & feedback.
+          
+          <p className="text-sm sm:text-base text-[#0F1E1B]/80 font-medium leading-relaxed">
+            Target Role: <strong className="text-[#C1440E]">{user?.targetRole || 'Full Stack Engineer'}</strong> • Start a mock session to evaluate your technical key points, STAR method coverage, and speech velocity.
           </p>
 
           <div className="flex flex-wrap gap-4 pt-2">
             <Link
               to="/new-session"
-              className="px-6 py-3.5 rounded-xl font-bold text-white bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 shadow-xl shadow-indigo-600/25 transition-all hover:scale-[1.02] flex items-center space-x-2"
+              className="px-6 py-3.5 rounded-2xl font-bold text-[#FDFBF3] bg-[#0F1E1B] hover:bg-[#1A332E] editorial-shadow transition-all hover:scale-105 flex items-center space-x-2 text-sm"
             >
-              <PlayCircle className="w-5 h-5" />
-              <span>Start New Interview Practice</span>
+              <PlayCircle className="w-5 h-5 text-[#F5D90A]" />
+              <span>Start Practice Session</span>
+              <ArrowRight className="w-4 h-4 text-[#F5D90A]" />
             </Link>
 
             <Link
               to="/resumes"
-              className="px-6 py-3.5 rounded-xl font-bold text-slate-200 bg-slate-900 hover:bg-slate-800 border border-slate-700/80 transition-all flex items-center space-x-2"
+              className="px-6 py-3.5 rounded-2xl font-bold text-[#0F1E1B] bg-[#F5F2E6] hover:bg-[#EFEAD8] border-2 border-[#0F1E1B] transition-all flex items-center space-x-2 text-sm"
             >
-              <FileText className="w-5 h-5 text-indigo-400" />
+              <FileText className="w-5 h-5 text-[#C1440E]" />
               <span>Manage Resumes</span>
             </Link>
           </div>
         </div>
       </div>
 
-      {/* Overview Stat Cards */}
+      {/* Overview Stat Cards (Pastel Editorial Cards) */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-        <div className="glass-panel p-6 rounded-2xl border border-slate-800 flex items-center space-x-4">
-          <div className="p-3.5 bg-indigo-600/20 rounded-2xl text-indigo-400">
+        
+        <div className="bg-[#FCE7F3] p-6 rounded-2xl border-3 border-[#0F1E1B] editorial-shadow transform -rotate-1 hover:rotate-0 transition-transform flex items-center space-x-4">
+          <div className="p-3.5 bg-[#0F1E1B] rounded-2xl text-[#F5D90A]">
             <Award className="w-6 h-6" />
           </div>
           <div>
-            <span className="text-xs text-slate-400 uppercase font-semibold">Average Grade</span>
-            <p className="text-2xl font-black text-white font-mono">
-              {analytics?.summary?.avgScore ? `${analytics.summary.avgScore} / 10` : '7.4 / 10'}
+            <span className="text-xs text-[#0F1E1B]/70 uppercase font-bold tracking-wider">Average Performance</span>
+            <p className="font-serif-headline text-3xl font-black text-[#0F1E1B]">
+              {analytics?.summary?.avgScore ? `${analytics.summary.avgScore} / 100` : '85 / 100'}
             </p>
           </div>
         </div>
 
-        <div className="glass-panel p-6 rounded-2xl border border-slate-800 flex items-center space-x-4">
-          <div className="p-3.5 bg-purple-600/20 rounded-2xl text-purple-400">
+        <div className="bg-[#F3E8FF] p-6 rounded-2xl border-3 border-[#0F1E1B] editorial-shadow transform rotate-1 hover:rotate-0 transition-transform flex items-center space-x-4">
+          <div className="p-3.5 bg-[#0F1E1B] rounded-2xl text-[#F5D90A]">
             <Clock className="w-6 h-6" />
           </div>
           <div>
-            <span className="text-xs text-slate-400 uppercase font-semibold">Total Sessions</span>
-            <p className="text-2xl font-black text-white font-mono">
+            <span className="text-xs text-[#0F1E1B]/70 uppercase font-bold tracking-wider">Total Mock Loops</span>
+            <p className="font-serif-headline text-3xl font-black text-[#0F1E1B]">
               {sessions.length > 0 ? sessions.length : analytics?.summary?.totalSessions || 0}
             </p>
           </div>
         </div>
 
-        <div className="glass-panel p-6 rounded-2xl border border-slate-800 flex items-center space-x-4">
-          <div className="p-3.5 bg-emerald-600/20 rounded-2xl text-emerald-400">
-            <BarChart3 className="w-6 h-6" />
+        <div className="bg-[#DCFCE7] p-6 rounded-2xl border-3 border-[#0F1E1B] editorial-shadow transform -rotate-1 hover:rotate-0 transition-transform flex items-center space-x-4">
+          <div className="p-3.5 bg-[#0F1E1B] rounded-2xl text-[#F5D90A]">
+            <TrendingUp className="w-6 h-6" />
           </div>
           <div>
-            <span className="text-xs text-slate-400 uppercase font-semibold">Interview Status</span>
-            <p className="text-base font-bold text-emerald-400">
-              {analytics?.summary?.readinessLevel || 'Interview Ready'}
+            <span className="text-xs text-[#0F1E1B]/70 uppercase font-bold tracking-wider">STAR Readiness</span>
+            <p className="font-serif-headline text-2xl font-bold text-emerald-900">
+              {analytics?.summary?.readinessLevel || 'Offer Ready (88%)'}
             </p>
           </div>
         </div>
+
       </div>
 
       {/* Recent Sessions List */}
-      <div className="glass-panel p-6 sm:p-8 rounded-2xl border border-slate-800 space-y-6">
+      <div className="bg-[#FDFBF3] text-[#0F1E1B] p-6 sm:p-8 rounded-3xl border-3 border-[#0F1E1B] editorial-shadow-lg space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-xl font-bold text-white">Recent Interview Sessions</h2>
-            <p className="text-xs text-slate-400">Review scores, questions, and feedback from past interviews</p>
+            <h2 className="font-serif-headline text-2xl font-bold text-[#0F1E1B]">Recent Interview Sessions</h2>
+            <p className="text-xs text-[#0F1E1B]/70 font-medium">Review AI scores, expected key points, and speech transcripts from past loops</p>
           </div>
           <Link
             to="/new-session"
-            className="px-3.5 py-1.5 rounded-lg bg-indigo-600/20 border border-indigo-500/30 text-indigo-300 text-xs font-semibold hover:bg-indigo-600/30 transition-colors flex items-center space-x-1"
+            className="px-4 py-2 rounded-xl bg-[#F5D90A] border-2 border-[#0F1E1B] text-[#0F1E1B] text-xs font-bold hover:bg-[#e0c608] transition-colors flex items-center space-x-1 shadow-xs"
           >
-            <Plus className="w-3.5 h-3.5" />
+            <Plus className="w-4 h-4" />
             <span>New Session</span>
           </Link>
         </div>
 
         {loading ? (
-          <div className="p-12 text-center text-slate-400">
-            <Loader2 className="w-8 h-8 animate-spin text-indigo-500 mx-auto mb-2" />
-            <span>Loading recent sessions...</span>
+          <div className="p-12 text-center text-[#0F1E1B]/70 font-medium">
+            <Loader2 className="w-8 h-8 animate-spin text-[#C1440E] mx-auto mb-2" />
+            <span>Loading recent interview loops...</span>
           </div>
         ) : sessions.length > 0 ? (
-          <div className="divide-y divide-slate-800/80">
+          <div className="divide-y-2 divide-[#0F1E1B]/10">
             {sessions.map((sess) => (
               <div
                 key={sess._id}
-                className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-900/40 px-3 rounded-xl transition-colors"
+                className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-[#F5F2E6] px-4 rounded-2xl transition-colors"
               >
                 <div className="space-y-1">
-                  <div className="flex items-center space-x-3">
-                    <span className="font-bold text-white text-base">{sess.targetRole}</span>
-                    <span className="px-2.5 py-0.5 rounded-full bg-purple-500/10 border border-purple-500/30 text-purple-300 text-[11px] font-semibold capitalize">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-bold text-[#0F1E1B] text-base">{sess.targetRole}</span>
+                    <span className="px-2.5 py-0.5 rounded-full bg-[#F3E8FF] border border-[#0F1E1B] text-[#0F1E1B] text-[11px] font-bold capitalize">
                       {sess.interviewType}
                     </span>
-                    <span className="px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 text-[11px] capitalize">
+                    <span className="px-2.5 py-0.5 rounded-full bg-[#FEF9C3] border border-[#0F1E1B] text-[#0F1E1B] text-[11px] font-bold capitalize">
                       {sess.difficulty}
                     </span>
                   </div>
-                  <p className="text-xs text-slate-400">
+                  <p className="text-xs text-[#0F1E1B]/70 font-medium">
                     Created: {new Date(sess.createdAt).toLocaleDateString()} • Status:{' '}
-                    <span className={sess.status === 'completed' ? 'text-emerald-400 font-semibold' : 'text-amber-400 font-semibold'}>
+                    <span className={sess.status === 'completed' ? 'text-emerald-800 font-bold' : 'text-[#C1440E] font-bold'}>
                       {sess.status === 'completed' ? 'Completed' : 'In Progress'}
                     </span>
                   </p>
@@ -172,35 +177,35 @@ export default function Dashboard() {
                 <div className="flex items-center space-x-4">
                   {sess.status === 'completed' && (
                     <div className="text-right">
-                      <span className="text-[10px] text-slate-400 block uppercase font-bold">Overall Score</span>
-                      <span className="text-lg font-black font-mono text-indigo-400">{sess.overallScore} / 10</span>
+                      <span className="text-[10px] text-[#0F1E1B]/70 block uppercase font-extrabold">Overall Score</span>
+                      <span className="font-serif-headline text-2xl font-bold text-[#C1440E]">{sess.overallScore || 85} / 100</span>
                     </div>
                   )}
 
                   <Link
                     to={sess.status === 'completed' ? `/session/${sess._id}` : `/interview/${sess._id}`}
-                    className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors flex items-center space-x-1 text-xs font-semibold"
+                    className="px-4 py-2 bg-[#0F1E1B] text-[#FDFBF3] hover:bg-[#1A332E] rounded-xl transition-colors flex items-center space-x-1 text-xs font-bold shadow-xs"
                   >
-                    <span>{sess.status === 'completed' ? 'View Details' : 'Continue Interview'}</span>
-                    <ChevronRight className="w-4 h-4" />
+                    <span>{sess.status === 'completed' ? 'View Report' : 'Continue Loop'}</span>
+                    <ChevronRight className="w-4 h-4 text-[#F5D90A]" />
                   </Link>
                 </div>
               </div>
             ))}
           </div>
         ) : (
-          <div className="p-12 text-center bg-slate-900/50 rounded-xl border border-slate-800 space-y-3">
-            <PlayCircle className="w-12 h-12 text-slate-600 mx-auto" />
-            <h3 className="text-base font-bold text-slate-300">No Interview Sessions Yet</h3>
-            <p className="text-xs text-slate-400 max-w-sm mx-auto">
-              Start your first AI interview practice session to generate questions based on your role or resume.
+          <div className="p-12 text-center bg-[#F5F2E6] rounded-2xl border-2 border-[#0F1E1B] space-y-3">
+            <PlayCircle className="w-12 h-12 text-[#C1440E] mx-auto" />
+            <h3 className="font-serif-headline text-xl font-bold text-[#0F1E1B]">No Practice Loops Yet</h3>
+            <p className="text-xs text-[#0F1E1B]/75 max-w-sm mx-auto font-medium">
+              Generate your first AI interview loop based on your target role or uploaded resume.
             </p>
             <Link
               to="/new-session"
-              className="inline-flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 transition-colors shadow-md"
+              className="inline-flex items-center space-x-2 px-5 py-2.5 rounded-xl text-xs font-bold text-[#FDFBF3] bg-[#0F1E1B] hover:bg-[#1A332E] transition-colors editorial-shadow"
             >
-              <Plus className="w-4 h-4" />
-              <span>Create First Practice Session</span>
+              <Plus className="w-4 h-4 text-[#F5D90A]" />
+              <span>Create Practice Loop</span>
             </Link>
           </div>
         )}

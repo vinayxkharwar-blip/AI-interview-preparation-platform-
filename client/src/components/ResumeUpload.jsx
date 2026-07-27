@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import axiosClient from '../api/axiosClient';
-import { UploadCloud, FileText, CheckCircle2, AlertCircle, Loader2, Sparkles, Briefcase, Cpu } from 'lucide-react';
+import { UploadCloud, FileText, CheckCircle2, AlertCircle, Loader2, Sparkles, Briefcase, Cpu, ArrowRight } from 'lucide-react';
 
 export default function ResumeUpload({ onUploadSuccess }) {
   const [file, setFile] = useState(null);
@@ -54,26 +54,28 @@ export default function ResumeUpload({ onUploadSuccess }) {
   };
 
   return (
-    <div className="glass-panel p-6 sm:p-8 rounded-2xl border border-slate-800 shadow-2xl">
-      <div className="flex items-center space-x-3 mb-6">
-        <div className="p-3 bg-indigo-600/20 border border-indigo-500/30 rounded-xl text-indigo-400">
+    <div className="bg-[#FDFBF3] text-[#0F1E1B] p-6 sm:p-8 rounded-3xl border-3 border-[#0F1E1B] editorial-shadow-lg space-y-6">
+      <div className="flex items-center space-x-3 mb-2">
+        <div className="p-3 bg-[#0F1E1B] text-[#F5D90A] rounded-2xl shadow-md">
           <UploadCloud className="w-6 h-6" />
         </div>
         <div>
-          <h2 className="text-xl font-bold text-white">Upload Your Resume</h2>
-          <p className="text-sm text-slate-400">PDF or DOCX supported. Our AI will extract skills & project details.</p>
+          <h2 className="font-serif-headline text-2xl font-bold text-[#0F1E1B]">Upload Your Resume</h2>
+          <p className="text-xs sm:text-sm text-[#0F1E1B]/75 font-medium">
+            PDF or DOCX supported. Our AI will automatically extract skills & project details.
+          </p>
         </div>
       </div>
 
       {error && (
-        <div className="mb-6 p-4 bg-rose-500/10 border border-rose-500/30 rounded-xl flex items-center space-x-3 text-rose-300 text-sm">
-          <AlertCircle className="w-5 h-5 shrink-0" />
+        <div className="p-4 bg-rose-50 border-2 border-rose-600 rounded-2xl flex items-center space-x-3 text-rose-800 text-xs font-bold">
+          <AlertCircle className="w-4 h-4 shrink-0" />
           <span>{error}</span>
         </div>
       )}
 
       <form onSubmit={handleUpload} className="space-y-4">
-        <div className="relative border-2 border-dashed border-slate-700 hover:border-indigo-500/60 transition-colors rounded-xl p-8 text-center bg-slate-900/50 cursor-pointer group">
+        <div className="relative border-3 border-dashed border-[#0F1E1B]/30 hover:border-[#0F1E1B] transition-colors rounded-2xl p-8 text-center bg-[#F5F2E6] cursor-pointer group">
           <input
             type="file"
             accept=".pdf,.docx,.doc"
@@ -82,12 +84,14 @@ export default function ResumeUpload({ onUploadSuccess }) {
           />
           
           <div className="flex flex-col items-center justify-center space-y-3">
-            <FileText className="w-12 h-12 text-slate-500 group-hover:text-indigo-400 group-hover:scale-110 transition-all" />
+            <div className="w-14 h-14 rounded-2xl bg-[#0F1E1B] text-[#F5D90A] flex items-center justify-center shadow-md group-hover:scale-110 transition-transform">
+              <FileText className="w-7 h-7" />
+            </div>
             <div>
-              <p className="text-sm font-semibold text-slate-200">
-                {file ? file.name : 'Click or drag resume here to upload'}
+              <p className="text-sm font-bold text-[#0F1E1B]">
+                {file ? file.name : 'Click or drag resume file here to upload'}
               </p>
-              <p className="text-xs text-slate-400 mt-1">Maximum file size: 15MB</p>
+              <p className="text-xs text-[#0F1E1B]/60 font-medium mt-1">Maximum file size: 15MB (PDF or DOCX)</p>
             </div>
           </div>
         </div>
@@ -95,17 +99,18 @@ export default function ResumeUpload({ onUploadSuccess }) {
         <button
           type="submit"
           disabled={!file || uploading}
-          className="w-full py-3.5 px-4 rounded-xl text-sm font-bold text-white bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-indigo-600/20 flex items-center justify-center space-x-2"
+          className="w-full py-3.5 px-4 rounded-2xl text-sm font-bold text-[#FDFBF3] bg-[#0F1E1B] hover:bg-[#1A332E] disabled:opacity-50 disabled:cursor-not-allowed transition-all editorial-shadow flex items-center justify-center space-x-2"
         >
           {uploading ? (
             <>
-              <Loader2 className="w-5 h-5 animate-spin" />
-              <span>Analyzing Document with OpenAI...</span>
+              <Loader2 className="w-5 h-5 animate-spin text-[#F5D90A]" />
+              <span>Analyzing Document & Extracting Skills...</span>
             </>
           ) : (
             <>
-              <Sparkles className="w-5 h-5" />
+              <Sparkles className="w-5 h-5 text-[#F5D90A]" />
               <span>Process Resume & Extract Skills</span>
+              <ArrowRight className="w-4 h-4 text-[#F5D90A]" />
             </>
           )}
         </button>
@@ -113,41 +118,41 @@ export default function ResumeUpload({ onUploadSuccess }) {
 
       {/* Extracted Structured JSON Preview */}
       {parsedResume && (
-        <div className="mt-8 pt-6 border-t border-slate-800 animate-fadeIn">
-          <div className="flex items-center space-x-2 text-emerald-400 text-sm font-bold mb-4">
-            <CheckCircle2 className="w-5 h-5" />
+        <div className="mt-8 pt-6 border-t-2 border-[#0F1E1B]/15 animate-fadeIn space-y-4">
+          <div className="flex items-center space-x-2 text-emerald-800 text-sm font-bold">
+            <CheckCircle2 className="w-5 h-5 text-emerald-700" />
             <span>Resume Successfully Parsed!</span>
           </div>
 
           <div className="space-y-4">
             {/* Target Role & Summary */}
-            <div className="bg-slate-900/80 p-4 rounded-xl border border-slate-800">
-              <div className="flex items-center space-x-2 text-xs font-semibold text-indigo-400 uppercase tracking-wider mb-1">
+            <div className="bg-[#F3E8FF] p-5 rounded-2xl border-2 border-[#0F1E1B]">
+              <div className="flex items-center space-x-2 text-xs font-bold text-[#C1440E] uppercase tracking-wider mb-1">
                 <Briefcase className="w-4 h-4" />
                 <span>Detected Target Role</span>
               </div>
-              <p className="text-base font-bold text-white">
+              <p className="font-serif-headline text-xl font-bold text-[#0F1E1B]">
                 {parsedResume.parsedData?.targetRole || 'Software Engineer'}
               </p>
               {parsedResume.parsedData?.summary && (
-                <p className="text-xs text-slate-300 mt-2 leading-relaxed">
+                <p className="text-xs text-[#0F1E1B]/85 mt-2 leading-relaxed font-medium">
                   {parsedResume.parsedData.summary}
                 </p>
               )}
             </div>
 
             {/* Extracted Skills Badges */}
-            {parsedResume.parsedData?.skills && (
-              <div className="bg-slate-900/80 p-4 rounded-xl border border-slate-800">
-                <div className="flex items-center space-x-2 text-xs font-semibold text-indigo-400 uppercase tracking-wider mb-3">
-                  <Cpu className="w-4 h-4" />
+            {parsedResume.parsedData?.skills && parsedResume.parsedData.skills.length > 0 && (
+              <div className="bg-[#DCFCE7] p-5 rounded-2xl border-2 border-[#0F1E1B]">
+                <div className="flex items-center space-x-2 text-xs font-bold text-[#0F1E1B] uppercase tracking-wider mb-3">
+                  <Cpu className="w-4 h-4 text-[#C1440E]" />
                   <span>Extracted Skills ({parsedResume.parsedData.skills.length})</span>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {parsedResume.parsedData.skills.map((skill, idx) => (
                     <span
                       key={idx}
-                      className="px-3 py-1 bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 rounded-lg text-xs font-medium"
+                      className="px-3 py-1 bg-[#FDFBF3] border-2 border-[#0F1E1B] text-[#0F1E1B] rounded-xl text-xs font-bold shadow-xs"
                     >
                       {skill}
                     </span>

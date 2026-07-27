@@ -34,7 +34,6 @@ export default function InterviewSession() {
         setSession(sessDoc);
         setQuestions(qList || []);
 
-        // Map past submitted answers & feedback by question ID
         const aMap = {};
         const fMap = {};
         if (aList) {
@@ -109,7 +108,6 @@ export default function InterviewSession() {
     if (currentIndex < questions.length - 1) {
       setCurrentIndex((prev) => prev + 1);
     } else {
-      // Last question answered! Complete session & synthesize AI Improvement Plan
       setIsCompleting(true);
       setError('');
       try {
@@ -130,9 +128,9 @@ export default function InterviewSession() {
 
   if (loading) {
     return (
-      <div className="min-h-[70vh] flex flex-col items-center justify-center text-slate-400">
-        <Loader2 className="w-10 h-10 animate-spin text-indigo-500 mb-3" />
-        <p className="text-sm font-medium">Preparing interview session environment...</p>
+      <div className="min-h-[70vh] flex flex-col items-center justify-center text-[#0F1E1B] font-medium">
+        <Loader2 className="w-10 h-10 animate-spin text-[#C1440E] mb-3" />
+        <p className="text-sm font-bold">Preparing live interview environment...</p>
       </div>
     );
   }
@@ -155,34 +153,34 @@ export default function InterviewSession() {
     <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8 space-y-8 animate-fadeIn">
       
       {/* Progress Top Bar */}
-      <div className="flex items-center justify-between bg-slate-900/80 p-4 rounded-2xl border border-slate-800">
+      <div className="flex flex-col sm:flex-row items-center justify-between bg-[#FDFBF3] text-[#0F1E1B] p-4 sm:p-5 rounded-3xl border-3 border-[#0F1E1B] editorial-shadow-sm gap-4">
         <div className="flex items-center space-x-3">
-          <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-            Target Role: <span className="text-indigo-400 font-semibold">{session?.targetRole}</span>
+          <span className="text-xs font-bold uppercase tracking-wider text-[#0F1E1B]/70">
+            Target Role: <strong className="text-[#C1440E]">{session?.targetRole}</strong>
           </span>
-          <span className="text-slate-700">•</span>
-          <span className="text-xs font-medium text-slate-400 capitalize">
-            Type: <span className="text-purple-400 font-semibold">{session?.interviewType}</span>
+          <span className="text-[#0F1E1B]/30">•</span>
+          <span className="text-xs font-bold text-[#0F1E1B]/70 capitalize">
+            Loop: <strong className="text-[#0F1E1B]">{session?.interviewType}</strong>
           </span>
         </div>
 
         {/* Progress Bar */}
         <div className="flex items-center space-x-3">
-          <div className="w-32 bg-slate-800 h-2 rounded-full overflow-hidden">
+          <div className="w-36 bg-[#F5F2E6] h-3 rounded-full border-2 border-[#0F1E1B] overflow-hidden">
             <div
-              className="bg-gradient-to-r from-indigo-500 to-purple-500 h-full transition-all duration-300"
+              className="bg-[#F5D90A] h-full transition-all duration-300 border-r-2 border-[#0F1E1B]"
               style={{ width: `${((currentIndex + 1) / questions.length) * 100}%` }}
             ></div>
           </div>
-          <span className="text-xs font-bold font-mono text-slate-300">
+          <span className="text-xs font-black font-mono text-[#0F1E1B]">
             {currentIndex + 1} / {questions.length}
           </span>
         </div>
       </div>
 
       {error && (
-        <div className="p-4 bg-rose-500/10 border border-rose-500/30 rounded-xl flex items-center space-x-3 text-rose-300 text-sm">
-          <AlertCircle className="w-5 h-5 shrink-0" />
+        <div className="p-4 bg-rose-50 border-2 border-rose-600 rounded-2xl flex items-center space-x-3 text-rose-800 text-xs font-bold">
+          <AlertCircle className="w-4 h-4 shrink-0" />
           <span>{error}</span>
         </div>
       )}
@@ -212,22 +210,22 @@ export default function InterviewSession() {
           <button
             onClick={handleNextQuestion}
             disabled={isCompleting}
-            className="w-full py-4 px-6 rounded-xl font-bold text-white bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 transition-all shadow-xl shadow-indigo-600/30 flex items-center justify-center space-x-2 text-base"
+            className="w-full py-4 px-6 rounded-2xl font-bold text-[#FDFBF3] bg-[#0F1E1B] hover:bg-[#1A332E] transition-all editorial-shadow flex items-center justify-center space-x-2 text-base"
           >
             {isCompleting ? (
               <>
-                <Loader2 className="w-5 h-5 animate-spin" />
-                <span>Synthesizing Final Improvement Plan with AI...</span>
+                <Loader2 className="w-5 h-5 animate-spin text-[#F5D90A]" />
+                <span>Synthesizing Final Growth Roadmap with AI...</span>
               </>
             ) : currentIndex < questions.length - 1 ? (
               <>
                 <span>Proceed to Next Question</span>
-                <ArrowRight className="w-5 h-5" />
+                <ArrowRight className="w-5 h-5 text-[#F5D90A]" />
               </>
             ) : (
               <>
-                <CheckCircle2 className="w-5 h-5" />
-                <span>Complete Session & Generate Improvement Plan</span>
+                <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+                <span>Complete Loop & View Full Report</span>
               </>
             )}
           </button>

@@ -1,7 +1,7 @@
 import React, { useState, useContext } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
-import { Sparkles, Mail, Lock, LogIn, AlertCircle, Loader2 } from 'lucide-react';
+import { Sparkles, Mail, Lock, LogIn, AlertCircle, Loader2, ArrowRight, Check } from 'lucide-react';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -34,33 +34,64 @@ export default function Login() {
     }
   };
 
+  const handleDemoLogin = async () => {
+    setEmail('test@example.com');
+    setPassword('password123');
+    setLoading(true);
+    setError('');
+    try {
+      await login('test@example.com', 'password123');
+      setLoading(false);
+      navigate('/dashboard');
+    } catch (err) {
+      console.error('Demo login error:', err);
+      setError('Demo login issue. Please try signing up.');
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-[85vh] flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full glass-panel p-8 sm:p-10 rounded-3xl border border-slate-800 shadow-2xl space-y-8 animate-fadeIn">
+      <div className="max-w-md w-full bg-[#FDFBF3] text-[#0F1E1B] p-8 sm:p-10 rounded-3xl border-3 border-[#0F1E1B] editorial-shadow-lg space-y-8 animate-fadeIn relative">
         
         {/* Title & Logo */}
         <div className="text-center space-y-2">
-          <div className="inline-flex w-14 h-14 rounded-2xl bg-gradient-to-tr from-indigo-600 to-purple-600 items-center justify-center shadow-xl shadow-indigo-600/30 mb-2">
-            <Sparkles className="w-7 h-7 text-white" />
+          <div className="inline-flex w-14 h-14 rounded-2xl bg-[#0F1E1B] text-[#FDFBF3] items-center justify-center shadow-lg mb-2">
+            <Sparkles className="w-7 h-7 text-[#F5D90A]" />
           </div>
-          <h2 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">Welcome Back</h2>
-          <p className="text-xs sm:text-sm text-slate-400">
-            Sign in to access your interview sessions and analytics dashboard.
+          <h2 className="font-serif-headline text-3xl font-bold text-[#0F1E1B]">Welcome Back</h2>
+          <p className="text-xs sm:text-sm text-[#0F1E1B]/70 font-medium">
+            Sign in to access your AI mock sessions, transcripts & growth roadmaps.
           </p>
         </div>
 
         {error && (
-          <div className="p-4 bg-rose-500/10 border border-rose-500/30 rounded-xl flex items-center space-x-3 text-rose-300 text-xs">
+          <div className="p-4 bg-rose-50 border-2 border-rose-600 rounded-2xl flex items-center space-x-3 text-rose-800 text-xs font-bold">
             <AlertCircle className="w-4 h-4 shrink-0" />
             <span>{error}</span>
           </div>
         )}
 
+        {/* Quick Demo Login Option */}
+        <div className="bg-[#F5F2E6] p-3.5 rounded-2xl border-2 border-[#0F1E1B]/20 flex items-center justify-between">
+          <div className="text-xs font-bold text-[#0F1E1B]">
+            <span>💡 Quick Test?</span>
+            <span className="block text-[11px] text-[#0F1E1B]/70 font-medium">Auto-fill test candidate credentials</span>
+          </div>
+          <button
+            type="button"
+            onClick={handleDemoLogin}
+            className="px-3 py-1.5 rounded-xl bg-[#F5D90A] text-[#0F1E1B] font-bold text-xs border-2 border-[#0F1E1B] hover:bg-[#e0c608] transition-colors shadow-xs"
+          >
+            One-Click Login
+          </button>
+        </div>
+
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-2">Email Address</label>
+            <label className="block text-xs font-bold uppercase tracking-wider text-[#0F1E1B] mb-2">Email Address</label>
             <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
+              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#0F1E1B]/50">
                 <Mail className="w-4 h-4" />
               </div>
               <input
@@ -69,15 +100,15 @@ export default function Login() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="developer@example.com"
-                className="w-full pl-10 pr-4 py-3 bg-slate-900/90 border border-slate-800 rounded-xl text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 text-sm"
+                className="w-full pl-10 pr-4 py-3 bg-[#F5F2E6] border-2 border-[#0F1E1B] rounded-2xl text-[#0F1E1B] placeholder-[#0F1E1B]/40 focus:outline-none focus:bg-[#FDFBF3] text-sm font-medium"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-2">Password</label>
+            <label className="block text-xs font-bold uppercase tracking-wider text-[#0F1E1B] mb-2">Password</label>
             <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
+              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#0F1E1B]/50">
                 <Lock className="w-4 h-4" />
               </div>
               <input
@@ -86,7 +117,7 @@ export default function Login() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
-                className="w-full pl-10 pr-4 py-3 bg-slate-900/90 border border-slate-800 rounded-xl text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 text-sm"
+                className="w-full pl-10 pr-4 py-3 bg-[#F5F2E6] border-2 border-[#0F1E1B] rounded-2xl text-[#0F1E1B] placeholder-[#0F1E1B]/40 focus:outline-none focus:bg-[#FDFBF3] text-sm font-medium"
               />
             </div>
           </div>
@@ -94,23 +125,23 @@ export default function Login() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3.5 px-4 rounded-xl text-sm font-bold text-white bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 disabled:opacity-50 transition-all shadow-lg shadow-indigo-600/20 flex items-center justify-center space-x-2"
+            className="w-full py-3.5 px-4 rounded-2xl text-sm font-bold text-[#FDFBF3] bg-[#0F1E1B] hover:bg-[#1A332E] disabled:opacity-50 transition-all editorial-shadow flex items-center justify-center space-x-2"
           >
             {loading ? (
-              <Loader2 className="w-5 h-5 animate-spin" />
+              <Loader2 className="w-5 h-5 animate-spin text-[#F5D90A]" />
             ) : (
               <>
-                <LogIn className="w-4 h-4" />
                 <span>Sign In to Platform</span>
+                <ArrowRight className="w-4 h-4 text-[#F5D90A]" />
               </>
             )}
           </button>
         </form>
 
-        <div className="text-center pt-4 border-t border-slate-800">
-          <p className="text-xs text-slate-400">
+        <div className="text-center pt-4 border-t border-[#0F1E1B]/15">
+          <p className="text-xs text-[#0F1E1B]/70 font-medium">
             Don't have an account yet?{' '}
-            <Link to="/register" className="font-bold text-indigo-400 hover:text-indigo-300 transition-colors">
+            <Link to="/register" className="font-bold text-[#C1440E] hover:underline decoration-[#F5D90A] decoration-2">
               Create an Account
             </Link>
           </p>
