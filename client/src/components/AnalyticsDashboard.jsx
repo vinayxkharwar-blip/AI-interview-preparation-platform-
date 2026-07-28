@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import {
   ResponsiveContainer,
   LineChart,
@@ -13,12 +14,25 @@ import {
   PolarRadiusAxis,
   Radar,
 } from 'recharts';
-import { TrendingUp, Target, AlertTriangle, Award, CheckCircle2, Activity, Zap } from 'lucide-react';
+import { TrendingUp, Target, AlertTriangle, Award, CheckCircle2, Activity, Zap, PlayCircle, BarChart3 } from 'lucide-react';
+import { toHundredScale } from '../utils/score';
+import EmptyState from './common/EmptyState';
 
 export default function AnalyticsDashboard({ analyticsData }) {
-  if (!analyticsData) return null;
+  if (!analyticsData || !analyticsData.summary) {
+    return (
+      <EmptyState
+        title="No Analytics Data Available"
+        description="Complete an interview practice loop to generate performance trends, skill category radar, and weak topic breakdowns."
+        icon={BarChart3}
+        actionText="Start Practice Loop"
+        actionLink="/new-session"
+      />
+    );
+  }
 
   const { summary, scoreTrend = [], skillScores = [], weakTopics = [] } = analyticsData;
+  const hasAvgScore = summary?.avgScore !== undefined && summary?.avgScore !== null;
 
   return (
     <div className="space-y-8 animate-fadeIn">
@@ -32,7 +46,9 @@ export default function AnalyticsDashboard({ analyticsData }) {
           </div>
           <div>
             <span className="text-xs text-[#0F1E1B]/70 font-bold uppercase tracking-wider">Average Score</span>
-            <h3 className="font-serif-headline text-3xl font-black text-[#0F1E1B]">{summary?.avgScore ? summary.avgScore * 10 : 85} / 100</h3>
+            <h3 className="font-serif-headline text-3xl font-black text-[#0F1E1B]">
+              {hasAvgScore ? `${toHundredScale(summary.avgScore)} / 100` : 'N/A'}
+            </h3>
           </div>
         </div>
 
@@ -62,7 +78,7 @@ export default function AnalyticsDashboard({ analyticsData }) {
           </div>
           <div>
             <span className="text-xs text-[#0F1E1B]/70 font-bold uppercase tracking-wider">Readiness Status</span>
-            <h3 className="font-serif-headline text-2xl font-bold text-emerald-900">{summary?.readinessLevel || 'Offer Ready'}</h3>
+            <h3 className="font-serif-headline text-2xl font-bold text-emerald-900">{summary?.readinessLevel || 'Not Evaluated'}</h3>
           </div>
         </div>
 
@@ -183,6 +199,15 @@ export default function AnalyticsDashboard({ analyticsData }) {
                   <span className="text-xs font-bold font-mono text-[#0F1E1B]">Avg Score: {item.avgScore}/10</span>
                 </div>
                 <h4 className="font-serif-headline text-base font-bold text-[#0F1E1B] leading-snug">{item.topic}</h4>
+                <div className="pt-2">
+                  <Link
+                    to={`/new-session?focus=${encodeURIComponent(item.topic)}&prevScore=${item.avgScore}`}
+                    className="inline-flex items-center justify-center space-x-1.5 w-full py-2 px-3 bg-[#0F1E1B] text-[#FDFBF3] hover:bg-[#C1440E] rounded-xl text-xs font-bold transition-colors editorial-shadow-sm"
+                  >
+                    <PlayCircle className="w-3.5 h-3.5 text-[#F5D90A]" />
+                    <span>Practice This Topic</span>
+                  </Link>
+                </div>
               </div>
             ))}
           </div>

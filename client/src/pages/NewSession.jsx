@@ -1,12 +1,15 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import axiosClient from '../api/axiosClient';
-import { PlayCircle, Briefcase, FileText, Settings2, Sparkles, Loader2, AlertCircle, Layers, ArrowRight } from 'lucide-react';
+import { PlayCircle, Briefcase, FileText, Settings2, Sparkles, Loader2, AlertCircle, Layers, ArrowRight, Target } from 'lucide-react';
 
 export default function NewSession() {
   const { user } = useContext(AuthContext);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const focusTopicParam = searchParams.get('focus');
+  const prevScoreParam = searchParams.get('prevScore');
 
   const [targetRole, setTargetRole] = useState(user?.targetRole || 'Full Stack Engineer');
   const [interviewType, setInterviewType] = useState('technical');
@@ -49,6 +52,8 @@ export default function NewSession() {
         interviewType,
         difficulty,
         count: Number(count),
+        focusTopic: focusTopicParam || undefined,
+        previousScore: prevScoreParam ? Number(prevScoreParam) : undefined,
       });
 
       const { session } = response.data;
@@ -75,6 +80,23 @@ export default function NewSession() {
             Customize target role, interview loop type, and seniority level. Our AI will generate structured, context-aware questions.
           </p>
         </div>
+
+        {focusTopicParam && (
+          <div className="p-5 bg-[#FEF9C3] border-3 border-[#0F1E1B] rounded-2xl flex items-center justify-between editorial-shadow-sm">
+            <div className="flex items-center space-x-3">
+              <div className="p-2 bg-[#0F1E1B] text-[#F5D90A] rounded-xl">
+                <Target className="w-5 h-5 text-[#F5D90A]" />
+              </div>
+              <div>
+                <span className="text-[10px] font-black uppercase tracking-wider text-[#C1440E]">Focused Retry Mode</span>
+                <h4 className="font-serif-headline text-lg font-bold text-[#0F1E1B]">{focusTopicParam}</h4>
+              </div>
+            </div>
+            <span className="px-3 py-1 bg-[#C1440E] text-[#FDFBF3] text-xs font-black rounded-full uppercase tracking-wider shadow-xs">
+              Weak Topic Drill
+            </span>
+          </div>
+        )}
 
         {error && (
           <div className="p-4 bg-rose-50 border-2 border-rose-600 rounded-2xl flex items-center space-x-3 text-rose-800 text-xs font-bold">

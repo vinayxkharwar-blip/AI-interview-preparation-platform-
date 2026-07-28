@@ -6,7 +6,7 @@ import AnswerRecorder from '../components/AnswerRecorder';
 import FeedbackCard from '../components/FeedbackCard';
 import SessionSummary from '../components/SessionSummary';
 import ImprovementPlanCard from '../components/ImprovementPlanCard';
-import { Loader2, ArrowRight, CheckCircle2, RotateCcw, AlertCircle } from 'lucide-react';
+import { Loader2, ArrowRight, CheckCircle2, RotateCcw, AlertCircle, Sparkles } from 'lucide-react';
 
 export default function InterviewSession() {
   const { id: sessionId } = useParams();
@@ -159,9 +159,15 @@ export default function InterviewSession() {
             Target Role: <strong className="text-[#C1440E]">{session?.targetRole}</strong>
           </span>
           <span className="text-[#0F1E1B]/30">•</span>
-          <span className="text-xs font-bold text-[#0F1E1B]/70 capitalize">
-            Loop: <strong className="text-[#0F1E1B]">{session?.interviewType}</strong>
-          </span>
+          {session?.focusTopic ? (
+            <span className="px-3 py-1 bg-[#C1440E] text-[#FDFBF3] text-xs font-black rounded-full uppercase tracking-wider shadow-xs">
+              Focused Practice: {session.focusTopic}
+            </span>
+          ) : (
+            <span className="text-xs font-bold text-[#0F1E1B]/70 capitalize">
+              Loop: <strong className="text-[#0F1E1B]">{session?.interviewType}</strong>
+            </span>
+          )}
         </div>
 
         {/* Progress Bar */}
@@ -182,6 +188,14 @@ export default function InterviewSession() {
         <div className="p-4 bg-rose-50 border-2 border-rose-600 rounded-2xl flex items-center space-x-3 text-rose-800 text-xs font-bold">
           <AlertCircle className="w-4 h-4 shrink-0" />
           <span>{error}</span>
+        </div>
+      )}
+
+      {/* Focused Practice Badge */}
+      {session?.focusTopic && (
+        <div className="inline-flex items-center space-x-2 px-4 py-1.5 rounded-full bg-[#FEF9C3] border-2 border-[#0F1E1B] text-[#0F1E1B] text-xs font-black uppercase tracking-wider editorial-shadow-sm mb-2">
+          <Sparkles className="w-4 h-4 text-[#C1440E]" />
+          <span>Focused Practice: {session.focusTopic}</span>
         </div>
       )}
 

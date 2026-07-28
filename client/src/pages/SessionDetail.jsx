@@ -5,6 +5,7 @@ import SessionSummary from '../components/SessionSummary';
 import ImprovementPlanCard from '../components/ImprovementPlanCard';
 import FeedbackCard from '../components/FeedbackCard';
 import { Loader2, ArrowLeft, HelpCircle, CheckCircle2 } from 'lucide-react';
+import { toHundredScale } from '../utils/score';
 
 export default function SessionDetail() {
   const { id } = useParams();
@@ -83,7 +84,7 @@ export default function SessionDetail() {
                   </div>
                   {fb && (
                     <span className="px-3 py-1 bg-[#F5D90A] border-2 border-[#0F1E1B] text-[#0F1E1B] font-bold text-sm rounded-xl shrink-0 shadow-xs">
-                      {fb.score > 10 ? fb.score : fb.score * 10} / 100
+                      {toHundredScale(fb.score)} / 100
                     </span>
                   )}
                 </div>

@@ -1,8 +1,11 @@
 import React from 'react';
 import { Award, CheckCircle2, XCircle, Lightbulb, Star, ShieldCheck } from 'lucide-react';
+import { toHundredScale } from '../utils/score';
 
 export default function FeedbackCard({ feedback }) {
   if (!feedback) return null;
+
+  const normalizedScore = toHundredScale(feedback.score);
 
   return (
     <div className="bg-[#FDFBF3] text-[#0F1E1B] p-6 sm:p-8 rounded-3xl border-3 border-[#0F1E1B] editorial-shadow-lg space-y-6 animate-fadeIn">
@@ -14,7 +17,7 @@ export default function FeedbackCard({ feedback }) {
           </div>
           <div>
             <h4 className="font-serif-headline text-2xl font-bold text-[#0F1E1B]">AI Grading & Rubric Report</h4>
-            <p className="text-xs text-[#0F1E1B]/70 font-medium">Category: {feedback.category || 'Technical Depth & STAR Coverage'}</p>
+            <p className="text-xs text-[#0F1E1B]/70 font-medium">Category: {feedback.category || 'General'}</p>
           </div>
         </div>
 
@@ -23,12 +26,12 @@ export default function FeedbackCard({ feedback }) {
           <div className="text-right hidden sm:block">
             <span className="text-[10px] text-[#0F1E1B]/70 uppercase font-black">Performance Grade</span>
             <p className="text-xs font-bold text-[#C1440E]">
-              {feedback.score >= 80 || feedback.score >= 8 ? 'Exceptional (Offer Level)' : feedback.score >= 60 || feedback.score >= 6 ? 'Competent' : 'Needs Practice'}
+              {normalizedScore >= 80 ? 'Exceptional (Offer Level)' : normalizedScore >= 60 ? 'Competent' : 'Needs Practice'}
             </p>
           </div>
           <div className="px-5 py-2.5 rounded-2xl bg-[#F5D90A] border-2 border-[#0F1E1B] flex items-center space-x-2 editorial-shadow-sm text-[#0F1E1B]">
             <Star className="w-5 h-5 fill-[#0F1E1B]" />
-            <span className="font-serif-headline text-3xl font-black">{feedback.score > 10 ? feedback.score : feedback.score * 10}</span>
+            <span className="font-serif-headline text-3xl font-black">{normalizedScore}</span>
             <span className="text-xs font-bold opacity-75">/ 100</span>
           </div>
         </div>

@@ -53,6 +53,7 @@ export default function QuestionCard({ question, currentNumber, totalQuestions }
         <div className="border-t-2 border-[#0F1E1B]/15 pt-4">
           <button
             onClick={() => setShowHints(!showHints)}
+            aria-label={showHints ? "Hide hints and guidance" : "Show hints and guidance"}
             className="flex items-center justify-between w-full text-xs font-bold text-[#C1440E] hover:underline transition-colors"
           >
             <div className="flex items-center space-x-2">
