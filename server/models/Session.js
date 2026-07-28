@@ -44,6 +44,14 @@ const sessionSchema = new mongoose.Schema(
         score: Number,
       },
     ],
+    focusTopic: {
+      type: String,
+      default: null,
+    },
+    previousScore: {
+      type: Number,
+      default: null,
+    },
   },
   { timestamps: true }
 );

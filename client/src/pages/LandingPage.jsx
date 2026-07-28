@@ -81,13 +81,13 @@ export default function LandingPage() {
       <div className="max-w-[1500px] mx-auto bg-[#FDFBF3] text-[#0F1E1B] rounded-3xl sm:rounded-[2.5rem] border-2 border-[#0F1E1B] editorial-shadow-lg overflow-hidden relative">
         
         {/* ================= 1. NAVBAR ================= */}
-        <header className="px-6 sm:px-10 py-5 border-b border-[#0F1E1B]/10 flex items-center justify-between relative z-20 bg-[#FDFBF3]/90 backdrop-blur-md sticky top-0">
+        <header className="px-3 sm:px-6 lg:px-10 py-3 sm:py-5 border-b border-[#0F1E1B]/10 flex items-center justify-between relative z-20 bg-[#FDFBF3]/90 backdrop-blur-md sticky top-0 gap-2">
           {/* Logo Left */}
-          <Link to="/" className="flex items-center space-x-3 group">
-            <div className="w-10 h-10 rounded-xl bg-[#0F1E1B] text-[#FDFBF3] flex items-center justify-center font-bold text-xl group-hover:scale-105 transition-transform shadow-md">
-              <Sparkles className="w-5 h-5 text-[#F5D90A]" />
+          <Link to="/" className="flex items-center space-x-2 sm:space-x-3 group shrink-0">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-[#0F1E1B] text-[#FDFBF3] flex items-center justify-center font-bold text-lg sm:text-xl group-hover:scale-105 transition-transform shadow-md shrink-0">
+              <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-[#F5D90A]" />
             </div>
-            <span className="font-serif-headline text-2xl font-black tracking-tight text-[#0F1E1B]">
+            <span className="font-serif-headline text-lg sm:text-2xl font-black tracking-tight text-[#0F1E1B] whitespace-nowrap">
               PrepPulse<span className="text-[#C1440E]">.ai</span>
             </span>
           </Link>
@@ -109,19 +109,19 @@ export default function LandingPage() {
           </nav>
 
           {/* Buttons Right */}
-          <div className="flex items-center space-x-3">
+          <div className="flex items-center space-x-1.5 sm:space-x-3 shrink-0">
             <Link
               to="/login"
-              className="px-4 py-2 rounded-xl text-sm font-bold border-2 border-[#0F1E1B] text-[#0F1E1B] hover:bg-[#0F1E1B] hover:text-[#FDFBF3] transition-all"
+              className="px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs sm:text-sm font-bold border-2 border-[#0F1E1B] text-[#0F1E1B] hover:bg-[#0F1E1B] hover:text-[#FDFBF3] transition-all whitespace-nowrap"
             >
               Log In
             </Link>
             <Link
               to="/register"
-              className="px-5 py-2.5 rounded-xl text-sm font-bold bg-[#0F1E1B] text-[#FDFBF3] hover:bg-[#1A332E] hover:scale-105 transition-all editorial-shadow-sm flex items-center space-x-1.5"
+              className="px-3.5 sm:px-5 py-1.5 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold bg-[#0F1E1B] text-[#FDFBF3] hover:bg-[#1A332E] hover:scale-105 transition-all editorial-shadow-sm flex items-center space-x-1 sm:space-x-1.5 whitespace-nowrap"
             >
               <span>Try Free</span>
-              <ArrowRight className="w-4 h-4 text-[#F5D90A]" />
+              <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#F5D90A]" />
             </Link>
           </div>
         </header>

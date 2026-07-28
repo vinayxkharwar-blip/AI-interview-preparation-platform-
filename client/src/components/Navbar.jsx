@@ -1,4 +1,4 @@
-import React, { useContext } from 'react';
+import React, { useContext, useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import { 
@@ -9,13 +9,17 @@ import {
   LogOut, 
   User, 
   LayoutDashboard,
-  Home
+  Home,
+  Menu,
+  X,
+  ArrowRight
 } from 'lucide-react';
 
 export default function Navbar() {
   const { user, logout } = useContext(AuthContext);
   const navigate = useNavigate();
   const location = useLocation();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const handleLogout = () => {
     logout();
@@ -26,22 +30,22 @@ export default function Navbar() {
 
   return (
     <nav className="sticky top-0 z-50 bg-[#FDFBF3]/95 backdrop-blur-md border-b-2 border-[#0F1E1B] text-[#0F1E1B] shadow-sm">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-between h-16 gap-2">
           
           {/* Logo */}
-          <Link to={user ? "/dashboard" : "/"} className="flex items-center space-x-3 group">
-            <div className="w-9 h-9 rounded-xl bg-[#0F1E1B] text-[#FDFBF3] flex items-center justify-center font-bold text-lg group-hover:scale-105 transition-transform shadow-md">
+          <Link to={user ? "/dashboard" : "/"} className="flex items-center space-x-2 sm:space-x-3 group shrink-0">
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-[#0F1E1B] text-[#FDFBF3] flex items-center justify-center font-bold text-base sm:text-lg group-hover:scale-105 transition-transform shadow-md shrink-0">
               <Sparkles className="w-4 h-4 text-[#F5D90A]" />
             </div>
             <div>
-              <span className="font-serif-headline text-2xl font-black tracking-tight text-[#0F1E1B]">
+              <span className="font-serif-headline text-lg sm:text-2xl font-black tracking-tight text-[#0F1E1B] whitespace-nowrap">
                 PrepPulse<span className="text-[#C1440E]">.ai</span>
               </span>
             </div>
           </Link>
 
-          {/* Navigation Links */}
+          {/* Desktop Navigation Links */}
           {user && (
             <div className="hidden md:flex items-center space-x-2">
               <Link
@@ -96,7 +100,7 @@ export default function Navbar() {
 
           {/* User Profile & Actions */}
           {user ? (
-            <div className="flex items-center space-x-3">
+            <div className="flex items-center space-x-2 sm:space-x-3 shrink-0">
               <Link
                 to="/"
                 className="hidden lg:flex items-center space-x-1 text-xs font-bold text-[#0F1E1B]/70 hover:text-[#0F1E1B] px-2.5 py-1 rounded-lg hover:bg-[#F5F2E6]"
@@ -120,25 +124,100 @@ export default function Navbar() {
               >
                 <LogOut className="w-4 h-4" />
               </button>
+              <button
+                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                className="md:hidden p-2 text-[#0F1E1B] rounded-xl border-2 border-[#0F1E1B] bg-[#F5F2E6]"
+                aria-label="Toggle menu"
+              >
+                {mobileMenuOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
+              </button>
             </div>
           ) : (
-            <div className="flex items-center space-x-3">
+            <div className="flex items-center space-x-1.5 sm:space-x-3 shrink-0">
               <Link
                 to="/login"
-                className="px-4 py-1.5 text-xs font-bold text-[#0F1E1B] border-2 border-[#0F1E1B] rounded-xl hover:bg-[#0F1E1B] hover:text-[#FDFBF3] transition-all"
+                className="px-3 sm:px-4 py-1.5 text-xs font-bold text-[#0F1E1B] border-2 border-[#0F1E1B] rounded-xl hover:bg-[#0F1E1B] hover:text-[#FDFBF3] transition-all whitespace-nowrap"
               >
                 Log In
               </Link>
               <Link
                 to="/register"
-                className="px-4 py-1.5 text-xs font-bold text-[#FDFBF3] bg-[#0F1E1B] hover:bg-[#1A332E] rounded-xl editorial-shadow-sm transition-all"
+                className="px-3.5 sm:px-4 py-1.5 text-xs font-bold text-[#FDFBF3] bg-[#0F1E1B] hover:bg-[#1A332E] rounded-xl editorial-shadow-sm transition-all whitespace-nowrap flex items-center space-x-1 sm:space-x-1.5"
               >
-                Try Free
+                <span>Try Free</span>
+                <ArrowRight className="w-3.5 h-3.5 text-[#F5D90A]" />
               </Link>
             </div>
           )}
 
         </div>
+
+        {/* Mobile Dropdown for Logged-In User */}
+        {user && mobileMenuOpen && (
+          <div className="md:hidden py-3 border-t-2 border-[#0F1E1B]/10 space-y-2">
+            <Link
+              to="/dashboard"
+              onClick={() => setMobileMenuOpen(false)}
+              className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-2 border-2 ${
+                isActive('/dashboard')
+                  ? 'bg-[#0F1E1B] text-[#FDFBF3] border-[#0F1E1B]'
+                  : 'border-transparent text-[#0F1E1B]'
+              }`}
+            >
+              <LayoutDashboard className="w-4 h-4" />
+              <span>Dashboard</span>
+            </Link>
+
+            <Link
+              to="/new-session"
+              onClick={() => setMobileMenuOpen(false)}
+              className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-2 border-2 ${
+                isActive('/new-session')
+                  ? 'bg-[#0F1E1B] text-[#FDFBF3] border-[#0F1E1B]'
+                  : 'border-transparent text-[#0F1E1B]'
+              }`}
+            >
+              <PlayCircle className="w-4 h-4 text-[#F5D90A]" />
+              <span>Start Practice</span>
+            </Link>
+
+            <Link
+              to="/resumes"
+              onClick={() => setMobileMenuOpen(false)}
+              className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-2 border-2 ${
+                isActive('/resumes')
+                  ? 'bg-[#0F1E1B] text-[#FDFBF3] border-[#0F1E1B]'
+                  : 'border-transparent text-[#0F1E1B]'
+              }`}
+            >
+              <FileText className="w-4 h-4" />
+              <span>My Resumes</span>
+            </Link>
+
+            <Link
+              to="/analytics"
+              onClick={() => setMobileMenuOpen(false)}
+              className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-2 border-2 ${
+                isActive('/analytics')
+                  ? 'bg-[#0F1E1B] text-[#FDFBF3] border-[#0F1E1B]'
+                  : 'border-transparent text-[#0F1E1B]'
+              }`}
+            >
+              <BarChart3 className="w-4 h-4" />
+              <span>Analytics</span>
+            </Link>
+
+            <Link
+              to="/"
+              onClick={() => setMobileMenuOpen(false)}
+              className="px-4 py-2.5 rounded-xl text-xs font-bold flex items-center space-x-2 border-2 border-transparent text-[#0F1E1B]"
+            >
+              <Home className="w-4 h-4" />
+              <span>Public Landing Page</span>
+            </Link>
+          </div>
+        )}
+
       </div>
     </nav>
   );

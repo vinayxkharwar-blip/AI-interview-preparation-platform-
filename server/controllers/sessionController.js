@@ -13,7 +13,7 @@ import { buildImprovementPlanPrompt } from '../prompts/improvementPrompts.js';
 // @route POST /api/sessions/start
 export const startSession = async (req, res) => {
   try {
-    const { resumeId, targetRole, interviewType = 'technical', difficulty = 'mid', count = 5 } = req.body;
+    const { resumeId, targetRole, interviewType = 'technical', difficulty = 'mid', count = 5, focusTopic, previousScore } = req.body;
 
     if (!targetRole) {
       return res.status(400).json({ message: 'Target role is required.' });
@@ -42,6 +42,8 @@ export const startSession = async (req, res) => {
         difficulty,
         totalQuestions: Number(count) || 5,
         status: 'in_progress',
+        focusTopic: focusTopic || null,
+        previousScore: previousScore != null ? Number(previousScore) : null,
       });
     } catch (e) {
       session = {
@@ -53,18 +55,21 @@ export const startSession = async (req, res) => {
         difficulty,
         totalQuestions: Number(count) || 5,
         status: 'in_progress',
+        focusTopic: focusTopic || null,
+        previousScore: previousScore != null ? Number(previousScore) : null,
         createdAt: new Date(),
       };
     }
 
     // 2. Generate questions via LLM
-    console.log('[Session Controller] Generating personalized interview questions via LLM...');
+    console.log('[Session Controller] Generating personalized interview questions via LLM...', focusTopic ? `[Focus Topic: ${focusTopic}]` : '');
     const prompt = buildQuestionGenerationPrompt({
       parsedResume,
       targetRole,
       interviewType,
       difficulty,
       count: session.totalQuestions,
+      focusTopic,
     });
 
     const llmResult = await generateLLMJson(prompt, 'You are an expert interview question generator.');
