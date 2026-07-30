@@ -11,6 +11,7 @@ import Dashboard from './pages/Dashboard';
 import Resumes from './pages/Resumes';
 import NewSession from './pages/NewSession';
 import InterviewSession from './pages/InterviewSession';
+import LiveInterviewSession from './pages/LiveInterviewSession';
 import SessionDetail from './pages/SessionDetail';
 import Analytics from './pages/Analytics';
 
@@ -59,6 +60,14 @@ function MainLayout() {
             element={
               <ProtectedRoute>
                 <InterviewSession />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/interview/:id/live"
+            element={
+              <ProtectedRoute>
+                <LiveInterviewSession />
               </ProtectedRoute>
             }
           />

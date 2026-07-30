@@ -6,7 +6,7 @@ import AnswerRecorder from '../components/AnswerRecorder';
 import FeedbackCard from '../components/FeedbackCard';
 import SessionSummary from '../components/SessionSummary';
 import ImprovementPlanCard from '../components/ImprovementPlanCard';
-import { Loader2, ArrowRight, CheckCircle2, RotateCcw, AlertCircle, Sparkles } from 'lucide-react';
+import { Loader2, ArrowRight, CheckCircle2, RotateCcw, AlertCircle, Sparkles, Video } from 'lucide-react';
 
 export default function InterviewSession() {
   const { id: sessionId } = useParams();
@@ -202,6 +202,31 @@ export default function InterviewSession() {
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8 space-y-8 animate-fadeIn">
       
+      {/* Live AI Video Call Banner */}
+      <div className="p-4 sm:p-5 bg-[#12211A] text-[#FBF9F3] rounded-3xl border-3 border-[#12211A] editorial-shadow flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div className="flex items-center space-x-3">
+          <div className="p-2.5 bg-[#E7B92E] text-[#12211A] rounded-2xl border-2 border-[#12211A]">
+            <Video className="w-5 h-5" />
+          </div>
+          <div>
+            <h4 className="font-serif-headline text-base sm:text-lg font-bold text-[#FBF9F3]">
+              Try Live AI Video Call Interview Mode
+            </h4>
+            <p className="text-xs text-[#DCEEDF]/80">
+              Conduct a real-time conversational interview with AI interviewer Alex.
+            </p>
+          </div>
+        </div>
+
+        <button
+          onClick={() => navigate(`/interview/${sessionId}/live`)}
+          className="w-full sm:w-auto px-5 py-2.5 bg-[#E7B92E] hover:bg-[#dda91b] text-[#12211A] font-bold text-xs rounded-2xl border-2 border-[#12211A] transition-all flex items-center justify-center space-x-2 shrink-0 shadow-xs"
+        >
+          <Sparkles className="w-4 h-4" />
+          <span>Launch Live Video Call</span>
+        </button>
+      </div>
+
       {/* Progress Top Bar */}
       <div className="flex flex-col sm:flex-row items-center justify-between bg-[#FDFBF3] text-[#0F1E1B] p-4 sm:p-5 rounded-3xl border-3 border-[#0F1E1B] editorial-shadow-sm gap-4">
         <div className="flex items-center space-x-3">
