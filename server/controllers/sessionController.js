@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import Session from '../models/Session.js';
 import Resume from '../models/Resume.js';
 import Question from '../models/Question.js';
@@ -8,6 +9,13 @@ import AnalyticsSnapshot from '../models/AnalyticsSnapshot.js';
 import { generateLLMJson } from '../services/llmService.js';
 import { buildQuestionGenerationPrompt } from '../prompts/questionPrompts.js';
 import { buildImprovementPlanPrompt } from '../prompts/improvementPrompts.js';
+
+// In-memory fallback stores when MongoDB is offline/reconnecting
+export const memorySessions = [];
+export const memoryQuestions = [];
+export const memoryAnswers = [];
+export const memoryFeedback = [];
+export const memoryImprovementPlans = [];
 
 // @desc Start a new interview session
 // @route POST /api/sessions/start
@@ -31,23 +39,33 @@ export const startSession = async (req, res) => {
       }
     }
 
+    const sessionId = new mongoose.Types.ObjectId().toString();
+
     // 1. Create Session DB record
-    let session;
-    try {
-      session = await Session.create({
-        user: req.user._id,
-        resume: resumeId || null,
-        targetRole,
-        interviewType,
-        difficulty,
-        totalQuestions: Number(count) || 5,
-        status: 'in_progress',
-        focusTopic: focusTopic || null,
-        previousScore: previousScore != null ? Number(previousScore) : null,
-      });
-    } catch (e) {
+    let session = null;
+    if (mongoose.connection.readyState === 1) {
+      try {
+        session = await Session.create({
+          _id: sessionId,
+          user: req.user._id,
+          resume: resumeId || null,
+          targetRole,
+          interviewType,
+          difficulty,
+          totalQuestions: Number(count) || 5,
+          status: 'in_progress',
+          focusTopic: focusTopic || null,
+          previousScore: previousScore != null ? Number(previousScore) : null,
+        });
+      } catch (e) {
+        console.log('[Session DB Notice] Session creation fallback:', e.message);
+      }
+    }
+
+    if (!session) {
       session = {
-        _id: 'session-' + Date.now(),
+        _id: sessionId,
+        id: sessionId,
         user: req.user._id,
         resume: resumeId || null,
         targetRole,
@@ -60,6 +78,7 @@ export const startSession = async (req, res) => {
         createdAt: new Date(),
       };
     }
+    memorySessions.push(session);
 
     // 2. Generate questions via LLM
     console.log('[Session Controller] Generating personalized interview questions via LLM...', focusTopic ? `[Focus Topic: ${focusTopic}]` : '');
@@ -72,32 +91,93 @@ export const startSession = async (req, res) => {
       focusTopic,
     });
 
-    const llmResult = await generateLLMJson(prompt, 'You are an expert interview question generator.');
-    const rawQuestions = llmResult.questions || [];
+    let rawQuestions = [];
+    try {
+      const llmResult = await generateLLMJson(prompt, 'You are an expert interview question generator.');
+      rawQuestions = llmResult?.questions || [];
+    } catch (llmErr) {
+      console.error('[Session Controller] Question generation LLM error:', llmErr.message);
+    }
 
-    // 3. Save Questions to DB
-    const questionsToSave = rawQuestions.map((q, idx) => ({
-      session: session._id,
-      questionNumber: q.questionNumber || idx + 1,
-      questionText: q.questionText,
-      category: q.category || 'General',
-      expectedKeyPoints: q.expectedKeyPoints || [],
-      hints: q.hints || [],
-    }));
+    if (!Array.isArray(rawQuestions) || rawQuestions.length === 0) {
+      console.warn('[Session Controller] LLM returned 0 questions. Using fallback interview question set.');
+      rawQuestions = [
+        {
+          questionNumber: 1,
+          questionText: `Can you explain your background and key technical experience relevant to ${targetRole}?`,
+          category: 'General / Background',
+          expectedKeyPoints: ['Relevant technical experience', 'Key projects', 'Role fit'],
+          hints: ['Focus on impactful projects and core strengths.'],
+        },
+        {
+          questionNumber: 2,
+          questionText: `Describe a challenging problem you solved in ${focusTopic || 'a recent project'} and how you handled technical trade-offs.`,
+          category: 'Problem Solving',
+          expectedKeyPoints: ['Problem description', 'Approach & Analysis', 'Results & Trade-offs'],
+          hints: ['Use the STAR method.'],
+        },
+        {
+          questionNumber: 3,
+          questionText: 'How do you approach application performance, error handling, and system reliability?',
+          category: 'Architecture & Quality',
+          expectedKeyPoints: ['Monitoring & Logging', 'Resilience patterns', 'Testing strategy'],
+          hints: ['Discuss real-world production practices.'],
+        },
+        {
+          questionNumber: 4,
+          questionText: 'Explain how asynchronous operations, event loops, and state management work in your primary tech stack.',
+          category: 'Core Concepts',
+          expectedKeyPoints: ['Event loop / Call stack', 'Asynchronous flow', 'State synchronization'],
+          hints: ['Explain execution order clearly.'],
+        },
+        {
+          questionNumber: 5,
+          questionText: 'How do you prioritize technical debt vs feature delivery in a fast-paced environment?',
+          category: 'Behavioral & Leadership',
+          expectedKeyPoints: ['Pragmatic trade-offs', 'Team communication', 'Iterative refactoring'],
+          hints: ['Balance long-term quality with short-term delivery.'],
+        },
+      ].slice(0, session.totalQuestions);
+    }
+
+    // 3. Save Questions to DB and memory store
+    const questionsToSave = rawQuestions.map((q, idx) => {
+      const qId = new mongoose.Types.ObjectId().toString();
+      return {
+        _id: qId,
+        id: qId,
+        session: session._id,
+        questionNumber: q.questionNumber || idx + 1,
+        questionText: q.questionText,
+        category: q.category || 'General',
+        expectedKeyPoints: q.expectedKeyPoints || [],
+        hints: q.hints || [],
+      };
+    });
 
     let savedQuestions = [];
-    try {
-      savedQuestions = await Question.insertMany(questionsToSave);
-    } catch (e) {
-      savedQuestions = questionsToSave.map((q, idx) => ({
-        ...q,
-        _id: `q-${session._id}-${idx + 1}`,
-      }));
+    if (mongoose.connection.readyState === 1) {
+      try {
+        savedQuestions = await Question.insertMany(questionsToSave);
+      } catch (e) {
+        console.log('[Session DB Notice] Question insertMany fallback:', e.message);
+        savedQuestions = questionsToSave;
+      }
+    } else {
+      savedQuestions = questionsToSave;
     }
+
+    questionsToSave.forEach((q) => {
+      if (!memoryQuestions.some((mq) => String(mq._id) === String(q._id))) {
+        memoryQuestions.push(q);
+      }
+    });
+
+    console.log(`[Session Controller] Successfully initialized session ${session._id} with ${questionsToSave.length} questions.`);
 
     res.status(201).json({
       session,
-      questions: savedQuestions,
+      questions: questionsToSave,
     });
   } catch (error) {
     console.error('[Start Session Error]', error);
@@ -110,10 +190,15 @@ export const startSession = async (req, res) => {
 export const getUserSessions = async (req, res) => {
   try {
     let sessions = [];
-    try {
-      sessions = await Session.find({ user: req.user._id }).sort({ createdAt: -1 });
-    } catch (e) {
-      console.log('[Sessions List Fallback]', e.message);
+    if (mongoose.connection.readyState === 1) {
+      try {
+        sessions = await Session.find({ user: req.user._id }).sort({ createdAt: -1 });
+      } catch (e) {
+        console.log('[Sessions List Fallback]', e.message);
+      }
+    }
+    if (sessions.length === 0) {
+      sessions = memorySessions.filter((s) => String(s.user) === String(req.user._id));
     }
     res.json(sessions);
   } catch (error) {
@@ -132,21 +217,45 @@ export const getSessionById = async (req, res) => {
     let feedback = [];
     let improvementPlan = null;
 
-    try {
-      session = await Session.findById(id);
-      if (session) {
-        questions = await Question.find({ session: id }).sort({ questionNumber: 1 });
-        answers = await Answer.find({ session: id });
-        feedback = await Feedback.find({ session: id });
-        improvementPlan = await ImprovementPlan.findOne({ session: id });
+    if (mongoose.connection.readyState === 1 && mongoose.Types.ObjectId.isValid(id)) {
+      try {
+        session = await Session.findById(id);
+        if (session) {
+          questions = await Question.find({ session: id }).sort({ questionNumber: 1 });
+          answers = await Answer.find({ session: id });
+          feedback = await Feedback.find({ session: id });
+          improvementPlan = await ImprovementPlan.findOne({ session: id });
+        }
+      } catch (e) {
+        console.log('[Get Session DB Warning]', e.message);
       }
-    } catch (e) {
-      console.log('[Get Session Fallback]', e.message);
+    }
+
+    if (!session) {
+      session = memorySessions.find((s) => String(s._id) === String(id) || String(s.id) === String(id));
+    }
+
+    if (questions.length === 0) {
+      questions = memoryQuestions.filter((q) => String(q.session) === String(id));
+    }
+
+    if (answers.length === 0) {
+      answers = memoryAnswers.filter((a) => String(a.session) === String(id));
+    }
+
+    if (feedback.length === 0) {
+      feedback = memoryFeedback.filter((f) => String(f.session) === String(id));
+    }
+
+    if (!improvementPlan) {
+      improvementPlan = memoryImprovementPlans.find((p) => String(p.session) === String(id)) || null;
     }
 
     if (!session) {
       return res.status(404).json({ message: 'Session not found.' });
     }
+
+    console.log(`[Get Session] Session "${id}" loaded. Questions count: ${questions.length}`);
 
     res.json({
       session,
@@ -156,6 +265,7 @@ export const getSessionById = async (req, res) => {
       improvementPlan,
     });
   } catch (error) {
+    console.error('[Get Session Error]', error);
     res.status(500).json({ message: error.message });
   }
 };

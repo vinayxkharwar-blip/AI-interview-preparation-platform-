@@ -1,15 +1,32 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import mongoose from 'mongoose';
+import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import User from '../models/User.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+dotenv.config({ path: path.join(__dirname, '../.env') });
+
+// Startup check for JWT_SECRET
+if (!process.env.JWT_SECRET) {
+  console.error('[Startup Warning] process.env.JWT_SECRET is missing or undefined! JWT signing will fail at runtime unless configured.');
+}
 
 // In-memory fallback user store when MongoDB is offline
 export const memoryUsers = [];
 
 export const generateToken = (id, name, email, targetRole) => {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    console.error('[JWT Error] process.env.JWT_SECRET is missing or undefined at runtime during token signing.');
+    throw new Error('JWT_SECRET environment variable is missing.');
+  }
   return jwt.sign(
     { id, name, email, targetRole },
-    process.env.JWT_SECRET || 'super-secret-ai-interview-prep-jwt-key-2026',
+    secret,
     { expiresIn: '7d' }
   );
 };
@@ -106,6 +123,7 @@ export const registerUser = async (req, res) => {
 // @desc Login user
 // @route POST /api/auth/login
 export const loginUser = async (req, res) => {
+  let currentStep = 'initializing request';
   try {
     const { email, password } = req.body;
 
@@ -114,8 +132,10 @@ export const loginUser = async (req, res) => {
     }
 
     const cleanEmail = email.toLowerCase().trim();
-    let user = null;
 
+    // Step 1: Finding user
+    currentStep = 'finding user';
+    let user = null;
     if (mongoose.connection.readyState === 1) {
       try {
         user = await User.findOne({ email: cleanEmail });
@@ -129,33 +149,30 @@ export const loginUser = async (req, res) => {
     }
 
     if (!user) {
-      // Fallback for valid credentials if user not found in memory store
-      if (password.length >= 6) {
-        const salt = await bcrypt.genSalt(10);
-        const hashedPassword = await bcrypt.hash(password, salt);
-        const mockId = new mongoose.Types.ObjectId().toString();
-        const mockUser = {
-          _id: mockId,
-          id: mockId,
-          name: cleanEmail.split('@')[0].replace(/[^a-zA-Z0-9]/g, ' '),
-          email: cleanEmail,
-          password: hashedPassword,
-          targetRole: 'Full Stack Engineer',
-        };
-        memoryUsers.push(mockUser);
-        user = mockUser;
-      } else {
-        return res.status(400).json({ message: 'Invalid credentials or password too short.' });
-      }
+      return res.status(401).json({ message: 'Invalid credentials.' });
     }
 
-    if (user.password) {
-      const isMatch = await bcrypt.compare(password, user.password);
-      if (!isMatch) {
-        return res.status(400).json({ message: 'Invalid credentials.' });
-      }
+    // Step 2: Comparing password
+    currentStep = 'comparing password';
+    if (!user.password || typeof user.password !== 'string') {
+      console.error('[Auth Error] Stored password hash is missing or malformed for user:', cleanEmail);
+      return res.status(401).json({ message: 'Invalid credentials.' });
     }
 
+    let isMatch = false;
+    try {
+      isMatch = await bcrypt.compare(password, user.password);
+    } catch (bcryptErr) {
+      console.error('[Bcrypt Error] Password comparison failed:', bcryptErr.message);
+      return res.status(401).json({ message: 'Invalid credentials.' });
+    }
+
+    if (!isMatch) {
+      return res.status(401).json({ message: 'Invalid credentials.' });
+    }
+
+    // Step 3: Signing token
+    currentStep = 'signing token';
     const formattedUser = formatUser(user);
     const token = generateToken(formattedUser.id, formattedUser.name, formattedUser.email, formattedUser.targetRole);
 
@@ -164,8 +181,12 @@ export const loginUser = async (req, res) => {
       user: formattedUser,
     });
   } catch (error) {
-    console.error('[Login Error]', error);
-    return res.status(500).json({ message: error.message || 'Server error during login' });
+    console.error(`[Login Error] Failed during step: "${currentStep}"`);
+    console.error('[Login Error] Error Message:', error.message);
+    console.error('[Login Error] Stack Trace:\n', error.stack);
+    return res.status(500).json({
+      message: `Server error during login (${currentStep}): ${error.message}`,
+    });
   }
 };
 

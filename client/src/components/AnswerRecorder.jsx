@@ -141,16 +141,36 @@ export default function AnswerRecorder({ onAnswerSubmitted, isSubmitting }) {
   };
 
   const handleSubmit = (e) => {
-    e.preventDefault();
-    if (!transcript.trim()) {
-      setError('Please provide or confirm an answer before submitting.');
+    if (e && e.preventDefault) {
+      e.preventDefault();
+    }
+    const answerText = transcript.trim();
+    console.log('[AnswerRecorder] Submit triggered | Mode:', mode, '| Answer length:', answerText.length, '| Content:', answerText);
+
+    if (!answerText) {
+      setError('Please provide or type an answer before submitting.');
       return;
     }
-    onAnswerSubmitted({
-      transcript: transcript.trim(),
-      answerType: mode,
-      audioUrl,
-    });
+
+    try {
+      onAnswerSubmitted({
+        transcript: answerText,
+        answerType: mode,
+        audioUrl: mode === 'voice' ? audioUrl : '',
+      });
+    } catch (err) {
+      console.error('[AnswerRecorder] Error executing onAnswerSubmitted callback:', err);
+      setError(err.message || 'Failed to submit answer.');
+    }
+  };
+
+  const handleKeyDown = (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+      e.preventDefault();
+      if (transcript.trim() && !isSubmitting) {
+        handleSubmit(e);
+      }
+    }
   };
 
   const formatTime = (seconds) => {
@@ -274,7 +294,7 @@ export default function AnswerRecorder({ onAnswerSubmitted, isSubmitting }) {
           <span className="text-sm font-bold">Transcribing audio via OpenAI Whisper API...</span>
         </div>
       ) : (
-        <div className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div className="flex items-center justify-between">
             <label className="block text-xs font-bold text-[#0F1E1B] uppercase tracking-wider">
               {mode === 'voice' ? 'Transcribed Answer (Review & Edit if needed)' : 'Type Candidate Response'}
@@ -291,6 +311,7 @@ export default function AnswerRecorder({ onAnswerSubmitted, isSubmitting }) {
             rows={5}
             value={transcript}
             onChange={(e) => setTranscript(e.target.value)}
+            onKeyDown={handleKeyDown}
             placeholder={
               mode === 'voice'
                 ? 'Your transcribed response will appear here automatically...'
@@ -300,10 +321,9 @@ export default function AnswerRecorder({ onAnswerSubmitted, isSubmitting }) {
           />
 
           <button
-            type="button"
-            onClick={handleSubmit}
+            type="submit"
             disabled={!transcript.trim() || isSubmitting}
-            className="w-full py-4 px-6 rounded-2xl font-bold text-[#FDFBF3] bg-[#0F1E1B] hover:bg-[#1A332E] disabled:opacity-50 disabled:cursor-not-allowed transition-all editorial-shadow flex items-center justify-center space-x-2"
+            className="w-full py-4 px-6 rounded-2xl font-bold text-[#FDFBF3] bg-[#0F1E1B] hover:bg-[#1A332E] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed transition-all editorial-shadow flex items-center justify-center space-x-2 cursor-pointer z-20 relative"
           >
             {isSubmitting ? (
               <>
@@ -318,7 +338,7 @@ export default function AnswerRecorder({ onAnswerSubmitted, isSubmitting }) {
               </>
             )}
           </button>
-        </div>
+        </form>
       )}
     </div>
   );

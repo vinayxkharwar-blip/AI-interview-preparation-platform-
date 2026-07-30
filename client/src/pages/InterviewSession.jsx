@@ -28,11 +28,22 @@ export default function InterviewSession() {
   useEffect(() => {
     const fetchSessionData = async () => {
       try {
+        console.log('[InterviewSession] Fetching session details for ID:', sessionId);
         const res = await axiosClient.get(`/sessions/${sessionId}`);
+        console.log('[InterviewSession] Raw API response from GET /sessions/' + sessionId + ':', res.data);
+
         const { session: sessDoc, questions: qList, answers: aList, feedback: fList, improvementPlan: planDoc } = res.data;
+
+        console.log('[InterviewSession] Extracted questions array length:', (qList || []).length, '| Questions:', qList);
+        console.log('[InterviewSession] Calling setQuestions() with count:', (qList || []).length);
 
         setSession(sessDoc);
         setQuestions(qList || []);
+
+        if (!qList || qList.length === 0) {
+          console.warn('[InterviewSession] ⚠️ Session loaded but questions array is empty!');
+          setError('No questions found for this session. Please start a new session.');
+        }
 
         const aMap = {};
         const fMap = {};
@@ -64,8 +75,8 @@ export default function InterviewSession() {
           });
         }
       } catch (err) {
-        console.error('Failed to load session details:', err);
-        setError('Failed to load interview session details.');
+        console.error('[InterviewSession] Failed to load session details:', err);
+        setError('Failed to load interview session details: ' + (err.response?.data?.message || err.message));
       } finally {
         setLoading(false);
       }
@@ -78,27 +89,66 @@ export default function InterviewSession() {
   const currentFeedback = currentQuestion ? feedbackMap[currentQuestion._id] : null;
 
   const handleAnswerSubmit = async ({ transcript, answerType, audioUrl }) => {
-    if (!currentQuestion) return;
+    console.log('[InterviewSession] 1. handleAnswerSubmit invoked | Arguments received:', {
+      sessionId,
+      transcriptLength: transcript?.length,
+      transcriptSnippet: transcript ? transcript.substring(0, 30) + '...' : undefined,
+      answerType,
+      audioUrl,
+    });
+
+    console.log('[InterviewSession] 2. Validating environment & state:', {
+      currentIndex,
+      totalQuestions: questions.length,
+      currentQuestion,
+      currentQuestionId: currentQuestion?._id || currentQuestion?.id,
+    });
+
+    if (!currentQuestion) {
+      console.warn('[InterviewSession] ❌ ABORTING SUBMIT: currentQuestion is null or undefined! Check questions state array or currentIndex.');
+      setError('Cannot submit answer: current question is invalid or missing.');
+      return;
+    }
+
+    if (!transcript || !transcript.trim()) {
+      console.warn('[InterviewSession] ❌ ABORTING SUBMIT: transcript is empty or whitespace!');
+      setError('Please enter or record an answer before submitting.');
+      return;
+    }
+
+    const questionIdToSubmit = currentQuestion._id || currentQuestion.id;
+    const requestPayload = {
+      sessionId,
+      questionId: questionIdToSubmit,
+      transcript: transcript.trim(),
+      answerType: answerType || 'text',
+      audioUrl: audioUrl || '',
+    };
+
     setIsSubmitting(true);
     setError('');
 
     try {
-      const res = await axiosClient.post('/answers/submit', {
-        sessionId,
-        questionId: currentQuestion._id,
-        transcript,
-        answerType,
-        audioUrl,
-      });
+      console.log('[InterviewSession] 3. About to call API POST /answers/submit with payload:', requestPayload);
+
+      const res = await axiosClient.post('/answers/submit', requestPayload);
+
+      console.log('[InterviewSession] 4. API call succeeded! Response status:', res.status, '| Data:', res.data);
 
       const { answer, feedback } = res.data;
 
-      setAnswersMap((prev) => ({ ...prev, [currentQuestion._id]: answer }));
-      setFeedbackMap((prev) => ({ ...prev, [currentQuestion._id]: feedback }));
+      setAnswersMap((prev) => ({ ...prev, [questionIdToSubmit]: answer }));
+      setFeedbackMap((prev) => ({ ...prev, [questionIdToSubmit]: feedback }));
 
       setIsSubmitting(false);
+      console.log('[InterviewSession] 5. Answer state updated successfully.');
     } catch (err) {
-      console.error('Submit answer error:', err);
+      console.error('[InterviewSession] ❌ API call failed:', {
+        message: err.message,
+        status: err.response?.status,
+        data: err.response?.data,
+        stack: err.stack,
+      });
       setError(err.response?.data?.message || 'Failed to analyze candidate answer.');
       setIsSubmitting(false);
     }
