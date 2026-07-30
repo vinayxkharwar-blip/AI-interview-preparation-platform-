@@ -47,6 +47,10 @@ export const formatUser = (u) => {
 // @route POST /api/auth/register (or /signup)
 export const registerUser = async (req, res) => {
   try {
+    if (mongoose.connection.readyState !== 1) {
+      return res.status(503).json({ message: 'Database temporarily unavailable, please try again' });
+    }
+
     const { name, email, password, targetRole } = req.body;
 
     if (!name || !email || !password) {
@@ -60,16 +64,11 @@ export const registerUser = async (req, res) => {
     const cleanEmail = email.toLowerCase().trim();
 
     let existingUser = null;
-    if (mongoose.connection.readyState === 1) {
-      try {
-        existingUser = await User.findOne({ email: cleanEmail });
-      } catch (e) {
-        console.log('[DB Auth Warning] Searching existing user failed:', e.message);
-      }
-    }
-
-    if (!existingUser) {
-      existingUser = memoryUsers.find((u) => u.email === cleanEmail);
+    try {
+      existingUser = await User.findOne({ email: cleanEmail });
+    } catch (e) {
+      console.log('[DB Auth Warning] Searching existing user failed:', e.message);
+      return res.status(503).json({ message: 'Database temporarily unavailable, please try again' });
     }
 
     if (existingUser) {
@@ -80,31 +79,20 @@ export const registerUser = async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, salt);
 
     let user = null;
-    if (mongoose.connection.readyState === 1) {
-      try {
-        user = await User.create({
-          name: name.trim(),
-          email: cleanEmail,
-          password: hashedPassword,
-          targetRole: targetRole || 'Full Stack Engineer',
-        });
-      } catch (e) {
-        console.log('[DB Auth Notice] User creation failed, falling back to memory store:', e.message);
-      }
-    }
-
-    if (!user) {
-      const mockId = new mongoose.Types.ObjectId().toString();
-      const mockUser = {
-        _id: mockId,
-        id: mockId,
+    try {
+      user = await User.create({
         name: name.trim(),
         email: cleanEmail,
         password: hashedPassword,
         targetRole: targetRole || 'Full Stack Engineer',
-      };
-      memoryUsers.push(mockUser);
-      user = mockUser;
+      });
+    } catch (e) {
+      console.error('[DB Auth Error] User creation failed:', e.message);
+      return res.status(503).json({ message: 'Database temporarily unavailable, please try again' });
+    }
+
+    if (!user) {
+      return res.status(503).json({ message: 'Database temporarily unavailable, please try again' });
     }
 
     const formattedUser = formatUser(user);

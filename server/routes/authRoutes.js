@@ -14,8 +14,8 @@ const checkDbReady = (req, res, next) => {
   next();
 };
 
-router.post('/register', registerUser);
-router.post('/signup', registerUser); // Alias
+router.post('/register', checkDbReady, registerUser);
+router.post('/signup', checkDbReady, registerUser); // Alias
 router.post('/login', checkDbReady, loginUser);
 router.get('/me', protect, getMe);
 

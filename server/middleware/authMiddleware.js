@@ -14,7 +14,12 @@ export const protect = async (req, res, next) => {
         process.env.JWT_SECRET || 'super-secret-ai-interview-prep-jwt-key-2026'
       );
 
-      if (mongoose.connection.readyState === 1 && mongoose.Types.ObjectId.isValid(decoded.id)) {
+      if (!decoded.id || typeof decoded.id !== 'string' || decoded.id.startsWith('user-') || !mongoose.Types.ObjectId.isValid(decoded.id)) {
+        console.warn(`[Auth Middleware] Rejected token with invalid user ID format: "${decoded.id}"`);
+        return res.status(401).json({ message: 'Invalid or expired session token, please sign in again.' });
+      }
+
+      if (mongoose.connection.readyState === 1) {
         try {
           req.user = await User.findById(decoded.id).select('-password');
         } catch (e) {
@@ -27,11 +32,11 @@ export const protect = async (req, res, next) => {
         const memUser = memoryUsers.find(
           (u) => u._id === decoded.id || u.id === decoded.id || u.email === decoded.email
         );
-        if (memUser) {
+        if (memUser && mongoose.Types.ObjectId.isValid(memUser._id)) {
           const { password, ...userWithoutPassword } = memUser;
           req.user = userWithoutPassword;
-        } else {
-          // Fallback mock user with token payload information
+        } else if (mongoose.Types.ObjectId.isValid(decoded.id)) {
+          // Fallback mock user with token payload information (only if ObjectId is valid)
           req.user = {
             _id: decoded.id,
             id: decoded.id,
@@ -39,6 +44,8 @@ export const protect = async (req, res, next) => {
             email: decoded.email || 'user@example.com',
             targetRole: decoded.targetRole || 'Full Stack Engineer',
           };
+        } else {
+          return res.status(401).json({ message: 'User session not found, please sign in again.' });
         }
       }
       return next();

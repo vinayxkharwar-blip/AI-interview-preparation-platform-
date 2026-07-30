@@ -21,10 +21,15 @@ export const memoryImprovementPlans = [];
 // @route POST /api/sessions/start
 export const startSession = async (req, res) => {
   try {
+    if (!req.user || !req.user._id) {
+      return res.status(400).json({ message: 'Cannot generate questions: user profile data is missing' });
+    }
+
     const { resumeId, targetRole, interviewType = 'technical', difficulty = 'mid', count = 5, focusTopic, previousScore } = req.body;
 
-    if (!targetRole) {
-      return res.status(400).json({ message: 'Target role is required.' });
+    const effectiveTargetRole = targetRole || req.user.targetRole;
+    if (!effectiveTargetRole) {
+      return res.status(400).json({ message: 'Cannot generate questions: user profile data is missing' });
     }
 
     let parsedResume = null;
@@ -49,7 +54,7 @@ export const startSession = async (req, res) => {
           _id: sessionId,
           user: req.user._id,
           resume: resumeId || null,
-          targetRole,
+          targetRole: effectiveTargetRole,
           interviewType,
           difficulty,
           totalQuestions: Number(count) || 5,
@@ -68,7 +73,7 @@ export const startSession = async (req, res) => {
         id: sessionId,
         user: req.user._id,
         resume: resumeId || null,
-        targetRole,
+        targetRole: effectiveTargetRole,
         interviewType,
         difficulty,
         totalQuestions: Number(count) || 5,
@@ -81,10 +86,14 @@ export const startSession = async (req, res) => {
     memorySessions.push(session);
 
     // 2. Generate questions via LLM
+    if (!req.user || !effectiveTargetRole) {
+      return res.status(400).json({ message: 'Cannot generate questions: user profile data is missing' });
+    }
+
     console.log('[Session Controller] Generating personalized interview questions via LLM...', focusTopic ? `[Focus Topic: ${focusTopic}]` : '');
     const prompt = buildQuestionGenerationPrompt({
       parsedResume,
-      targetRole,
+      targetRole: effectiveTargetRole,
       interviewType,
       difficulty,
       count: session.totalQuestions,
@@ -94,7 +103,10 @@ export const startSession = async (req, res) => {
     let rawQuestions = [];
     try {
       const llmResult = await generateLLMJson(prompt, 'You are an expert interview question generator.');
-      rawQuestions = llmResult?.questions || [];
+      if (!llmResult) {
+        throw new Error('Cannot generate questions: user profile data is missing or LLM failed to respond');
+      }
+      rawQuestions = Array.isArray(llmResult.questions) ? llmResult.questions : (llmResult.questions || []);
     } catch (llmErr) {
       console.error('[Session Controller] Question generation LLM error:', llmErr.message);
     }
