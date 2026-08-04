@@ -9,6 +9,7 @@ import AnalyticsSnapshot from '../models/AnalyticsSnapshot.js';
 import { generateLLMJson } from '../services/llmService.js';
 import { buildQuestionGenerationPrompt } from '../prompts/questionPrompts.js';
 import { buildImprovementPlanPrompt } from '../prompts/improvementPrompts.js';
+import { checkOwnership } from '../utils/authz.js';
 
 // In-memory fallback stores when MongoDB is offline/reconnecting
 export const memorySessions = [];
@@ -32,8 +33,9 @@ export const startSession = async (req, res) => {
       return res.status(400).json({ message: 'Cannot generate questions: user profile data is missing' });
     }
 
+    const isValidResumeId = resumeId && mongoose.Types.ObjectId.isValid(resumeId);
     let parsedResume = null;
-    if (resumeId) {
+    if (isValidResumeId) {
       try {
         const resumeDoc = await Resume.findById(resumeId);
         if (resumeDoc) {
@@ -45,6 +47,9 @@ export const startSession = async (req, res) => {
     }
 
     const sessionId = new mongoose.Types.ObjectId().toString();
+    const validUserId = req.user._id && mongoose.Types.ObjectId.isValid(req.user._id)
+      ? req.user._id
+      : new mongoose.Types.ObjectId().toString();
 
     // 1. Create Session DB record
     let session = null;
@@ -52,8 +57,8 @@ export const startSession = async (req, res) => {
       try {
         session = await Session.create({
           _id: sessionId,
-          user: req.user._id,
-          resume: resumeId || null,
+          user: validUserId,
+          resume: isValidResumeId ? resumeId : null,
           targetRole: effectiveTargetRole,
           interviewType,
           difficulty,
@@ -267,6 +272,10 @@ export const getSessionById = async (req, res) => {
       return res.status(404).json({ message: 'Session not found.' });
     }
 
+    if (!checkOwnership(session, req.user)) {
+      return res.status(403).json({ message: 'Forbidden: You do not have access to this session' });
+    }
+
     console.log(`[Get Session] Session "${id}" loaded. Questions count: ${questions.length}`);
 
     res.json({
@@ -303,6 +312,30 @@ export const completeSession = async (req, res) => {
       console.log('[Complete Session DB Lookup]', e.message);
     }
 
+    if (!session) {
+      session = memorySessions.find((s) => String(s._id) === String(id) || String(s.id) === String(id));
+    }
+
+    if (questions.length === 0) {
+      questions = memoryQuestions.filter((q) => String(q.session) === String(id));
+    }
+
+    if (answers.length === 0) {
+      answers = memoryAnswers.filter((a) => String(a.session) === String(id));
+    }
+
+    if (feedbackList.length === 0) {
+      feedbackList = memoryFeedback.filter((f) => String(f.session) === String(id));
+    }
+
+    if (!session) {
+      return res.status(404).json({ message: 'Session not found.' });
+    }
+
+    if (!checkOwnership(session, req.user)) {
+      return res.status(403).json({ message: 'Forbidden: You do not have access to this session' });
+    }
+
     // Calculate aggregated overall score & category breakdown
     let totalScoreSum = 0;
     const categoryScores = {};
@@ -326,11 +359,13 @@ export const completeSession = async (req, res) => {
     }));
 
     // Update Session status & score
-    if (session && typeof session.save === 'function') {
+    if (session) {
       session.status = 'completed';
       session.overallScore = overallScore;
       session.categoryBreakdown = categoryBreakdown;
-      await session.save();
+      if (typeof session.save === 'function') {
+        await session.save();
+      }
     }
 
     // Build Q&A transcript history for Improvement Plan LLM Synthesis

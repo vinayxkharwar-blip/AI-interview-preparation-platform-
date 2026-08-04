@@ -4,6 +4,7 @@ import axiosClient from '../api/axiosClient';
 import PreCallPermissionsModal from '../components/PreCallPermissionsModal';
 import LiveTranscriptDrawer from '../components/LiveTranscriptDrawer';
 import QuestionCard from '../components/QuestionCard';
+import { Room } from 'livekit-client';
 import {
   Mic, MicOff, Video, VideoOff, PhoneOff, MessageSquare, Lightbulb,
   Sparkles, ShieldCheck, Loader2, Volume2, Target, CheckCircle2,
@@ -37,12 +38,43 @@ export default function LiveInterviewSession() {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [currentSpeechTranscript, setCurrentSpeechTranscript] = useState('');
 
+  // HeyGen Avatar Stream States & References
+  const alexVideoRef = useRef(null);
+  const heygenPeerConnectionRef = useRef(null);
+  const [hasAlexAvatarStream, setHasAlexAvatarStream] = useState(false);
+  const [heygenSessionInfo, setHeyGenSessionInfo] = useState({ sessionId: null });
+
   // References
   const localVideoRef = useRef(null);
   const mediaStreamRef = useRef(null);
+  const livekitRoomRef = useRef(null);
   const timerIntervalRef = useRef(null);
   const recognitionRef = useRef(null);
   const synthRef = useRef(null);
+
+  // Helper to safely load SpeechSynthesis voices asynchronously across browsers
+  const getVoicesAsync = () => {
+    return new Promise((resolve) => {
+      if (!('speechSynthesis' in window)) {
+        return resolve([]);
+      }
+      let voices = window.speechSynthesis.getVoices();
+      if (voices && voices.length > 0) {
+        return resolve(voices);
+      }
+
+      const timer = setTimeout(() => {
+        if (window.speechSynthesis) window.speechSynthesis.onvoiceschanged = null;
+        resolve(window.speechSynthesis ? window.speechSynthesis.getVoices() || [] : []);
+      }, 500);
+
+      window.speechSynthesis.onvoiceschanged = () => {
+        clearTimeout(timer);
+        window.speechSynthesis.onvoiceschanged = null;
+        resolve(window.speechSynthesis.getVoices() || []);
+      };
+    });
+  };
 
   // 1. Fetch Session Data
   useEffect(() => {
@@ -118,19 +150,23 @@ export default function LiveInterviewSession() {
       };
 
       recognition.onerror = (err) => {
-        console.warn('[Live STT Warning]', err.error);
+        if (err.error !== 'aborted') {
+          console.warn('[Live STT Warning]', err.error);
+        }
       };
 
       recognition.onend = () => {
         setIsCandidateSpeaking(false);
-        // Restart STT if call is still active
-        if (!isEndingCall && !isMicMuted) {
+        // Restart STT if call is active and Alex is NOT speaking
+        if (!isEndingCall && !isMicMuted && !isAlexSpeaking) {
           try { recognition.start(); } catch (e) {}
         }
       };
 
       recognitionRef.current = recognition;
-      try { recognition.start(); } catch (e) {}
+      if (!isAlexSpeaking) {
+        try { recognition.start(); } catch (e) {}
+      }
     } else {
       console.warn('[Live STT] Web Speech API SpeechRecognition is not supported in this browser.');
     }
@@ -162,50 +198,266 @@ export default function LiveInterviewSession() {
     }
   }, [showPermissionsModal, questions]);
 
-  // 5. Handle Permissions Granted & Local Video Setup
-  const handlePermissionsGranted = ({ stream }) => {
+  // 5. Handle Permissions Granted & Media Setup
+  const handlePermissionsGranted = async ({ stream }) => {
     setShowPermissionsModal(false);
     mediaStreamRef.current = stream;
 
+    // Prime browser SpeechSynthesis on user click gesture so audio autoplay policy is unlocked
+    if ('speechSynthesis' in window) {
+      try {
+        window.speechSynthesis.resume();
+        getVoicesAsync().then((voices) => {
+          console.log(`[Web Speech Pre-warm] ${voices.length} voices pre-loaded on user gesture.`);
+        });
+        const silentUtterance = new SpeechSynthesisUtterance('');
+        silentUtterance.volume = 0;
+        window.speechSynthesis.speak(silentUtterance);
+      } catch (e) {
+        console.warn('[Web Speech Pre-warm Notice]', e);
+      }
+    }
+
+    // Direct attach candidate stream to local video element
     if (localVideoRef.current && stream) {
       localVideoRef.current.srcObject = stream;
+      localVideoRef.current.play().catch((e) => console.warn('[Video Play Notice]', e.message));
+    }
+
+    // Initialize HeyGen Real-Time Streaming Avatar Session
+    initHeyGenAvatarStream();
+
+    // Connect to LiveKit Room and publish candidate tracks if LiveKit configured
+    try {
+      const res = await axiosClient.post(`/sessions/${sessionId}/live/token`);
+      const { isFallback, token, url, message } = res.data;
+
+      if (!isFallback && token && url) {
+        console.log('[LiveKit] Connecting to LiveKit room at:', url);
+        const room = new Room();
+        livekitRoomRef.current = room;
+
+        room.on('disconnected', (reason) => {
+          console.warn('[LiveKit Room] Disconnected from room:', reason);
+        });
+
+        await room.connect(url, token);
+        console.log('[LiveKit] Successfully connected to LiveKit Cloud room');
+
+        if (stream) {
+          const videoTrack = stream.getVideoTracks()[0];
+          const audioTrack = stream.getAudioTracks()[0];
+
+          if (videoTrack) {
+            await room.localParticipant.publishTrack(videoTrack, { name: 'camera-track' });
+            console.log('[LiveKit] Candidate video track published to room');
+          }
+          if (audioTrack) {
+            await room.localParticipant.publishTrack(audioTrack, { name: 'mic-track' });
+            console.log('[LiveKit] Candidate mic track published to room');
+          }
+        }
+      } else {
+        console.log('[LiveKit Fallback Notice]', message || 'Using high-performance browser WebRTC media stream fallback mode.');
+      }
+    } catch (lkErr) {
+      console.error('[LiveKit Error] Failed to connect to LiveKit Cloud room:', lkErr.message || lkErr, lkErr);
+      console.log('[LiveKit Fallback] Falling back to local browser media stream.');
     }
   };
 
-  // 6. Text-To-Speech (TTS) Engine - Drives Equalizer Animation directly
-  const speakAlexLine = (text, onComplete) => {
+  // 5b. Initialize HeyGen Real-Time Streaming Avatar Stream Session
+  const initHeyGenAvatarStream = async () => {
+    try {
+      const res = await axiosClient.post(`/sessions/${sessionId}/live/heygen-stream`);
+      const { isFallback, sessionId: hgSessionId, offer, iceServers, message } = res.data;
+
+      if (isFallback || !hgSessionId || !offer) {
+        console.log('[HeyGen Stream] (a) HeyGen API key missing or in fallback mode:', message || 'Key not set in .env. Using waveform visualizer animation.');
+        setHasAlexAvatarStream(false);
+        return;
+      }
+
+      console.log('[HeyGen Stream] HeyGen API key detected. Initializing WebRTC RTCPeerConnection for Alex avatar stream:', hgSessionId);
+      setHeyGenSessionInfo({ sessionId: hgSessionId });
+
+      const pc = new RTCPeerConnection({ iceServers: iceServers || [] });
+      heygenPeerConnectionRef.current = pc;
+
+      pc.ontrack = (event) => {
+        console.log('[HeyGen Stream] Received WebRTC media track from HeyGen avatar stream:', event.track.kind);
+        if (alexVideoRef.current && event.streams && event.streams[0]) {
+          alexVideoRef.current.srcObject = event.streams[0];
+          setHasAlexAvatarStream(true);
+        }
+      };
+
+      pc.onicecandidate = (event) => {
+        if (event.candidate) {
+          axiosClient.post(`/sessions/${sessionId}/live/heygen-ice`, {
+            sessionId: hgSessionId,
+            candidate: event.candidate,
+          }).catch((e) => console.warn('[HeyGen ICE Submit Notice]', e.message));
+        }
+      };
+
+      const remoteOffer = typeof offer === 'string' ? { type: 'offer', sdp: offer } : offer;
+      await pc.setRemoteDescription(remoteOffer);
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+
+      await axiosClient.post(`/sessions/${sessionId}/live/heygen-sdp`, {
+        sessionId: hgSessionId,
+        answer: { type: 'answer', sdp: answer.sdp },
+      });
+
+      console.log('[HeyGen Stream] WebRTC handshake complete for Alex avatar stream');
+    } catch (err) {
+      console.warn('[HeyGen Stream Notice] (a) HeyGen key missing or stream setup error. Using animated waveform fallback:', err.message);
+      setHasAlexAvatarStream(false);
+    }
+  };
+
+  // 5c. Candidate Video Stream Attachment Effect (Stable, non-flickering)
+  useEffect(() => {
+    if (!showPermissionsModal && !isCameraOff && localVideoRef.current && mediaStreamRef.current) {
+      if (localVideoRef.current.srcObject !== mediaStreamRef.current) {
+        localVideoRef.current.srcObject = mediaStreamRef.current;
+        localVideoRef.current.play().catch((err) => console.warn('[Video Play Notice]', err.message));
+      }
+    }
+  }, [showPermissionsModal, isCameraOff]);
+
+  // Teardown HeyGen session, LiveKit room & media tracks on component unmount
+  useEffect(() => {
+    return () => {
+      if (heygenPeerConnectionRef.current) {
+        try { heygenPeerConnectionRef.current.close(); } catch (e) {}
+      }
+      if (heygenSessionInfo.sessionId) {
+        axiosClient.post(`/sessions/${sessionId}/live/heygen-stop`, { sessionId: heygenSessionInfo.sessionId }).catch(() => {});
+      }
+      if (livekitRoomRef.current) {
+        try { livekitRoomRef.current.disconnect(); } catch (e) {}
+      }
+      if (mediaStreamRef.current) {
+        mediaStreamRef.current.getTracks().forEach((track) => track.stop());
+      }
+    };
+  }, [heygenSessionInfo.sessionId, sessionId]);
+
+  // 6. Multi-Engine Text-To-Speech (TTS) - Guarantees Alex's spoken audio plays out loud in all browsers
+  const speakAlexLine = async (text, onComplete, isAvatarSpeaking = false) => {
+    if (!text) return;
     setLiveCaption(text);
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel(); // Stop any previous speech
+    setIsAlexSpeaking(true);
 
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.rate = 1.0;
-      utterance.pitch = 1.0;
-
-      utterance.onstart = () => {
-        setIsAlexSpeaking(true);
-      };
-
-      utterance.onend = () => {
+    // If HeyGen avatar stream is active & speaking over WebRTC
+    if (hasAlexAvatarStream && isAvatarSpeaking) {
+      console.log('[TTS Engine] HeyGen avatar stream active: speaking via WebRTC avatar stream.');
+      const duration = Math.max(3000, text.length * 60);
+      setTimeout(() => {
         setIsAlexSpeaking(false);
         if (onComplete) onComplete();
-      };
+      }, duration);
+      return;
+    }
 
-      utterance.onerror = (e) => {
-        console.error('[TTS Error]', e);
-        setIsAlexSpeaking(false);
-        if (onComplete) onComplete();
-      };
+    // Web Speech API Fallback
+    console.log('[TTS Engine] (b) Web Speech API fallback triggered for Alex caption:', text);
 
-      synthRef.current = utterance;
-      window.speechSynthesis.speak(utterance);
-    } else {
-      // Fallback timer if SpeechSynthesis unavailable
-      setIsAlexSpeaking(true);
+    if (!('speechSynthesis' in window)) {
+      console.warn('[Web Speech TTS Error] (d) speechSynthesis is not supported in this browser.');
       setTimeout(() => {
         setIsAlexSpeaking(false);
         if (onComplete) onComplete();
       }, Math.max(3000, text.length * 50));
+      return;
+    }
+
+    try {
+      // Pause candidate STT temporarily while Alex speaks to prevent mic feedback & STT audio conflicts
+      if (recognitionRef.current) {
+        try { recognitionRef.current.stop(); } catch (e) {}
+      }
+
+      // Cancel previous active synthesis & unpause audio engine
+      window.speechSynthesis.cancel();
+      if (window.speechSynthesis.paused) {
+        window.speechSynthesis.resume();
+      }
+
+      // Load voices asynchronously to prevent empty voices array bug
+      const voices = await getVoicesAsync();
+      console.log(`[Web Speech TTS] ${voices.length} voices available in browser.`);
+
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.rate = 0.95;
+      utterance.pitch = 1.0;
+      utterance.volume = 1.0;
+
+      if (voices && voices.length > 0) {
+        const bestVoice =
+          voices.find((v) => v.lang === 'en-US' && (v.name.includes('Google') || v.name.includes('Natural') || v.name.includes('Guy') || v.name.includes('David') || v.name.includes('Alex'))) ||
+          voices.find((v) => v.lang.startsWith('en')) ||
+          voices[0];
+        if (bestVoice) {
+          utterance.voice = bestVoice;
+          console.log('[Web Speech TTS] Selected voice:', bestVoice.name, `(${bestVoice.lang})`);
+        }
+      } else {
+        console.warn('[Web Speech TTS Warning] No voices returned by browser, using browser default voice.');
+      }
+
+      let hasEnded = false;
+      const finishSpeech = () => {
+        if (hasEnded) return;
+        hasEnded = true;
+        setIsAlexSpeaking(false);
+        if (onComplete) onComplete();
+      };
+
+      utterance.onstart = () => {
+        console.log('[Web Speech TTS] (c) speak() called successfully for Alex dialogue.');
+        setIsAlexSpeaking(true);
+      };
+
+      utterance.onend = () => {
+        console.log('[Web Speech TTS] speak() ended successfully.');
+        finishSpeech();
+      };
+
+      utterance.onerror = (e) => {
+        console.error('[Web Speech TTS Error] (d) speak() threw an error:', e.error || e);
+        finishSpeech();
+      };
+
+      synthRef.current = utterance;
+
+      // Resume synthesis right before speak() call to unlock Chrome autoplay policy
+      window.speechSynthesis.resume();
+      window.speechSynthesis.speak(utterance);
+      window.speechSynthesis.resume();
+
+      // Chrome safety heartbeat timer so synthesis doesn't hang indefinitely
+      const expectedDurationMs = Math.max(4000, (text.length / 12) * 1000);
+      setTimeout(() => {
+        if (!hasEnded && window.speechSynthesis && window.speechSynthesis.speaking) {
+          window.speechSynthesis.resume();
+        }
+      }, expectedDurationMs / 2);
+
+      setTimeout(() => {
+        if (!hasEnded) {
+          console.warn('[Web Speech TTS Notice] Safety timeout reached for speech end.');
+          finishSpeech();
+        }
+      }, expectedDurationMs + 3000);
+
+    } catch (err) {
+      console.error('[Web Speech TTS Error] (d) speak() threw exception during execution:', err);
+      setIsAlexSpeaking(false);
+      if (onComplete) onComplete();
     }
   };
 
@@ -224,9 +476,10 @@ export default function LiveInterviewSession() {
         userTranscript: spokenText,
         currentQuestionIndex: currentIndex,
         conversationHistory: liveTurns.slice(-4),
+        heygenSessionId: heygenSessionInfo.sessionId,
       });
 
-      const { interviewerLine, keyPointsCovered, decision, nextQuestionIndex, turnScore } = res.data;
+      const { interviewerLine, keyPointsCovered, decision, nextQuestionIndex, turnScore, heygenSpeaking } = res.data;
 
       const newTurn = {
         questionIndex: currentIndex,
@@ -240,14 +493,14 @@ export default function LiveInterviewSession() {
 
       setLiveTurns((prev) => [...prev, newTurn]);
 
-      // Speak Alex's response line
+      // Speak Alex's response line (via HeyGen Streaming Avatar or Web Speech API fallback)
       speakAlexLine(interviewerLine, () => {
         if (decision === 'next_question' && nextQuestionIndex < questions.length) {
           setCurrentIndex(nextQuestionIndex);
         } else if (decision === 'complete') {
           handleEndInterview();
         }
-      });
+      }, Boolean(heygenSpeaking));
     } catch (err) {
       console.error('[LiveTurn Error]', err);
       speakAlexLine('Could you please repeat that? I had trouble processing your last response.');
@@ -263,6 +516,9 @@ export default function LiveInterviewSession() {
       if (audioTrack) {
         audioTrack.enabled = !audioTrack.enabled;
         setIsMicMuted(!audioTrack.enabled);
+        if (livekitRoomRef.current?.localParticipant) {
+          try { livekitRoomRef.current.localParticipant.setMicrophoneEnabled(audioTrack.enabled); } catch (e) {}
+        }
       }
     } else {
       setIsMicMuted(!isMicMuted);
@@ -275,6 +531,9 @@ export default function LiveInterviewSession() {
       if (videoTrack) {
         videoTrack.enabled = !videoTrack.enabled;
         setIsCameraOff(!videoTrack.enabled);
+        if (livekitRoomRef.current?.localParticipant) {
+          try { livekitRoomRef.current.localParticipant.setCameraEnabled(videoTrack.enabled); } catch (e) {}
+        }
       }
     } else {
       setIsCameraOff(!isCameraOff);
@@ -289,6 +548,15 @@ export default function LiveInterviewSession() {
     if (window.speechSynthesis) window.speechSynthesis.cancel();
     if (recognitionRef.current) {
       try { recognitionRef.current.stop(); } catch (e) {}
+    }
+    if (heygenPeerConnectionRef.current) {
+      try { heygenPeerConnectionRef.current.close(); } catch (e) {}
+    }
+    if (heygenSessionInfo.sessionId) {
+      axiosClient.post(`/sessions/${sessionId}/live/heygen-stop`, { sessionId: heygenSessionInfo.sessionId }).catch(() => {});
+    }
+    if (livekitRoomRef.current) {
+      try { livekitRoomRef.current.disconnect(); } catch (e) {}
     }
     if (mediaStreamRef.current) {
       mediaStreamRef.current.getTracks().forEach((track) => track.stop());
@@ -381,29 +649,43 @@ export default function LiveInterviewSession() {
               )}
             </div>
 
-            {/* AI Avatar Visualizer */}
-            <div className="my-auto text-center space-y-6 z-10 py-6">
-              
-              {/* Glowing Avatar Sphere */}
-              <div className="relative inline-block">
-                <div className={`w-32 h-32 sm:w-40 sm:h-40 rounded-full bg-gradient-to-br from-[#1D3327] via-[#12211A] to-[#254233] border-4 ${isAlexSpeaking ? 'border-[#E7B92E] shadow-[0_0_30px_rgba(231,185,46,0.5)]' : 'border-[#E4DDC9]/30'} flex items-center justify-center mx-auto transition-all duration-300`}>
-                  <Volume2 className={`w-16 h-16 ${isAlexSpeaking ? 'text-[#E7B92E] scale-110' : 'text-[#DCEEDF]/60'} transition-transform duration-300`} />
+            {/* AI Avatar Visualizer / D-ID WebRTC Avatar Video */}
+            <div className="my-auto text-center space-y-4 z-10 py-4 flex flex-col items-center justify-center">
+              {hasAlexAvatarStream ? (
+                <div className="relative w-full max-w-sm sm:max-w-md aspect-video rounded-2xl overflow-hidden border-2 border-[#E7B92E] shadow-[0_0_25px_rgba(231,185,46,0.35)] bg-black flex items-center justify-center">
+                  <video
+                    ref={alexVideoRef}
+                    autoPlay
+                    playsInline
+                    className="w-full h-full object-cover"
+                  />
+                  <div className="absolute top-2.5 right-2.5 bg-[#12211A]/85 backdrop-blur-md px-2.5 py-1 rounded-full border border-[#E7B92E]/60 text-[10px] font-bold text-[#E7B92E] flex items-center space-x-1">
+                    <Sparkles className="w-3 h-3 text-[#E7B92E]" />
+                    <span>Real-Time AI Avatar</span>
+                  </div>
                 </div>
+              ) : (
+                /* Glowing Avatar Sphere Fallback */
+                <div className="relative inline-block">
+                  <div className={`w-32 h-32 sm:w-40 sm:h-40 rounded-full bg-gradient-to-br from-[#1D3327] via-[#12211A] to-[#254233] border-4 ${isAlexSpeaking ? 'border-[#E7B92E] shadow-[0_0_30px_rgba(231,185,46,0.5)]' : 'border-[#E4DDC9]/30'} flex items-center justify-center mx-auto transition-all duration-300`}>
+                    <Volume2 className={`w-16 h-16 ${isAlexSpeaking ? 'text-[#E7B92E] scale-110' : 'text-[#DCEEDF]/60'} transition-transform duration-300`} />
+                  </div>
 
-                {/* Animated Equalizer Bar Mouth (Driven strictly off TTS state + reduced-motion support) */}
-                <div className="absolute -bottom-3 left-1/2 transform -translate-x-1/2 flex items-center space-x-1 bg-[#12211A] px-4 py-1.5 rounded-full border-2 border-[#E7B92E]">
-                  {[0.4, 0.9, 0.6, 1.0, 0.7, 0.4].map((scale, i) => (
-                    <div
-                      key={i}
-                      className={`w-1.5 bg-[#E7B92E] rounded-full transition-all duration-150 ${isAlexSpeaking ? 'motion-safe:animate-bounce' : 'h-2'}`}
-                      style={{
-                        height: isAlexSpeaking ? `${scale * 20}px` : '6px',
-                        animationDelay: `${i * 100}ms`
-                      }}
-                    />
-                  ))}
+                  {/* Animated Equalizer Bar Mouth */}
+                  <div className="absolute -bottom-3 left-1/2 transform -translate-x-1/2 flex items-center space-x-1 bg-[#12211A] px-4 py-1.5 rounded-full border-2 border-[#E7B92E]">
+                    {[0.4, 0.9, 0.6, 1.0, 0.7, 0.4].map((scale, i) => (
+                      <div
+                        key={i}
+                        className={`w-1.5 bg-[#E7B92E] rounded-full transition-all duration-150 ${isAlexSpeaking ? 'motion-safe:animate-bounce' : 'h-2'}`}
+                        style={{
+                          height: isAlexSpeaking ? `${scale * 20}px` : '6px',
+                          animationDelay: `${i * 100}ms`
+                        }}
+                      />
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
 
               <div>
                 <h4 className="text-lg font-bold text-[#FBF9F3]">Alex</h4>

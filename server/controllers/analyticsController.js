@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import Session from '../models/Session.js';
 import Feedback from '../models/Feedback.js';
 import Answer from '../models/Answer.js';
+import { memorySessions, memoryAnswers, memoryFeedback } from './sessionController.js';
 
 // @desc Get aggregated user analytics metrics for dashboard charts
 // @route GET /api/analytics/dashboard
@@ -113,7 +114,66 @@ export const getDashboardAnalytics = async (req, res) => {
       console.log('[Analytics Aggregation DB Fallback]', dbErr.message);
     }
 
-    // Fallback populated data if no user sessions exist yet (for stunning demonstration visuals)
+    // In-memory fallback calculation if DB aggregations returned empty results
+    if (scoreTrend.length === 0) {
+      const userMemSessions = memorySessions.filter(
+        (s) => String(s.user) === String(userId) && s.status === 'completed'
+      );
+      if (userMemSessions.length > 0) {
+        totalSessions = userMemSessions.length;
+        const scoreSum = userMemSessions.reduce((acc, s) => acc + (s.overallScore || 0), 0);
+        avgScore = Number((scoreSum / totalSessions).toFixed(1));
+
+        scoreTrend = userMemSessions.map((s, idx) => ({
+          date: s.createdAt ? new Date(s.createdAt).toISOString().split('T')[0] : `Session ${idx + 1}`,
+          score: s.overallScore || 0,
+          role: s.targetRole || 'Software Engineer',
+          type: s.interviewType || 'technical',
+        }));
+
+        const userMemAnswers = memoryAnswers.filter((a) => String(a.user) === String(userId));
+        totalAnswers = userMemAnswers.length;
+
+        const userMemSessionIds = new Set(
+          memorySessions.filter((s) => String(s.user) === String(userId)).map((s) => String(s._id || s.id))
+        );
+        const userMemFeedback = memoryFeedback.filter((f) => userMemSessionIds.has(String(f.session)));
+
+        if (userMemFeedback.length > 0) {
+          const catMap = {};
+          const weaknessMap = {};
+
+          userMemFeedback.forEach((fb) => {
+            const cat = fb.category || 'General';
+            if (!catMap[cat]) catMap[cat] = { sum: 0, count: 0 };
+            catMap[cat].sum += fb.score || 0;
+            catMap[cat].count += 1;
+
+            if (Array.isArray(fb.weaknesses)) {
+              fb.weaknesses.forEach((w) => {
+                if (!weaknessMap[w]) weaknessMap[w] = { frequency: 0, sum: 0 };
+                weaknessMap[w].frequency += 1;
+                weaknessMap[w].sum += fb.score || 0;
+              });
+            }
+          });
+
+          skillScores = Object.keys(catMap).map((cat) => ({
+            skill: cat,
+            score: Number((catMap[cat].sum / catMap[cat].count).toFixed(1)),
+            fullMark: 10,
+          }));
+
+          weakTopics = Object.keys(weaknessMap).map((w) => ({
+            topic: w,
+            frequency: weaknessMap[w].frequency,
+            avgScore: Number((weaknessMap[w].sum / weaknessMap[w].frequency).toFixed(1)),
+          }));
+        }
+      }
+    }
+
+    // Fallback populated demo data if no user sessions exist in DB or memory stores
     if (scoreTrend.length === 0) {
       scoreTrend = [
         { date: 'Session 1', score: 6.2, role: 'Software Developer', type: 'technical' },

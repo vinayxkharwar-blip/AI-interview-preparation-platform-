@@ -29,7 +29,10 @@ export default function Login() {
       navigate('/dashboard');
     } catch (err) {
       console.error('Login error:', err);
-      setError(err.response?.data?.message || err.message || 'Invalid credentials or server unavailable.');
+      const serverMessage = typeof err.response?.data === 'string'
+        ? err.response.data
+        : err.response?.data?.message;
+      setError(serverMessage || err.message || 'Invalid credentials or server unavailable.');
       setLoading(false);
     }
   };

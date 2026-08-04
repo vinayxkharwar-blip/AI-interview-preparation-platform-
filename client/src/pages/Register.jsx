@@ -39,7 +39,10 @@ export default function Register() {
       navigate('/dashboard');
     } catch (err) {
       console.error('Registration error:', err);
-      setError(err.response?.data?.message || err.message || 'Registration failed.');
+      const serverMessage = typeof err.response?.data === 'string' 
+        ? err.response.data 
+        : err.response?.data?.message;
+      setError(serverMessage || err.message || 'Registration failed. Please try again.');
       setLoading(false);
     }
   };

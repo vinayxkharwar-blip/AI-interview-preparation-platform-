@@ -2,7 +2,9 @@ import Resume from '../models/Resume.js';
 import { parseResumeFile } from '../services/resumeParser.js';
 import { generateLLMJson } from '../services/llmService.js';
 import { buildResumeParsePrompt } from '../prompts/resumePrompts.js';
+import { checkOwnership } from '../utils/authz.js';
 import path from 'path';
+import fs from 'fs';
 
 // @desc Upload & Parse Resume
 // @route POST /api/resumes/upload
@@ -16,7 +18,19 @@ export const uploadResume = async (req, res) => {
     const fileType = fileExt === 'pdf' ? 'pdf' : 'docx';
 
     console.log(`[Resume Upload] Extracting text from file: ${req.file.originalname}`);
-    const rawText = await parseResumeFile(req.file.path, fileType);
+
+    let rawText = '';
+    try {
+      rawText = await parseResumeFile(req.file.path, fileType);
+    } finally {
+      if (req.file && req.file.path) {
+        fs.unlink(req.file.path, (unlinkErr) => {
+          if (unlinkErr) {
+            console.error('[Resume Cleanup Warning] Could not delete temp file:', unlinkErr.message);
+          }
+        });
+      }
+    }
 
     if (!rawText || rawText.trim().length === 0) {
       return res.status(400).json({ message: 'Could not extract text from the document. File may be empty or encrypted.' });
@@ -86,6 +100,9 @@ export const getResumeById = async (req, res) => {
     }
     if (!resume) {
       return res.status(404).json({ message: 'Resume not found' });
+    }
+    if (!checkOwnership(resume, req.user)) {
+      return res.status(403).json({ message: 'Forbidden: You do not have access to this resume' });
     }
     res.json(resume);
   } catch (error) {

@@ -7,14 +7,14 @@ export default function QuestionCard({ question, currentNumber, totalQuestions }
   if (!question) return null;
 
   return (
-    <div className="bg-[#FDFBF3] text-[#0F1E1B] p-6 sm:p-8 rounded-3xl border-3 border-[#0F1E1B] editorial-shadow-lg space-y-6">
+    <div className="bg-[#FDFBF3] text-[#0F1E1B] p-4 sm:p-6 lg:p-8 rounded-3xl border-3 border-[#0F1E1B] editorial-shadow-lg space-y-4 sm:space-y-6">
       {/* Header Badges */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center space-x-3">
-          <span className="px-3.5 py-1 bg-[#F5D90A] text-[#0F1E1B] border-2 border-[#0F1E1B] rounded-full text-xs font-black uppercase tracking-wider shadow-xs">
+      <div className="flex flex-wrap items-center justify-between gap-2.5">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+          <span className="px-3 py-1 bg-[#F5D90A] text-[#0F1E1B] border-2 border-[#0F1E1B] rounded-full text-[11px] sm:text-xs font-black uppercase tracking-wider shadow-xs">
             Question {currentNumber} of {totalQuestions}
           </span>
-          <span className="px-3 py-1 bg-[#F5F2E6] text-[#0F1E1B] border-2 border-[#0F1E1B] rounded-full text-xs font-bold flex items-center space-x-1.5">
+          <span className="px-3 py-1 bg-[#F5F2E6] text-[#0F1E1B] border-2 border-[#0F1E1B] rounded-full text-[11px] sm:text-xs font-bold flex items-center space-x-1.5">
             <Target className="w-3.5 h-3.5 text-[#C1440E]" />
             <span>{question.category || 'General'}</span>
           </span>
@@ -23,7 +23,7 @@ export default function QuestionCard({ question, currentNumber, totalQuestions }
 
       {/* Main Question Text */}
       <div>
-        <h3 className="font-serif-headline text-2xl sm:text-3xl font-bold text-[#0F1E1B] leading-tight tracking-tight">
+        <h3 className="font-serif-headline text-lg sm:text-2xl lg:text-3xl font-bold text-[#0F1E1B] leading-snug sm:leading-tight tracking-tight">
           "{question.questionText}"
         </h3>
       </div>

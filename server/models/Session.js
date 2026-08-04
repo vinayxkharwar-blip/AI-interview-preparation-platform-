@@ -52,6 +52,14 @@ const sessionSchema = new mongoose.Schema(
       type: Number,
       default: null,
     },
+    heygenToken: {
+      type: String,
+      default: null,
+    },
+    heygenSessionId: {
+      type: String,
+      default: null,
+    },
   },
   { timestamps: true }
 );

@@ -64,11 +64,7 @@ const mockLLMResponse = (prompt) => {
   console.log('[LLM Service Mock] Generating dynamic response based on prompt context...');
   const lower = prompt.toLowerCase();
 
-  if (lower.includes('resume') || lower.includes('recruiter') || lower.includes('raw resume text')) {
-    return extractResumeFallback(prompt);
-  }
-
-  if (lower.includes('question')) {
+  if (lower.includes('generate') || lower.includes('interview questions') || lower.includes('questionnumber')) {
     return {
       questions: [
         {
@@ -84,9 +80,34 @@ const mockLLMResponse = (prompt) => {
           category: "Technical / Core Concepts",
           expectedKeyPoints: ["Heap/stack allocation", "Garbage collection / Memory cleanup", "Memory leak scenarios"],
           hints: ["Mention reference tracking and event loop if applicable."]
+        },
+        {
+          questionNumber: 3,
+          questionText: "How do you approach application performance, error handling, and system reliability?",
+          category: "Architecture & Quality",
+          expectedKeyPoints: ["Monitoring & Logging", "Resilience patterns", "Testing strategy"],
+          hints: ["Discuss real-world production practices."]
+        },
+        {
+          questionNumber: 4,
+          questionText: "Explain how asynchronous operations, event loops, and state management work in your primary tech stack.",
+          category: "Core Concepts",
+          expectedKeyPoints: ["Event loop / Call stack", "Asynchronous flow", "State synchronization"],
+          hints: ["Explain execution order clearly."]
+        },
+        {
+          questionNumber: 5,
+          questionText: "How do you prioritize technical debt vs feature delivery in a fast-paced environment?",
+          category: "Behavioral & Leadership",
+          expectedKeyPoints: ["Pragmatic trade-offs", "Team communication", "Iterative refactoring"],
+          hints: ["Balance long-term quality with short-term delivery."]
         }
       ]
     };
+  }
+
+  if (lower.includes('resume') || lower.includes('recruiter') || lower.includes('raw resume text')) {
+    return extractResumeFallback(prompt);
   }
 
   if (lower.includes('feedback') || lower.includes('score') || lower.includes('evaluat') || lower.includes('candidate\'s answer')) {

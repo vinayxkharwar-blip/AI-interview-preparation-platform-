@@ -18,6 +18,42 @@ const __dirname = path.dirname(__filename);
 
 dotenv.config({ path: path.join(__dirname, '.env') });
 
+const validateEnv = () => {
+  const warnings = [];
+  const heygenKey = process.env.HEYGEN_API_KEY;
+  const didKey = process.env.DID_API_KEY || process.env.D_ID_API_KEY;
+  const livekitKey = process.env.LIVEKIT_API_KEY;
+  const livekitSecret = process.env.LIVEKIT_API_SECRET;
+  const livekitUrl = process.env.LIVEKIT_URL;
+  const geminiKey = process.env.GEMINI_API_KEY;
+
+  if (!heygenKey || heygenKey === 'your_heygen_api_key' || heygenKey.includes('••••')) {
+    warnings.push('HEYGEN_API_KEY: Missing or placeholder (HeyGen Real-Time Avatar will fall back to animated visualizer & Web Speech API)');
+  }
+  if (!livekitKey || livekitKey === 'your_livekit_api_key') {
+    warnings.push('LIVEKIT_API_KEY: Missing or placeholder');
+  }
+  if (!livekitSecret || livekitSecret === 'your_livekit_secret' || livekitSecret.includes('••••')) {
+    warnings.push('LIVEKIT_API_SECRET: Missing, default, or contains bullet placeholders (••••)');
+  }
+  if (!livekitUrl || livekitUrl.includes('cloudse')) {
+    warnings.push('LIVEKIT_URL: Missing or malformed');
+  }
+  if (!geminiKey) {
+    warnings.push('GEMINI_API_KEY: Missing (LLM evaluation will fallback to heuristic evaluation)');
+  }
+
+  if (warnings.length > 0) {
+    console.warn(`\n⚠️  [Environment Configuration Warnings]`);
+    warnings.forEach((w) => console.warn(`   - ${w}`));
+    console.warn(`   (To enable full LiveKit & HeyGen Avatar streaming, update server/.env with valid credentials)\n`);
+  } else {
+    console.log(`✅ [Environment Check] All LiveKit, HeyGen Avatar, and Gemini credentials successfully loaded.`);
+  }
+};
+
+validateEnv();
+
 const app = express();
 
 // Connect to MongoDB

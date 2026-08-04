@@ -5,6 +5,7 @@ import { transcribeAudio } from '../services/sttService.js';
 import { generateLLMJson } from '../services/llmService.js';
 import { buildAnswerFeedbackPrompt } from '../prompts/feedbackPrompts.js';
 import { memoryQuestions, memoryAnswers, memoryFeedback } from './sessionController.js';
+import fs from 'fs';
 
 // @desc Transcribe audio before user confirmation
 // @route POST /api/answers/transcribe
@@ -15,7 +16,19 @@ export const transcribeAnswerAudio = async (req, res) => {
     }
 
     console.log(`[Answer Controller] Transcribing audio file: ${req.file.originalname}`);
-    const transcript = await transcribeAudio(req.file.path);
+
+    let transcript = '';
+    try {
+      transcript = await transcribeAudio(req.file.path);
+    } finally {
+      if (req.file && req.file.path) {
+        fs.unlink(req.file.path, (unlinkErr) => {
+          if (unlinkErr) {
+            console.error('[Audio Cleanup Warning] Could not delete temp file:', unlinkErr.message);
+          }
+        });
+      }
+    }
 
     res.json({
       transcript,

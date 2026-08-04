@@ -11,7 +11,7 @@ export const protect = async (req, res, next) => {
       token = req.headers.authorization.split(' ')[1];
       const decoded = jwt.verify(
         token,
-        process.env.JWT_SECRET || 'super-secret-ai-interview-prep-jwt-key-2026'
+        process.env.JWT_SECRET
       );
 
       if (!decoded.id || typeof decoded.id !== 'string' || decoded.id.startsWith('user-') || !mongoose.Types.ObjectId.isValid(decoded.id)) {

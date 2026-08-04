@@ -12,7 +12,7 @@ dotenv.config({ path: path.join(__dirname, '../.env') });
 
 // Startup check for JWT_SECRET
 if (!process.env.JWT_SECRET) {
-  console.error('[Startup Warning] process.env.JWT_SECRET is missing or undefined! JWT signing will fail at runtime unless configured.');
+  throw new Error('FATAL: process.env.JWT_SECRET is missing or undefined! Server cannot start without a configured JWT_SECRET.');
 }
 
 // In-memory fallback user store when MongoDB is offline
@@ -20,10 +20,6 @@ export const memoryUsers = [];
 
 export const generateToken = (id, name, email, targetRole) => {
   const secret = process.env.JWT_SECRET;
-  if (!secret) {
-    console.error('[JWT Error] process.env.JWT_SECRET is missing or undefined at runtime during token signing.');
-    throw new Error('JWT_SECRET environment variable is missing.');
-  }
   return jwt.sign(
     { id, name, email, targetRole },
     secret,
@@ -47,10 +43,6 @@ export const formatUser = (u) => {
 // @route POST /api/auth/register (or /signup)
 export const registerUser = async (req, res) => {
   try {
-    if (mongoose.connection.readyState !== 1) {
-      return res.status(503).json({ message: 'Database temporarily unavailable, please try again' });
-    }
-
     const { name, email, password, targetRole } = req.body;
 
     if (!name || !email || !password) {
@@ -64,11 +56,16 @@ export const registerUser = async (req, res) => {
     const cleanEmail = email.toLowerCase().trim();
 
     let existingUser = null;
-    try {
-      existingUser = await User.findOne({ email: cleanEmail });
-    } catch (e) {
-      console.log('[DB Auth Warning] Searching existing user failed:', e.message);
-      return res.status(503).json({ message: 'Database temporarily unavailable, please try again' });
+    if (mongoose.connection.readyState === 1) {
+      try {
+        existingUser = await User.findOne({ email: cleanEmail });
+      } catch (e) {
+        console.log('[DB Auth Warning] Searching existing user failed:', e.message);
+      }
+    }
+
+    if (!existingUser) {
+      existingUser = memoryUsers.find((u) => u.email === cleanEmail);
     }
 
     if (existingUser) {
@@ -79,20 +76,28 @@ export const registerUser = async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, salt);
 
     let user = null;
-    try {
-      user = await User.create({
+    if (mongoose.connection.readyState === 1) {
+      try {
+        user = await User.create({
+          name: name.trim(),
+          email: cleanEmail,
+          password: hashedPassword,
+          targetRole: targetRole || 'Full Stack Engineer',
+        });
+      } catch (e) {
+        console.error('[DB Auth Error] User creation failed, using memory fallback:', e.message);
+      }
+    }
+
+    if (!user) {
+      user = {
+        _id: new mongoose.Types.ObjectId().toString(),
         name: name.trim(),
         email: cleanEmail,
         password: hashedPassword,
         targetRole: targetRole || 'Full Stack Engineer',
-      });
-    } catch (e) {
-      console.error('[DB Auth Error] User creation failed:', e.message);
-      return res.status(503).json({ message: 'Database temporarily unavailable, please try again' });
-    }
-
-    if (!user) {
-      return res.status(503).json({ message: 'Database temporarily unavailable, please try again' });
+      };
+      memoryUsers.push(user);
     }
 
     const formattedUser = formatUser(user);

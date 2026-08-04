@@ -41,11 +41,17 @@ export default function PreCallPermissionsModal({ onPermissionsGranted, onCancel
     setErrorMessage('');
     stopTracks();
 
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Media access timeout')), 3500)
+    );
+
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
+      const getMediaPromise = navigator.mediaDevices.getUserMedia({
         video: { width: { ideal: 640 }, height: { ideal: 480 } },
         audio: true,
       });
+
+      const stream = await Promise.race([getMediaPromise, timeoutPromise]);
 
       streamRef.current = stream;
 
@@ -70,6 +76,7 @@ export default function PreCallPermissionsModal({ onPermissionsGranted, onCancel
 
         const dataArray = new Uint8Array(analyser.frequencyBinCount);
         const updateMicLevel = () => {
+          if (!analyser) return;
           analyser.getByteFrequencyData(dataArray);
           const average = dataArray.reduce((acc, val) => acc + val, 0) / dataArray.length;
           setMicLevel(Math.min(100, Math.round((average / 128) * 100)));
@@ -82,10 +89,24 @@ export default function PreCallPermissionsModal({ onPermissionsGranted, onCancel
 
       setPermissionState('granted');
     } catch (err) {
-      console.error('[PreCall] Media permissions denied or error:', err);
+      console.warn('[PreCall] Media access error or timeout, trying basic fallback:', err.message);
+
+      try {
+        const fallbackStream = await navigator.mediaDevices.getUserMedia({ audio: true }).catch(() => null);
+        if (fallbackStream) {
+          streamRef.current = fallbackStream;
+          setHasCamera(false);
+          setHasMic(true);
+          setPermissionState('granted');
+          return;
+        }
+      } catch (e) {}
+
       setPermissionState('denied');
       if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
         setErrorMessage('Camera and Microphone permissions were denied in your browser settings.');
+      } else if (err.message === 'Media access timeout') {
+        setErrorMessage('Camera/microphone response timed out (device may be busy in another app). You can join using WebRTC fallback mode.');
       } else {
         setErrorMessage(err.message || 'Unable to access camera or microphone.');
       }
@@ -93,10 +114,13 @@ export default function PreCallPermissionsModal({ onPermissionsGranted, onCancel
   };
 
   const handleProceed = () => {
-    // Pass active stream or permissions status to parent
+    // Disown stream so cleanup won't stop active tracks on modal unmount
+    const activeStream = streamRef.current;
+    streamRef.current = null;
+
     if (onPermissionsGranted) {
       onPermissionsGranted({
-        stream: streamRef.current,
+        stream: activeStream,
         hasCamera,
         hasMic,
       });
@@ -210,25 +234,26 @@ export default function PreCallPermissionsModal({ onPermissionsGranted, onCancel
             <span>Fallback to Standard Mode</span>
           </button>
 
-          {permissionState === 'granted' ? (
+          <div className="flex items-center space-x-2 w-full sm:w-auto">
+            {permissionState !== 'granted' && (
+              <button
+                type="button"
+                onClick={requestPermissions}
+                className="px-4 py-3 rounded-2xl font-bold text-[#12211A] bg-[#E4DDC9] hover:bg-[#D8CFA7] transition-all border-2 border-[#12211A] text-xs flex items-center justify-center space-x-1"
+              >
+                <Mic className="w-3.5 h-3.5" />
+                <span>Retry</span>
+              </button>
+            )}
             <button
               type="button"
               onClick={handleProceed}
               className="w-full sm:w-auto px-6 py-3 rounded-2xl font-bold text-[#FBF9F3] bg-[#12211A] hover:bg-[#1D3327] transition-all border-2 border-[#12211A] editorial-shadow flex items-center justify-center space-x-2 text-sm"
             >
               <CheckCircle2 className="w-4 h-4 text-[#E7B92E]" />
-              <span>Join Video Call with Alex</span>
+              <span>{permissionState === 'granted' ? 'Join Video Call with Alex' : 'Join Call Now (Fallback Mode)'}</span>
             </button>
-          ) : (
-            <button
-              type="button"
-              onClick={requestPermissions}
-              className="w-full sm:w-auto px-6 py-3 rounded-2xl font-bold text-[#12211A] bg-[#E7B92E] hover:bg-[#DDA91B] transition-all border-2 border-[#12211A] flex items-center justify-center space-x-2 text-xs"
-            >
-              <Mic className="w-4 h-4" />
-              <span>Grant Permissions & Retry</span>
-            </button>
-          )}
+          </div>
         </div>
 
       </div>
