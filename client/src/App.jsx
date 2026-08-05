@@ -14,6 +14,9 @@ import InterviewSession from './pages/InterviewSession';
 import LiveInterviewSession from './pages/LiveInterviewSession';
 import SessionDetail from './pages/SessionDetail';
 import Analytics from './pages/Analytics';
+import CareerHub from './pages/CareerHub';
+import CoverLetterGenerator from './pages/CoverLetterGenerator';
+import AICareerCoach from './components/AICareerCoach';
 
 function MainLayout() {
   const location = useLocation();
@@ -22,6 +25,7 @@ function MainLayout() {
   return (
     <div className="min-h-screen bg-[#E6E4DC] text-[#0F1E1B] selection:bg-[#F5D90A] selection:text-[#0F1E1B] flex flex-col font-sans-body">
       {!isLandingPage && <Navbar />}
+      {!isLandingPage && <AICareerCoach />}
       
       <main className="flex-1">
         <Routes>
@@ -84,6 +88,22 @@ function MainLayout() {
             element={
               <ProtectedRoute>
                 <Analytics />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/career-hub"
+            element={
+              <ProtectedRoute>
+                <CareerHub />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/cover-letter"
+            element={
+              <ProtectedRoute>
+                <CoverLetterGenerator />
               </ProtectedRoute>
             }
           />

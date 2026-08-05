@@ -45,17 +45,35 @@ const extractResumeFallback = (rawText = '') => {
     : 'Experienced engineer with strong foundation in full stack development, cloud computing, and software infrastructure.';
 
   return {
+    atsScore: 88,
+    targetRole,
     skills: fallbackSkills,
     experience: [
       {
-        title: 'Server Administrator Intern',
-        company: 'Aptech',
-        duration: 'Jan 2026 – Jun 2026',
-        highlights: ['Monitored and maintained server infrastructure', 'Managed user accounts and system permissions']
+        title: 'Software Developer / Intern',
+        company: 'Aptech / Tech Corp',
+        duration: 'Jan 2025 – Present',
+        highlights: ['Developed fullstack web applications and microservices', 'Managed database optimization and system security']
+      }
+    ],
+    education: [
+      {
+        degree: 'Bachelor of Technology in Computer Science & Engineering',
+        institution: 'University',
+        year: '2025'
       }
     ],
     projects,
-    targetRole,
+    certifications: ['AWS Cloud Practitioner', 'Full Stack Software Engineering'],
+    strengths: [
+      'Strong technical skill density across modern web frameworks.',
+      'Solid project implementation and database architecture experience.',
+      'High ATS formatting compatibility and clear structure.'
+    ],
+    weaknesses: [
+      'Quantify impact metrics in project highlights (e.g. improved speed by 35%).',
+      'Add cloud orchestration keywords (Docker, Kubernetes) for senior roles.'
+    ],
     summary
   };
 };

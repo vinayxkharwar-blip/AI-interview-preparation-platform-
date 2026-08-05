@@ -12,6 +12,9 @@ import questionRoutes from './routes/questionRoutes.js';
 import answerRoutes from './routes/answerRoutes.js';
 import feedbackRoutes from './routes/feedbackRoutes.js';
 import analyticsRoutes from './routes/analyticsRoutes.js';
+import jobRoutes from './routes/jobRoutes.js';
+import applicationRoutes from './routes/applicationRoutes.js';
+import coverLetterRoutes from './routes/coverLetterRoutes.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -75,6 +78,9 @@ app.use('/api/questions', questionRoutes);
 app.use('/api/answers', answerRoutes);
 app.use('/api/feedback', feedbackRoutes);
 app.use('/api/analytics', analyticsRoutes);
+app.use('/api/jobs', jobRoutes);
+app.use('/api/applications', applicationRoutes);
+app.use('/api/cover-letter', coverLetterRoutes);
 
 // Health Check
 app.get('/api/health', (req, res) => {
@@ -96,7 +102,7 @@ app.use((err, req, res, next) => {
 let PORT = process.env.PORT || 5000;
 
 const startServer = (portToTry) => {
-  const server = app.listen(portToTry, () => {
+  const server = app.listen(portToTry, '0.0.0.0', () => {
     console.log(`====================================================`);
     console.log(`🚀 AI Interview Server running on http://localhost:${portToTry}`);
     console.log(`====================================================`);

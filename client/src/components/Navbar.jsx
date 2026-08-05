@@ -1,6 +1,7 @@
 import React, { useContext, useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
+import NotificationCenter from './NotificationCenter';
 import { 
   Sparkles, 
   BarChart3, 
@@ -9,6 +10,8 @@ import {
   LogOut, 
   User, 
   LayoutDashboard,
+  Briefcase,
+  Send,
   Home,
   Menu,
   X,
@@ -47,10 +50,10 @@ export default function Navbar() {
 
           {/* Desktop Navigation Links */}
           {user && (
-            <div className="hidden md:flex items-center space-x-2">
+            <div className="hidden md:flex items-center space-x-1.5">
               <Link
                 to="/dashboard"
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 border-2 ${
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1 border-2 ${
                   isActive('/dashboard')
                     ? 'bg-[#0F1E1B] text-[#FDFBF3] border-[#0F1E1B] editorial-shadow-sm'
                     : 'border-transparent text-[#0F1E1B]/80 hover:border-[#0F1E1B]/30 hover:bg-[#F5F2E6]'
@@ -61,32 +64,44 @@ export default function Navbar() {
               </Link>
 
               <Link
-                to="/new-session"
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 border-2 ${
-                  isActive('/new-session')
-                    ? 'bg-[#0F1E1B] text-[#FDFBF3] border-[#0F1E1B] editorial-shadow-sm'
-                    : 'border-transparent text-[#0F1E1B]/80 hover:border-[#0F1E1B]/30 hover:bg-[#F5F2E6]'
-                }`}
-              >
-                <PlayCircle className="w-3.5 h-3.5 text-[#F5D90A]" />
-                <span>Start Practice</span>
-              </Link>
-
-              <Link
                 to="/resumes"
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 border-2 ${
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1 border-2 ${
                   isActive('/resumes')
                     ? 'bg-[#0F1E1B] text-[#FDFBF3] border-[#0F1E1B] editorial-shadow-sm'
                     : 'border-transparent text-[#0F1E1B]/80 hover:border-[#0F1E1B]/30 hover:bg-[#F5F2E6]'
                 }`}
               >
-                <FileText className="w-3.5 h-3.5" />
-                <span>My Resumes</span>
+                <FileText className="w-3.5 h-3.5 text-[#C1440E]" />
+                <span>Resume Studio</span>
+              </Link>
+
+              <Link
+                to="/career-hub"
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1 border-2 ${
+                  isActive('/career-hub')
+                    ? 'bg-[#0F1E1B] text-[#FDFBF3] border-[#0F1E1B] editorial-shadow-sm'
+                    : 'border-transparent text-[#0F1E1B]/80 hover:border-[#0F1E1B]/30 hover:bg-[#F5F2E6]'
+                }`}
+              >
+                <Briefcase className="w-3.5 h-3.5 text-[#F5D90A]" />
+                <span>Career Hub</span>
+              </Link>
+
+              <Link
+                to="/career-hub?tab=applications"
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1 border-2 ${
+                  location.search.includes('applications')
+                    ? 'bg-[#0F1E1B] text-[#FDFBF3] border-[#0F1E1B] editorial-shadow-sm'
+                    : 'border-transparent text-[#0F1E1B]/80 hover:border-[#0F1E1B]/30 hover:bg-[#F5F2E6]'
+                }`}
+              >
+                <Send className="w-3.5 h-3.5 text-blue-500" />
+                <span>Applications</span>
               </Link>
 
               <Link
                 to="/analytics"
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 border-2 ${
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1 border-2 ${
                   isActive('/analytics')
                     ? 'bg-[#0F1E1B] text-[#FDFBF3] border-[#0F1E1B] editorial-shadow-sm'
                     : 'border-transparent text-[#0F1E1B]/80 hover:border-[#0F1E1B]/30 hover:bg-[#F5F2E6]'
@@ -98,9 +113,10 @@ export default function Navbar() {
             </div>
           )}
 
-          {/* User Profile & Actions */}
+          {/* User Profile, Notifications & Actions */}
           {user ? (
-            <div className="flex items-center space-x-2 sm:space-x-3 shrink-0">
+            <div className="flex items-center space-x-2 shrink-0">
+              <NotificationCenter />
               <Link
                 to="/"
                 className="hidden lg:flex items-center space-x-1 text-xs font-bold text-[#0F1E1B]/70 hover:text-[#0F1E1B] px-2.5 py-1 rounded-lg hover:bg-[#F5F2E6]"
@@ -166,6 +182,19 @@ export default function Navbar() {
             >
               <LayoutDashboard className="w-4 h-4" />
               <span>Dashboard</span>
+            </Link>
+
+            <Link
+              to="/career-hub"
+              onClick={() => setMobileMenuOpen(false)}
+              className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-2 border-2 ${
+                isActive('/career-hub')
+                  ? 'bg-[#0F1E1B] text-[#FDFBF3] border-[#0F1E1B]'
+                  : 'border-transparent text-[#0F1E1B]'
+              }`}
+            >
+              <Briefcase className="w-4 h-4 text-[#F5D90A]" />
+              <span>Career Hub</span>
             </Link>
 
             <Link

@@ -174,6 +174,9 @@ export const speakHeyGenTurn = async (sessionId, text, taskType = 'repeat', sess
   return data;
 };
 
+// Export alias for compatibility with liveInterviewController
+export const speakHeyGenStream = speakHeyGenTurn;
+
 /**
  * Stop and close HeyGen session.
  * Reuses existing stored sessionToken without requesting a new token.
