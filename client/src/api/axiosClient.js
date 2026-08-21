@@ -21,6 +21,15 @@ axiosClient.interceptors.request.use(
 axiosClient.interceptors.response.use(
   (response) => response,
   (error) => {
+    const userMessage =
+      error.response?.data?.message ||
+      error.response?.data?.error ||
+      (error.response?.status === 500
+        ? 'Internal server error. Please try again later.'
+        : error.message || 'An unexpected error occurred. Please try again.');
+
+    error.userMessage = userMessage;
+
     if (error.response && error.response.status === 401) {
       // Don't auto-redirect if we're on login page already
       if (!window.location.pathname.includes('/login') && !window.location.pathname.includes('/register')) {

@@ -46,7 +46,7 @@ export default function NextBestAction({
     action = {
       step: 'Step 3 of 5',
       title: 'Generate a Tailored AI Cover Letter',
-      description: 'Create a personalized executive cover letter for your #1 matched job opening in seconds using Gemini AI.',
+      description: 'Create a personalized executive cover letter for your #1 matched job opening in seconds using OpenAI AI.',
       buttonText: 'Generate Cover Letter',
       icon: FileText,
       path: '/cover-letter',

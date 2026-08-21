@@ -86,8 +86,6 @@ export const createHeyGenStream = async (avatarName, voiceId) => {
     },
   };
 
-  console.log('[heygenService] Creating WebRTC streaming session for HeyGen avatar:', payload.avatar_name);
-
   // Initialize streaming session with sessionToken Bearer header
   const data = await fetchJson(`${HEYGEN_API_URL}/streaming.new`, {
     method: 'POST',
@@ -97,8 +95,6 @@ export const createHeyGenStream = async (avatarName, voiceId) => {
 
   const sessionData = data.data || data;
   const { session_id: sessionId, sdp, ice_servers: iceServers, ice_servers2 } = sessionData;
-
-  console.log('[heygenService] Successfully created HeyGen session:', sessionId);
 
   return {
     sessionId,
@@ -115,8 +111,6 @@ export const createHeyGenStream = async (avatarName, voiceId) => {
 export const submitHeyGenSdpAnswer = async (sessionId, answer, sessionToken = null) => {
   const headers = getHeyGenHeaders(sessionToken);
   if (!headers) throw new Error('HEYGEN_API_KEY is not configured.');
-
-  console.log(`[heygenService] Submitting SDP answer for HeyGen session ${sessionId}`);
 
   const data = await fetchJson(`${HEYGEN_API_URL}/streaming.start`, {
     method: 'POST',
@@ -158,8 +152,6 @@ export const speakHeyGenTurn = async (sessionId, text, taskType = 'repeat', sess
   const headers = getHeyGenHeaders(sessionToken);
   if (!headers) throw new Error('HEYGEN_API_KEY is not configured.');
 
-  console.log(`[heygenService] Sending speak task to HeyGen session ${sessionId}: "${text.substring(0, 60)}..."`);
-
   const data = await fetchJson(`${HEYGEN_API_URL}/streaming.task`, {
     method: 'POST',
     headers,
@@ -170,7 +162,6 @@ export const speakHeyGenTurn = async (sessionId, text, taskType = 'repeat', sess
     }),
   });
 
-  console.log(`[heygenService] Speak task successfully sent to HeyGen session ${sessionId}`);
   return data;
 };
 
@@ -186,7 +177,6 @@ export const closeHeyGenStream = async (sessionId, sessionToken = null) => {
   if (!headers || !sessionId) return null;
 
   try {
-    console.log(`[heygenService] Closing HeyGen session ${sessionId}`);
     const data = await fetchJson(`${HEYGEN_API_URL}/streaming.stop`, {
       method: 'POST',
       headers,

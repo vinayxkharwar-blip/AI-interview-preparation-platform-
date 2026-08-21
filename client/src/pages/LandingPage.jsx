@@ -654,7 +654,7 @@ export default function LandingPage() {
               </div>
               <div>
                 <h3 className="font-serif-headline text-2xl font-bold">Live AI Voice Interview Walkthrough</h3>
-                <p className="text-xs text-[#0F1E1B]/70 font-medium">Interactive preview of OpenAI Whisper & Gemini evaluation engine.</p>
+                <p className="text-xs text-[#0F1E1B]/70 font-medium">Interactive preview of OpenAI Whisper & GPT-4o evaluation engine.</p>
               </div>
             </div>
 

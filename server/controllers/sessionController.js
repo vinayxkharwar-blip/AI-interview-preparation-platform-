@@ -95,7 +95,6 @@ export const startSession = async (req, res) => {
       return res.status(400).json({ message: 'Cannot generate questions: user profile data is missing' });
     }
 
-    console.log('[Session Controller] Generating personalized interview questions via LLM...', focusTopic ? `[Focus Topic: ${focusTopic}]` : '');
     const prompt = buildQuestionGenerationPrompt({
       parsedResume,
       targetRole: effectiveTargetRole,
@@ -190,8 +189,6 @@ export const startSession = async (req, res) => {
       }
     });
 
-    console.log(`[Session Controller] Successfully initialized session ${session._id} with ${questionsToSave.length} questions.`);
-
     res.status(201).json({
       session,
       questions: questionsToSave,
@@ -275,8 +272,6 @@ export const getSessionById = async (req, res) => {
     if (!checkOwnership(session, req.user)) {
       return res.status(403).json({ message: 'Forbidden: You do not have access to this session' });
     }
-
-    console.log(`[Get Session] Session "${id}" loaded. Questions count: ${questions.length}`);
 
     res.json({
       session,
@@ -383,7 +378,6 @@ export const completeSession = async (req, res) => {
       };
     });
 
-    console.log('[Complete Session] Generating AI Improvement Plan...');
     const planPrompt = buildImprovementPlanPrompt({
       targetRole: session ? session.targetRole : 'Software Engineer',
       interviewType: session ? session.interviewType : 'technical',

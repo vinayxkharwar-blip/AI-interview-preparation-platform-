@@ -1,0 +1,89 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    background-color: #E6E4DC;
+    color: #0F1E1B;
+  }
+}
+
+.font-serif-headline {
+  font-family: 'Fraunces', 'Instrument Serif', Georgia, serif;
+}
+
+.font-sans-body {
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+/* Warm Editorial Box Shadows */
+.editorial-shadow {
+  box-shadow: 4px 6px 0px 0px rgba(15, 30, 27, 0.95);
+}
+
+.editorial-shadow-lg {
+  box-shadow: 8px 12px 0px 0px rgba(15, 30, 27, 0.95);
+}
+
+.editorial-shadow-sm {
+  box-shadow: 2px 3px 0px 0px rgba(15, 30, 27, 0.95);
+}
+
+.editorial-terracotta-shadow {
+  box-shadow: 4px 6px 0px 0px #C1440E;
+}
+
+/* Yellow Highlight Block */
+.yellow-highlight {
+  background-color: #F5D90A;
+  color: #0F1E1B;
+  display: inline-block;
+  padding: 0 0.25em;
+  transform: rotate(-1deg);
+  border-radius: 4px;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulseGlow {
+  0%, 100% {
+    box-shadow: 0 0 10px rgba(245, 217, 10, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 25px rgba(245, 217, 10, 0.8);
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.pulse-glow {
+  animation: pulseGlow 2s infinite ease-in-out;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #E6E4DC;
+}
+::-webkit-scrollbar-thumb {
+  background: #0F1E1B;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #1A332E;
+}

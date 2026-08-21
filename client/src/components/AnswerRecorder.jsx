@@ -5,7 +5,7 @@ import { Mic, Square, RefreshCw, Type, Loader2, Sparkles, AlertCircle, CheckCirc
 const MAX_RECORDING_DURATION = 300; // 5 minutes in seconds
 const WARNING_THRESHOLD = 270; // 30 seconds remaining (4:30)
 
-export default function AnswerRecorder({ onAnswerSubmitted, isSubmitting }) {
+export default function corder({ onAnswerSubmitted, isSubmitting }) {
   const [mode, setMode] = useState('voice'); // 'voice' or 'text'
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
@@ -145,7 +145,6 @@ export default function AnswerRecorder({ onAnswerSubmitted, isSubmitting }) {
       e.preventDefault();
     }
     const answerText = transcript.trim();
-    console.log('[AnswerRecorder] Submit triggered | Mode:', mode, '| Answer length:', answerText.length, '| Content:', answerText);
 
     if (!answerText) {
       setError('Please provide or type an answer before submitting.');
@@ -159,7 +158,7 @@ export default function AnswerRecorder({ onAnswerSubmitted, isSubmitting }) {
         audioUrl: mode === 'voice' ? audioUrl : '',
       });
     } catch (err) {
-      console.error('[AnswerRecorder] Error executing onAnswerSubmitted callback:', err);
+      console.error('[corder] Error executing onAnswerSubmitted callback:', err);
       setError(err.message || 'Failed to submit answer.');
     }
   };
@@ -191,9 +190,8 @@ export default function AnswerRecorder({ onAnswerSubmitted, isSubmitting }) {
           <button
             type="button"
             onClick={() => handleModeChange('voice')}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition-all ${
-              mode === 'voice' ? 'bg-[#0F1E1B] text-[#FDFBF3] editorial-shadow-sm' : 'text-[#0F1E1B]/70 hover:text-[#0F1E1B]'
-            }`}
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition-all ${mode === 'voice' ? 'bg-[#0F1E1B] text-[#FDFBF3] editorial-shadow-sm' : 'text-[#0F1E1B]/70 hover:text-[#0F1E1B]'
+              }`}
           >
             <Mic className="w-3.5 h-3.5 text-[#F5D90A]" />
             <span>Voice Record (Whisper STT)</span>
@@ -201,9 +199,8 @@ export default function AnswerRecorder({ onAnswerSubmitted, isSubmitting }) {
           <button
             type="button"
             onClick={() => handleModeChange('text')}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition-all ${
-              mode === 'text' ? 'bg-[#0F1E1B] text-[#FDFBF3] editorial-shadow-sm' : 'text-[#0F1E1B]/70 hover:text-[#0F1E1B]'
-            }`}
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition-all ${mode === 'text' ? 'bg-[#0F1E1B] text-[#FDFBF3] editorial-shadow-sm' : 'text-[#0F1E1B]/70 hover:text-[#0F1E1B]'
+              }`}
           >
             <Type className="w-3.5 h-3.5" />
             <span>Type Answer</span>

@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import axiosClient from '../api/axiosClient';
 import { 
   Sparkles, 
   X, 
@@ -36,8 +37,6 @@ export default function AICareerCoach() {
   const [loading, setLoading] = useState(false);
   const chatEndRef = useRef(null);
 
-  const token = localStorage.getItem('token');
-
   useEffect(() => {
     if (chatEndRef.current) {
       chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
@@ -54,46 +53,16 @@ export default function AICareerCoach() {
     setLoading(true);
 
     try {
-      // Connect to backend feedback / LLM service
-      const res = await fetch('/api/feedback/coach', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ prompt: textToSend }),
-      });
-
-      let botText = '';
-      if (res.ok) {
-        const data = await res.json();
-        botText = data.response || data.message;
-      }
-
-      if (!botText) {
-        // Fallback career coach responses
-        const lower = textToSend.toLowerCase();
-        if (lower.includes('ats') || lower.includes('score') || lower.includes('resume')) {
-          botText = "To boost your ATS Score by +15%: 1. Include cloud keywords like Docker & AWS. 2. Quantify achievement bullets (e.g., 'Reduced API latency by 40%'). You can optimize your resume directly in the Resume Studio!";
-        } else if (lower.includes('job') || lower.includes('react') || lower.includes('find')) {
-          botText = "I found several high-match Full Stack and React openings (Stripe, Vercel, Datadog) with match scores up to 95%. Head to the Career Hub to view and apply!";
-        } else if (lower.includes('cover') || lower.includes('letter')) {
-          botText = "I can draft a tailored cover letter for your target role in seconds. Click 'AI Cover Letter' in the navbar or career actions grid.";
-        } else if (lower.includes('google') || lower.includes('interview') || lower.includes('prepare')) {
-          botText = "For Google engineering interviews: Focus on Data Structures (Trees, Graphs, Dynamic Programming), System Architecture, and STAR-method behavioral responses. Ready to launch a mock loop?";
-        } else {
-          botText = `Great question regarding "${textToSend}". I recommend keeping your ATS score above 85%, applying to 3-5 matched jobs daily, and completing a 15-minute mock interview loop!`;
-        }
-      }
-
+      const res = await axiosClient.post('/feedback/coach', { prompt: textToSend });
+      const botText = res.data?.response || res.data?.message || "I'm here to help with your job search!";
       setMessages((prev) => [...prev, { sender: 'coach', text: botText }]);
     } catch (err) {
-      console.error(err);
+      console.error('Career Coach API error:', err);
       setMessages((prev) => [
         ...prev,
         {
           sender: 'coach',
-          text: "I'm ready to guide your job search! Navigate to Resume Studio or Career Hub to take your next step.",
+          text: 'Coach is temporarily unavailable, please try again.',
         },
       ]);
     } finally {
@@ -141,7 +110,7 @@ export default function AICareerCoach() {
                 </h3>
                 <span className="text-[10px] text-emerald-400 font-bold flex items-center space-x-1">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>
-                  <span>Online • Powered by Gemini AI</span>
+                  <span>Online • Career Assistant</span>
                 </span>
               </div>
             </div>

@@ -28,14 +28,8 @@ export default function InterviewSession() {
   useEffect(() => {
     const fetchSessionData = async () => {
       try {
-        console.log('[InterviewSession] Fetching session details for ID:', sessionId);
         const res = await axiosClient.get(`/sessions/${sessionId}`);
-        console.log('[InterviewSession] Raw API response from GET /sessions/' + sessionId + ':', res.data);
-
         const { session: sessDoc, questions: qList, answers: aList, feedback: fList, improvementPlan: planDoc } = res.data;
-
-        console.log('[InterviewSession] Extracted questions array length:', (qList || []).length, '| Questions:', qList);
-        console.log('[InterviewSession] Calling setQuestions() with count:', (qList || []).length);
 
         setSession(sessDoc);
         setQuestions(qList || []);
@@ -89,29 +83,12 @@ export default function InterviewSession() {
   const currentFeedback = currentQuestion ? feedbackMap[currentQuestion._id] : null;
 
   const handleAnswerSubmit = async ({ transcript, answerType, audioUrl }) => {
-    console.log('[InterviewSession] 1. handleAnswerSubmit invoked | Arguments received:', {
-      sessionId,
-      transcriptLength: transcript?.length,
-      transcriptSnippet: transcript ? transcript.substring(0, 30) + '...' : undefined,
-      answerType,
-      audioUrl,
-    });
-
-    console.log('[InterviewSession] 2. Validating environment & state:', {
-      currentIndex,
-      totalQuestions: questions.length,
-      currentQuestion,
-      currentQuestionId: currentQuestion?._id || currentQuestion?.id,
-    });
-
     if (!currentQuestion) {
-      console.warn('[InterviewSession] ❌ ABORTING SUBMIT: currentQuestion is null or undefined! Check questions state array or currentIndex.');
       setError('Cannot submit answer: current question is invalid or missing.');
       return;
     }
 
     if (!transcript || !transcript.trim()) {
-      console.warn('[InterviewSession] ❌ ABORTING SUBMIT: transcript is empty or whitespace!');
       setError('Please enter or record an answer before submitting.');
       return;
     }
@@ -129,26 +106,15 @@ export default function InterviewSession() {
     setError('');
 
     try {
-      console.log('[InterviewSession] 3. About to call API POST /answers/submit with payload:', requestPayload);
-
       const res = await axiosClient.post('/answers/submit', requestPayload);
-
-      console.log('[InterviewSession] 4. API call succeeded! Response status:', res.status, '| Data:', res.data);
-
       const { answer, feedback } = res.data;
 
       setAnswersMap((prev) => ({ ...prev, [questionIdToSubmit]: answer }));
       setFeedbackMap((prev) => ({ ...prev, [questionIdToSubmit]: feedback }));
 
       setIsSubmitting(false);
-      console.log('[InterviewSession] 5. Answer state updated successfully.');
     } catch (err) {
-      console.error('[InterviewSession] ❌ API call failed:', {
-        message: err.message,
-        status: err.response?.status,
-        data: err.response?.data,
-        stack: err.stack,
-      });
+      console.error('[InterviewSession] Submit answer failed:', err);
       setError(err.response?.data?.message || 'Failed to analyze candidate answer.');
       setIsSubmitting(false);
     }

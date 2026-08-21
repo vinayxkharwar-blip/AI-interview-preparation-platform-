@@ -29,7 +29,6 @@ import {
 export default function Dashboard() {
   const { user } = useContext(AuthContext);
   const navigate = useNavigate();
-  const token = localStorage.getItem('token');
 
   const [sessions, setSessions] = useState([]);
   const [resumes, setResumes] = useState([]);
@@ -54,9 +53,9 @@ export default function Dashboard() {
         const [sessRes, resRes, jobsRes, savedRes, appsRes] = await Promise.allSettled([
           axiosClient.get('/sessions'),
           axiosClient.get('/resumes'),
-          fetch('/api/jobs/recommendations', { headers: { Authorization: `Bearer ${token}` } }),
-          fetch('/api/jobs/saved', { headers: { Authorization: `Bearer ${token}` } }),
-          fetch('/api/applications', { headers: { Authorization: `Bearer ${token}` } }),
+          axiosClient.get('/jobs/recommendations'),
+          axiosClient.get('/jobs/saved'),
+          axiosClient.get('/applications'),
         ]);
 
         if (sessRes.status === 'fulfilled') setSessions(sessRes.value.data || []);
@@ -67,20 +66,18 @@ export default function Dashboard() {
             setGoals((prev) => prev.map((g) => (g.id === 1 ? { ...g, completed: true } : g)));
           }
         }
-        if (jobsRes.status === 'fulfilled' && jobsRes.value.ok) {
-          const jobsData = await jobsRes.value.json();
-          setJobs(jobsData || []);
+        if (jobsRes.status === 'fulfilled') {
+          const jobsData = jobsRes.value.data || [];
+          setJobs(jobsData);
           if (jobsData.length > 0) {
             setGoals((prev) => prev.map((g) => (g.id === 2 ? { ...g, completed: true } : g)));
           }
         }
-        if (savedRes.status === 'fulfilled' && savedRes.value.ok) {
-          const savedData = await savedRes.value.json();
-          setSavedJobs(savedData || []);
+        if (savedRes.status === 'fulfilled') {
+          setSavedJobs(savedRes.value.data || []);
         }
-        if (appsRes.status === 'fulfilled' && appsRes.value.ok) {
-          const appsData = await appsRes.value.json();
-          setApplications(appsData || []);
+        if (appsRes.status === 'fulfilled') {
+          setApplications(appsRes.value.data || []);
         }
       } catch (err) {
         console.error('Failed to load dashboard metrics:', err);
@@ -97,7 +94,7 @@ export default function Dashboard() {
   };
 
   const latestResume = resumes.length > 0 ? resumes[0] : null;
-  const atsScore = latestResume?.parsedData?.atsScore || 88;
+  const atsScore = typeof latestResume?.parsedData?.atsScore === 'number' ? latestResume.parsedData.atsScore : 82;
   const featuredJob = jobs.length > 0 ? jobs[0] : null;
 
   // Composite Career Health Score (0-100)

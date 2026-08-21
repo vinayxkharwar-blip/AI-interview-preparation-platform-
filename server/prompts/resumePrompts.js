@@ -1,38 +1,38 @@
 export const buildResumeParsePrompt = (rawText) => {
   return `You are an expert HR, ATS (Applicant Tracking System), and senior technical recruiter analyzer. 
-Analyze and extract comprehensive structured information and an ATS Resume Score from the following raw resume text.
+Analyze and extract comprehensive structured information and an ATS Resume Score from the raw resume text below.
 
-Return ONLY a valid JSON object with the following exact schema:
+Return ONLY a valid JSON object matching this exact structure:
 {
-  "atsScore": number (integer between 0 and 100 representing overall ATS compatibility and quality),
-  "targetRole": "string (inferred primary target job role, e.g. Full Stack Engineer)",
-  "skills": ["string (technical & soft skills extracted)"],
+  "atsScore": 85,
+  "targetRole": "Full Stack Engineer",
+  "skills": ["JavaScript", "React", "Node.js", "SQL"],
   "experience": [
     {
-      "title": "string",
-      "company": "string",
-      "duration": "string",
-      "highlights": ["string"]
+      "title": "Software Developer",
+      "company": "Tech Corp",
+      "duration": "2023 - Present",
+      "highlights": ["Developed React web applications and REST APIs"]
     }
   ],
   "education": [
     {
-      "degree": "string",
-      "institution": "string",
-      "year": "string"
+      "degree": "Bachelor of Technology in Computer Science",
+      "institution": "University",
+      "year": "2023"
     }
   ],
   "projects": [
     {
-      "name": "string",
-      "description": "string",
-      "techStack": ["string"]
+      "name": "AI Application Platform",
+      "description": "Full stack web application",
+      "techStack": ["React", "Node.js", "MongoDB"]
     }
   ],
-  "certifications": ["string"],
-  "strengths": ["string (key ATS & technical strengths)"],
-  "weaknesses": ["string (areas for ATS improvement & skill gaps)"],
-  "summary": "string"
+  "certifications": ["AWS Certified Developer"],
+  "strengths": ["Strong technical stack density", "Clear project implementation"],
+  "weaknesses": ["Include quantifiable performance metrics in project descriptions"],
+  "summary": "Full stack engineer with strong development experience."
 }
 
 Resume Raw Text:

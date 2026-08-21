@@ -15,17 +15,22 @@ export const uploadResume = async (req, res) => {
     }
 
     const fileExt = path.extname(req.file.originalname).toLowerCase().replace('.', '');
-    const fileType = fileExt === 'pdf' ? 'pdf' : 'docx';
+    if (!['pdf', 'docx', 'doc'].includes(fileExt)) {
+      if (req.file.path && fs.existsSync(req.file.path)) {
+        try { fs.unlinkSync(req.file.path); } catch (e) {}
+      }
+      return res.status(400).json({ message: 'Invalid file type. Only PDF and DOCX documents are allowed.' });
+    }
 
-    console.log(`[Resume Upload] Extracting text from file: ${req.file.originalname}`);
+    const fileType = fileExt === 'pdf' ? 'pdf' : 'docx';
 
     let rawText = '';
     try {
       rawText = await parseResumeFile(req.file.path, fileType);
     } finally {
-      if (req.file && req.file.path) {
+      if (req.file && req.file.path && fs.existsSync(req.file.path)) {
         fs.unlink(req.file.path, (unlinkErr) => {
-          if (unlinkErr) {
+          if (unlinkErr && unlinkErr.code !== 'ENOENT') {
             console.error('[Resume Cleanup Warning] Could not delete temp file:', unlinkErr.message);
           }
         });
@@ -36,9 +41,17 @@ export const uploadResume = async (req, res) => {
       return res.status(400).json({ message: 'Could not extract text from the document. File may be empty or encrypted.' });
     }
 
-    console.log('[Resume Upload] Requesting structured extraction from LLM service...');
+    console.log(`[Resume Upload] Processing "${req.file.originalname}" | Extracted rawText length: ${rawText.length} characters`);
+
     const prompt = buildResumeParsePrompt(rawText);
     const parsedData = await generateLLMJson(prompt, 'You parse raw resume text into JSON format.');
+
+    console.log('[Resume Upload] Resulting Parsed Data:', {
+      atsScore: parsedData.atsScore,
+      targetRole: parsedData.targetRole,
+      skillsCount: parsedData.skills?.length || 0,
+      source: parsedData._meta?.source || 'unknown'
+    });
 
     let newResume;
     try {
@@ -67,6 +80,9 @@ export const uploadResume = async (req, res) => {
       resume: newResume,
     });
   } catch (error) {
+    if (req.file && req.file.path && fs.existsSync(req.file.path)) {
+      try { fs.unlinkSync(req.file.path); } catch (e) {}
+    }
     console.error('[Resume Upload Error]', error);
     res.status(500).json({ message: error.message || 'Error processing resume file.' });
   }
