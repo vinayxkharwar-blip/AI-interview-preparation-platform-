@@ -330,7 +330,7 @@ export default function CareerHub() {
           {/* TAB 1: Career Dashboard */}
           {activeTab === 'dashboard' && (
             <CareerDashboard
-              atsScore={latestResume?.parsedData?.atsScore || 88}
+              atsScore={typeof latestResume?.parsedData?.atsScore === 'number' ? latestResume.parsedData.atsScore : 80}
               jobsFoundCount={jobs.length}
               savedJobsCount={savedJobs.length}
               applications={applications}

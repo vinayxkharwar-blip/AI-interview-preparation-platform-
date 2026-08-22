@@ -5,9 +5,7 @@ import axiosClient from '../api/axiosClient';
 import NextBestAction from '../components/NextBestAction';
 import CompanyPrepModal from '../components/CompanyPrepModal';
 import { 
-  PlayCircle, 
   FileText, 
-  BarChart3, 
   Sparkles, 
   Clock, 
   CheckCircle2, 
@@ -18,8 +16,6 @@ import {
   ArrowRight,
   TrendingUp,
   Briefcase,
-  Send,
-  Bookmark,
   Building2,
   Check,
   Target,

@@ -21,7 +21,6 @@ import {
   Mail,
   X,
   Volume2,
-  ShieldCheck,
   Users,
   Briefcase
 } from 'lucide-react';

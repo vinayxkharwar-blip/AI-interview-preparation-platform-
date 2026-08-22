@@ -1,5 +1,5 @@
 import React from 'react';
-import { CheckCircle2, TrendingUp, RotateCcw, AlertCircle, Sparkles } from 'lucide-react';
+import { CheckCircle2, TrendingUp, RotateCcw, AlertCircle, Sparkles, BookOpen } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { toHundredScale } from '../utils/score';
 import EmptyState from './common/EmptyState';
@@ -124,12 +124,19 @@ export default function SessionSummary({ session, overallScore, categoryBreakdow
 
       {/* Next Action Buttons */}
       <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4 border-t-2 border-[#0F1E1B]/15">
+        <a
+          href="#recommended-learning"
+          className="w-full sm:w-auto px-6 py-3.5 rounded-2xl font-black text-[#0F1E1B] bg-[#F5D90A] hover:bg-[#e5ca07] border-2 border-[#0F1E1B] transition-all flex items-center justify-center space-x-2 text-sm editorial-shadow"
+        >
+          <BookOpen className="w-5 h-5 text-[#0F1E1B]" />
+          <span>Prepare Now (Recommended Topics)</span>
+        </a>
         <Link
           to="/analytics"
           className="w-full sm:w-auto px-6 py-3.5 rounded-2xl font-bold text-[#FDFBF3] bg-[#0F1E1B] hover:bg-[#1A332E] transition-all flex items-center justify-center space-x-2 editorial-shadow text-sm"
         >
           <TrendingUp className="w-5 h-5 text-[#F5D90A]" />
-          <span>View Detailed Progress Analytics</span>
+          <span>View Progress Analytics</span>
         </Link>
         <button
           onClick={onStartNew}

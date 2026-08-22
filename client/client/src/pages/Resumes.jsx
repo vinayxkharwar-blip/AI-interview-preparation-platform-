@@ -169,7 +169,7 @@ export default function Resumes() {
 
   const latestResume = resumes.length > 0 ? resumes[0] : null;
   const parsed = latestResume?.parsedData || {};
-  const atsScore = parsed.atsScore || 88;
+  const atsScore = typeof parsed.atsScore === 'number' ? parsed.atsScore : 80;
   const targetRole = parsed.targetRole || 'Full Stack Engineer';
 
   // Career Progress Checklist items

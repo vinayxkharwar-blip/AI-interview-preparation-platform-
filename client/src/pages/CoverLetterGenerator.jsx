@@ -10,8 +10,7 @@ import {
   Check, 
   ArrowLeft, 
   Building2, 
-  Briefcase,
-  Send
+  Briefcase
 } from 'lucide-react';
 
 export default function CoverLetterGenerator() {

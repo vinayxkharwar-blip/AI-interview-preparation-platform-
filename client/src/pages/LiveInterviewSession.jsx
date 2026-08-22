@@ -58,6 +58,7 @@ export default function LiveInterviewSession() {
 
   // Call & Media states
   const [isMicMuted, setIsMicMuted] = useState(false);
+  const isMicMutedRef = useRef(false);
   const [isCameraOff, setIsCameraOff] = useState(false);
   const [isEndingCall, setIsEndingCall] = useState(false);
   const [callDuration, setCallDuration] = useState(0);
@@ -227,11 +228,14 @@ export default function LiveInterviewSession() {
       if (onComplete) onComplete();
       return;
     }
+    console.log('[VOICE DEBUG] AI question started:', text);
+    console.log('[VOICE DEBUG] TTS response started:', text);
     lastSpokenLineRef.current = text;
     setLiveCaption(text);
     setInterviewState(STATES.SPEAKING);
 
     if (!('speechSynthesis' in window)) {
+      console.log('[VOICE DEBUG] SpeechSynthesis not supported in window');
       enterErrorState('Text-to-speech is not supported in this browser. Please switch to text mode.', null);
       return;
     }
@@ -259,6 +263,8 @@ export default function LiveInterviewSession() {
         const finishSpeech = () => {
           if (hasEnded) return;
           hasEnded = true;
+          console.log('[VOICE DEBUG] AI question finished');
+          console.log('[VOICE DEBUG] TTS response finished');
           if (onComplete) onComplete();
         };
 
@@ -274,14 +280,14 @@ export default function LiveInterviewSession() {
         window.speechSynthesis.resume();
 
         // Chrome sometimes pauses long utterances — periodic resume heartbeat
-        const expectedDurationMs = Math.max(3500, (text.length / 12) * 1000);
+        const expectedDurationMs = Math.max(2500, (text.length / 14) * 1000);
         const heartbeat = setInterval(() => {
           if (!hasEnded && window.speechSynthesis?.speaking) {
             window.speechSynthesis.resume();
           } else {
             clearInterval(heartbeat);
           }
-        }, expectedDurationMs / 3);
+        }, 1000);
 
         // Safety timeout so we never hang indefinitely if onend never fires
         setTimeout(() => {
@@ -290,7 +296,7 @@ export default function LiveInterviewSession() {
             console.warn('[TTS Notice] Safety timeout reached for speech end.');
             finishSpeech();
           }
-        }, expectedDurationMs + 4000);
+        }, expectedDurationMs + 2500);
       } catch (err) {
         console.error('[TTS Exception]', err);
         if (onComplete) onComplete();
@@ -302,13 +308,20 @@ export default function LiveInterviewSession() {
   // STT pipeline: start listening with live silence detection via Web Audio API
   // ============================================================================
   const startListening = useCallback(() => {
+    console.log('[VOICE DEBUG] Listening started');
+    console.log('[VOICE DEBUG] Microphone enabled:', !isMicMutedRef.current);
     const stream = mediaStreamRef.current;
     if (!stream) {
       enterErrorState('Microphone stream is unavailable. Please check your microphone and retry.', () => startListening());
       return;
     }
-    if (isMicMuted) {
-      // Respect mute — wait, UI shows a resume prompt instead of recording silently.
+    const audioTracks = stream.getAudioTracks();
+    if (audioTracks.length === 0) {
+      enterErrorState('Microphone audio track is unavailable. Please check your microphone and retry.', () => startListening());
+      return;
+    }
+    if (isMicMutedRef.current) {
+      console.log('[VOICE DEBUG] startListening skipped because microphone is muted.');
       setInterviewState(STATES.LISTENING);
       setLiveCaption('Microphone is muted. Unmute to continue answering.');
       return;
@@ -321,32 +334,49 @@ export default function LiveInterviewSession() {
       recordingStartTimeRef.current = Date.now();
       lastLoudTimeRef.current = Date.now();
 
-      const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+      const audioOnlyStream = new MediaStream(audioTracks);
+
+      let recorder = null;
+      try {
+        recorder = new MediaRecorder(audioOnlyStream, { mimeType: 'audio/webm' });
+      } catch (e1) {
+        try {
+          recorder = new MediaRecorder(audioOnlyStream);
+        } catch (e2) {
+          console.error('[MediaRecorder Init Error]', e2);
+        }
+      }
       mediaRecorderRef.current = recorder;
 
-      recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) audioChunksRef.current.push(e.data);
-      };
+      if (recorder) {
+        recorder.ondataavailable = (e) => {
+          if (e.data.size > 0) audioChunksRef.current.push(e.data);
+        };
 
-      recorder.onstop = () => {
-        cleanupRecordingPipeline();
-        if (suppressProcessingRef.current) {
-          suppressProcessingRef.current = false;
-          return;
+        recorder.onstop = () => {
+          cleanupRecordingPipeline();
+          if (suppressProcessingRef.current) {
+            suppressProcessingRef.current = false;
+            return;
+          }
+          processCurrentAnswer();
+        };
+
+        try {
+          recorder.start(250);
+        } catch (startErr) {
+          console.error('[Recorder Start Error]', startErr);
         }
-        const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        handleRecordedAnswer(blob);
-      };
+      }
 
-      recorder.start();
       setInterviewState(STATES.LISTENING);
       setLiveCaption('Listening for your answer...');
       setLiveTranscriptPreview('');
 
-      // Silence detection via analyser volume monitoring
+      // Silence detection via analyser volume monitoring (using audioOnlyStream)
       const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       audioContextRef.current = audioCtx;
-      const source = audioCtx.createMediaStreamSource(stream);
+      const source = audioCtx.createMediaStreamSource(audioOnlyStream);
       const analyser = audioCtx.createAnalyser();
       analyser.fftSize = 512;
       source.connect(analyser);
@@ -366,6 +396,7 @@ export default function LiveInterviewSession() {
           lastLoudTimeRef.current = now;
           if (!hasSpokenRef.current) {
             hasSpokenRef.current = true;
+            console.log('[VOICE DEBUG] User speech started');
             if (noSpeechTimeoutRef.current) clearTimeout(noSpeechTimeoutRef.current);
           }
         }
@@ -378,6 +409,8 @@ export default function LiveInterviewSession() {
           elapsedSinceStart > MIN_RECORDING_MS_BEFORE_AUTO_STOP &&
           silenceDuration > SILENCE_THRESHOLD_MS
         ) {
+          console.log('[VOICE DEBUG] User speech ended');
+          console.log('[VOICE DEBUG] Silence detected');
           stopListening();
           return;
         }
@@ -408,7 +441,25 @@ export default function LiveInterviewSession() {
       enterErrorState('Could not start the microphone recorder. Please retry or switch to text mode.', () => startListening());
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isMicMuted, enterErrorState, cleanupRecordingPipeline]);
+  }, [enterErrorState, cleanupRecordingPipeline]);
+
+  const processCurrentAnswer = () => {
+    console.log('[SUBMIT DEBUG] Answer processing started');
+    if (audioChunksRef.current && audioChunksRef.current.length > 0) {
+      const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+      console.log('[SUBMIT DEBUG] Answer available: audio blob size', blob.size);
+      console.log('[SUBMIT DEBUG] Calling submit handler');
+      handleRecordedAnswer(blob);
+    } else if (liveTranscriptPreview && liveTranscriptPreview.trim()) {
+      console.log('[SUBMIT DEBUG] Answer available: transcript preview');
+      console.log('[SUBMIT DEBUG] Calling submit handler');
+      submitTurn(liveTranscriptPreview.trim());
+    } else {
+      console.log('[SUBMIT DEBUG] Answer available: fallback empty turn');
+      console.log('[SUBMIT DEBUG] Calling submit handler');
+      submitTurn('');
+    }
+  };
 
   const stopListening = () => {
     if (isStoppingRef.current) return;
@@ -418,9 +469,15 @@ export default function LiveInterviewSession() {
     if (silenceAnimFrameRef.current) cancelAnimationFrame(silenceAnimFrameRef.current);
 
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-      mediaRecorderRef.current.stop();
+      try {
+        mediaRecorderRef.current.stop();
+      } catch (e) {
+        cleanupRecordingPipeline();
+        processCurrentAnswer();
+      }
     } else {
       cleanupRecordingPipeline();
+      processCurrentAnswer();
     }
   };
 
@@ -430,10 +487,11 @@ export default function LiveInterviewSession() {
   const handleRecordedAnswer = async (blob) => {
     setInterviewState(STATES.PROCESSING);
     setLiveCaption('Transcribing your answer...');
+    console.log('[VOICE DEBUG] Answer length/audio length:', blob ? blob.size : 0);
 
-    if (!blob || blob.size < 500) {
-      // Effectively empty audio — skip a wasted API call, ask candidate to repeat.
-      await submitTurn('');
+    if (!blob || blob.size < 150) {
+      console.log('[VOICE DEBUG] Audio blob small or empty, continuing with transcript preview fallback');
+      await submitTurn(liveTranscriptPreview || '');
       return;
     }
 
@@ -450,10 +508,8 @@ export default function LiveInterviewSession() {
       await submitTurn(transcript);
     } catch (err) {
       console.error('[Transcription Error]', err);
-      enterErrorState(
-        err.response?.data?.message || 'Failed to transcribe your answer. Check your connection and retry.',
-        () => handleRecordedAnswer(blob)
-      );
+      console.log('[VOICE DEBUG] Transcription error fallback, proceeding to submit turn');
+      await submitTurn(liveTranscriptPreview || '');
     }
   };
 
@@ -461,9 +517,13 @@ export default function LiveInterviewSession() {
   // Submit the turn to Gemini for evaluation + dynamic next question
   // ============================================================================
   const submitTurn = async (transcriptText) => {
+    console.log('[SUBMIT DEBUG] submitTurn() called');
+    console.log('[VOICE DEBUG] submitTurn() called');
+    console.log('[VOICE DEBUG] Answer length/audio length:', transcriptText ? transcriptText.length : 0);
     setInterviewState(STATES.EVALUATING);
     setLiveCaption('Evaluating your answer...');
 
+    console.log('[VOICE DEBUG] Gemini request started');
     try {
       const res = await axiosClient.post(`/sessions/${sessionId}/live/turn`, {
         userTranscript: transcriptText,
@@ -471,6 +531,10 @@ export default function LiveInterviewSession() {
         currentQuestionText,
         conversationHistory: liveTurns.slice(-6),
       }, { timeout: 30000 });
+
+      console.log('[SUBMIT DEBUG] Gemini response received:', res.data?.interviewerLine);
+      console.log('[VOICE DEBUG] Gemini response received:', res.data);
+      console.log('[VOICE DEBUG] Gemini response content:', res.data?.interviewerLine);
 
       const {
         interviewerLine, questionText, nextQuestionText, decision, turnScore,
@@ -506,11 +570,16 @@ export default function LiveInterviewSession() {
       if (nextQuestionText) {
         setCurrentQuestionText(nextQuestionText);
         setCurrentQuestionCategory(category || currentQuestionCategory);
+        console.log('[SUBMIT DEBUG] Next question triggered:', nextQuestionText);
+        console.log('[VOICE DEBUG] Next question triggered:', nextQuestionText);
+      } else {
+        console.log('[SUBMIT DEBUG] Next question triggered:', currentQuestionText);
+        console.log('[VOICE DEBUG] Next question triggered:', currentQuestionText);
       }
 
       setInterviewState(STATES.NEXT_QUESTION);
       speakLine(interviewerLine, () => {
-        if (!isMicMuted) {
+        if (!isMicMutedRef.current) {
           startListening();
         } else {
           setInterviewState(STATES.LISTENING);
@@ -519,10 +588,31 @@ export default function LiveInterviewSession() {
       });
     } catch (err) {
       console.error('[Submit Turn Error]', err);
-      enterErrorState(
-        err.response?.data?.message || 'Failed to reach the AI interviewer. Check your connection and retry.',
-        () => submitTurn(transcriptText)
-      );
+      const fallbackLine = "Thank you for that answer. Let's move on to the next question.";
+      console.log('[VOICE DEBUG] Gemini error fallback, speaking fallback line');
+      speakLine(fallbackLine, () => {
+        if (!isMicMutedRef.current) startListening();
+      });
+    }
+  };
+
+  const handleManualStopRecording = () => {
+    console.log('[SUBMIT DEBUG] Button clicked');
+    console.log('[SUBMIT DEBUG] isListening:', interviewState === STATES.LISTENING);
+    console.log('[SUBMIT DEBUG] isProcessing:', interviewState === STATES.PROCESSING || interviewState === STATES.EVALUATING);
+    console.log('[SUBMIT DEBUG] isMicMuted:', isMicMutedRef.current);
+
+    if (interviewState === STATES.PROCESSING || interviewState === STATES.EVALUATING) {
+      console.log('[SUBMIT DEBUG] Already processing/evaluating turn');
+      return;
+    }
+
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      console.log('[SUBMIT DEBUG] Stopping active MediaRecorder to finalize audio turn');
+      stopListening();
+    } else {
+      console.log('[SUBMIT DEBUG] MediaRecorder not actively recording, processing current answer directly');
+      processCurrentAnswer();
     }
   };
 
@@ -546,6 +636,14 @@ export default function LiveInterviewSession() {
       );
       return;
     }
+
+    const audioTrack = stream.getAudioTracks()[0];
+    if (audioTrack) {
+      audioTrack.enabled = true;
+      console.log('[Mic Diagnostic] Microphone permission granted. Audio track active:', audioTrack.enabled);
+    }
+    setIsMicMuted(false);
+    isMicMutedRef.current = false;
 
     // Prime browser SpeechSynthesis on user click gesture so autoplay policy is unlocked
     if ('speechSynthesis' in window) {
@@ -577,7 +675,10 @@ export default function LiveInterviewSession() {
           const videoTrack = stream.getVideoTracks()[0];
           const audioTrack = stream.getAudioTracks()[0];
           if (videoTrack) await room.localParticipant.publishTrack(videoTrack, { name: 'camera-track' });
-          if (audioTrack) await room.localParticipant.publishTrack(audioTrack, { name: 'mic-track' });
+          if (audioTrack) {
+            await room.localParticipant.publishTrack(audioTrack, { name: 'mic-track' });
+            console.log('[Mic Diagnostic] Microphone track published to LiveKit.');
+          }
         }
       }
     } catch (lkErr) {
@@ -597,8 +698,7 @@ export default function LiveInterviewSession() {
 
     setInterviewState(STATES.ASKING);
     speakLine(greeting, () => {
-      setLiveTurns((prev) => prev.length === 0 ? prev : prev); // no-op, kept for clarity
-      startListening();
+      if (!isMicMutedRef.current) startListening();
     });
   };
 
@@ -636,18 +736,41 @@ export default function LiveInterviewSession() {
   // --------------------------------------------------------------------------
   const toggleMic = () => {
     const nextMuted = !isMicMuted;
+    console.log(`[Mic Diagnostic] Mute button clicked. Changing isMicMuted to: ${nextMuted}`);
     setIsMicMuted(nextMuted);
+    isMicMutedRef.current = nextMuted;
+
     if (mediaStreamRef.current) {
       const audioTrack = mediaStreamRef.current.getAudioTracks()[0];
-      if (audioTrack) audioTrack.enabled = !nextMuted;
-      if (livekitRoomRef.current?.localParticipant) {
-        try { livekitRoomRef.current.localParticipant.setMicrophoneEnabled(!nextMuted); } catch (e) { }
+      if (audioTrack) {
+        audioTrack.enabled = !nextMuted;
+        console.log(`[Mic Diagnostic] MediaStream audioTrack.enabled: ${audioTrack.enabled}`);
       }
     }
-    // If unmuting while we were waiting on mute in LISTENING state (no active recorder),
-    // resume listening now.
-    if (!nextMuted && interviewState === STATES.LISTENING && mediaRecorderRef.current?.state !== 'recording') {
-      startListening();
+
+    if (livekitRoomRef.current?.localParticipant) {
+      try {
+        livekitRoomRef.current.localParticipant.setMicrophoneEnabled(!nextMuted);
+        console.log(`[Mic Diagnostic] LiveKit microphone enabled set to: ${!nextMuted}`);
+      } catch (e) {
+        console.warn('[Mic Diagnostic] LiveKit mic toggle notice:', e.message);
+      }
+    }
+
+    if (nextMuted) {
+      if (interviewState === STATES.LISTENING) {
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+          suppressProcessingRef.current = true;
+          try { mediaRecorderRef.current.stop(); } catch (e) {}
+        }
+        cleanupRecordingPipeline();
+        setLiveCaption('Microphone is muted. Unmute to continue answering.');
+      }
+    } else {
+      if (interviewState === STATES.LISTENING) {
+        setLiveCaption('Listening for your answer...');
+        startListening();
+      }
     }
   };
 
@@ -672,14 +795,8 @@ export default function LiveInterviewSession() {
       stopListening();
     }
     speakLine(lastSpokenLineRef.current || currentQuestionText, () => {
-      if (!isMicMuted) startListening();
+      if (!isMicMutedRef.current) startListening();
     });
-  };
-
-  const handleManualStopRecording = () => {
-    if (interviewState === STATES.LISTENING) {
-      stopListening();
-    }
   };
 
   const handleSwitchToTextMode = () => {
@@ -795,44 +912,33 @@ export default function LiveInterviewSession() {
 
       {/* Main Call Container */}
       {!showPermissionsModal && !voiceUnsupported && (
-        <div className="max-w-6xl mx-auto w-full space-y-6 flex-1 flex flex-col">
+        <div className="max-w-7xl mx-auto w-full space-y-5 flex-1 flex flex-col justify-between">
 
-          {/* Call Header */}
-          <div className="flex flex-col sm:flex-row items-center justify-between bg-[#FBF9F3] p-4 rounded-3xl border-3 border-[#12211A] editorial-shadow-sm gap-4">
+          {/* 1. TOP HEADER */}
+          <div className="flex flex-col sm:flex-row items-center justify-between bg-[#FBF9F3] px-6 py-4 rounded-3xl border-3 border-[#12211A] editorial-shadow-sm gap-4">
             <div className="flex items-center space-x-3">
-              <span className="font-serif-headline text-xl font-bold text-[#12211A] tracking-tight">
-                PrepPulse.ai
+              <span className="font-serif-headline text-lg font-black text-[#12211A] uppercase tracking-wider">
+                AI INTERVIEW
               </span>
               <span className="text-[#12211A]/30">•</span>
-              <span className="px-3 py-1 bg-[#12211A] text-[#E7B92E] text-xs font-black rounded-full uppercase tracking-wider">
-                Live Voice Interview
+              <span className="text-xs font-bold text-[#C05C33]">
+                {session?.targetRole || 'Full Stack & AI Engineer'}
               </span>
             </div>
 
-            <div className="flex items-center space-x-4 text-xs font-bold">
-              <span className="text-[#12211A]/70">
-                Role: <strong className="text-[#C05C33]">{session?.targetRole}</strong>
+            <div className="flex items-center space-x-2 px-4 py-1.5 bg-[#12211A] text-[#E7B92E] rounded-full border border-[#12211A] text-xs font-extrabold uppercase tracking-widest font-mono">
+              QUESTION {currentQuestionNumber} / {totalQuestions}
+            </div>
+
+            <div className="flex items-center space-x-3 text-xs font-bold">
+              <span className="flex items-center space-x-1.5 px-3 py-1 bg-emerald-500/10 text-emerald-800 border border-emerald-500/30 rounded-full font-black">
+                <span className="w-2 h-2 rounded-full bg-emerald-600 animate-pulse"></span>
+                <span>LIVE</span>
               </span>
               <span className="px-3 py-1 bg-[#E7B92E] text-[#12211A] rounded-full border border-[#12211A] font-mono">
                 ⏱ {formatTime(callDuration)}
               </span>
             </div>
-          </div>
-
-          {/* State Machine Status Strip */}
-          <div className="flex items-center justify-between bg-[#12211A] text-[#FBF9F3] px-5 py-3 rounded-2xl border-2 border-[#12211A]">
-            <div className="flex items-center space-x-2">
-              {(interviewState === STATES.SPEAKING || interviewState === STATES.PROCESSING || interviewState === STATES.EVALUATING || interviewState === STATES.NEXT_QUESTION) && (
-                <Loader2 className="w-4 h-4 animate-spin text-[#E7B92E]" />
-              )}
-              {interviewState === STATES.LISTENING && (
-                <span className="w-2.5 h-2.5 rounded-full bg-[#E7B92E] animate-ping"></span>
-              )}
-              <span className="text-xs font-bold">{stateLabel[interviewState] || interviewState}</span>
-            </div>
-            <span className="text-xs font-mono text-[#E7B92E]">
-              Question {currentQuestionNumber} / {totalQuestions}
-            </span>
           </div>
 
           {/* Error banner with retry */}
@@ -863,52 +969,82 @@ export default function LiveInterviewSession() {
             </div>
           )}
 
-          {/* Video Grid Section */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1">
+          {/* 2. MAIN LAYOUT (TWO COLUMNS) */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 items-stretch">
 
-            {/* Main AI Interviewer Box */}
-            <div className="lg:col-span-2 bg-[#12211A] rounded-3xl border-3 border-[#12211A] p-6 sm:p-8 flex flex-col justify-between relative overflow-hidden editorial-shadow-lg min-h-[420px]">
+            {/* LEFT — AI INTERVIEWER PANEL (7 COLS) */}
+            <div className="lg:col-span-7 bg-[#12211A] text-[#FBF9F3] rounded-3xl border-3 border-[#12211A] p-6 sm:p-8 flex flex-col justify-between relative overflow-hidden editorial-shadow-lg min-h-[460px]">
 
-              {/* Top Status Bar */}
+              {/* Header inside AI Panel */}
               <div className="flex items-center justify-between z-10">
                 <div className="flex items-center space-x-2 bg-[#1D3327] px-3.5 py-1.5 rounded-full border border-[#E7B92E]/40 text-xs text-[#FBF9F3]">
-                  <span className={`w-2.5 h-2.5 rounded-full ${interviewState === STATES.SPEAKING ? 'bg-[#E7B92E] animate-ping' : 'bg-emerald-400'}`}></span>
-                  <span className="font-bold">Alex (AI Interviewer)</span>
+                  <span className={`w-2.5 h-2.5 rounded-full ${(interviewState === STATES.SPEAKING || interviewState === STATES.ASKING || interviewState === STATES.NEXT_QUESTION) ? 'bg-[#E7B92E] animate-ping' : 'bg-emerald-400'}`}></span>
+                  <span className="font-bold">Alex (AI Technical Interviewer)</span>
+                </div>
+
+                {/* Dynamic Status Pill */}
+                <div className="px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider border flex items-center space-x-1.5 bg-[#12211A]/90 border-[#E7B92E] text-[#E7B92E]">
+                  {(interviewState === STATES.SPEAKING || interviewState === STATES.ASKING || interviewState === STATES.NEXT_QUESTION) && (
+                    <>
+                      <span className="w-2 h-2 rounded-full bg-[#E7B92E] animate-ping"></span>
+                      <span>● AI Speaking</span>
+                    </>
+                  )}
+                  {interviewState === STATES.LISTENING && (
+                    <>
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                      <span>{isMicMuted ? '● Mic Muted' : '● Your Turn'}</span>
+                    </>
+                  )}
+                  {(interviewState === STATES.PROCESSING || interviewState === STATES.EVALUATING) && (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-[#E7B92E]" />
+                      <span>● Processing</span>
+                    </>
+                  )}
+                  {interviewState === STATES.IDLE && <span>● Ready</span>}
                 </div>
               </div>
 
-              {/* Avatar Visualizer */}
-              <div className="my-auto text-center space-y-4 z-10 py-4 flex flex-col items-center justify-center">
+              {/* 3. AI AVATAR ORB VISUALIZER */}
+              <div className="my-auto text-center space-y-5 z-10 py-6 flex flex-col items-center justify-center">
                 <div className="relative inline-block">
-                  <div className={`w-32 h-32 sm:w-40 sm:h-40 rounded-full bg-gradient-to-br from-[#1D3327] via-[#12211A] to-[#254233] border-4 ${interviewState === STATES.SPEAKING ? 'border-[#E7B92E] shadow-[0_0_30px_rgba(231,185,46,0.5)]' : 'border-[#E4DDC9]/30'} flex items-center justify-center mx-auto transition-all duration-300`}>
-                    <Volume2 className={`w-16 h-16 ${interviewState === STATES.SPEAKING ? 'text-[#E7B92E] scale-110' : 'text-[#DCEEDF]/60'} transition-transform duration-300`} />
+                  {/* Glowing Circular AI Orb */}
+                  <div className={`w-36 h-36 sm:w-44 sm:h-44 rounded-full bg-gradient-to-br from-[#1D3327] via-[#12211A] to-[#254233] border-4 ${(interviewState === STATES.SPEAKING || interviewState === STATES.ASKING) ? 'border-[#E7B92E] shadow-[0_0_35px_rgba(231,185,46,0.6)] scale-105' : 'border-[#E4DDC9]/30'} flex items-center justify-center mx-auto transition-all duration-300`}>
+                    <Volume2 className={`w-16 h-16 ${(interviewState === STATES.SPEAKING || interviewState === STATES.ASKING) ? 'text-[#E7B92E] scale-110' : 'text-[#DCEEDF]/60'} transition-transform duration-300`} />
                   </div>
-                  <div className="absolute -bottom-3 left-1/2 transform -translate-x-1/2 flex items-center space-x-1 bg-[#12211A] px-4 py-1.5 rounded-full border-2 border-[#E7B92E]">
+
+                  {/* Equalizer Bar Mouth */}
+                  <div className="absolute -bottom-3 left-1/2 transform -translate-x-1/2 flex items-center space-x-1.5 bg-[#12211A] px-5 py-1.5 rounded-full border-2 border-[#E7B92E] shadow-md">
                     {[0.4, 0.9, 0.6, 1.0, 0.7, 0.4].map((scale, i) => (
                       <div
                         key={i}
-                        className={`w-1.5 bg-[#E7B92E] rounded-full transition-all duration-150 ${interviewState === STATES.SPEAKING ? 'motion-safe:animate-bounce' : 'h-2'}`}
-                        style={{ height: interviewState === STATES.SPEAKING ? `${scale * 20}px` : '6px', animationDelay: `${i * 100}ms` }}
+                        className={`w-1.5 bg-[#E7B92E] rounded-full transition-all duration-150 ${(interviewState === STATES.SPEAKING || interviewState === STATES.ASKING) ? 'motion-safe:animate-bounce' : 'h-2'}`}
+                        style={{ height: (interviewState === STATES.SPEAKING || interviewState === STATES.ASKING) ? `${scale * 22}px` : '6px', animationDelay: `${i * 100}ms` }}
                       />
                     ))}
                   </div>
                 </div>
+
                 <div>
-                  <h4 className="text-lg font-bold text-[#FBF9F3]">Alex</h4>
-                  <p className="text-xs text-[#DCEEDF]/80 font-medium">{stateLabel[interviewState]}</p>
+                  <h3 className="text-xl font-bold font-serif-headline text-[#FBF9F3]">Alex</h3>
+                  <p className="text-xs text-[#DCEEDF]/80 font-semibold tracking-wide uppercase mt-0.5">AI Interviewer</p>
                 </div>
               </div>
 
-              {/* Live Caption Strip */}
-              <div className="z-10 bg-[#1D3327]/90 backdrop-blur-md p-4 rounded-2xl border border-[#E7B92E]/30 text-center">
-                <p className="text-xs font-bold text-[#E7B92E] uppercase tracking-wider mb-1">Live Captions</p>
-                <p className="text-sm font-medium text-[#FBF9F3] leading-relaxed italic">"{liveCaption}"</p>
+              {/* Live AI Caption Strip */}
+              <div className="z-10 bg-[#1D3327]/95 backdrop-blur-md p-4 rounded-2xl border border-[#E7B92E]/30 text-center">
+                <p className="text-[10px] font-extrabold text-[#E7B92E] uppercase tracking-widest mb-1">Live AI Captions</p>
+                <p className="text-xs sm:text-sm font-medium text-[#FBF9F3] leading-relaxed italic">"{liveCaption}"</p>
               </div>
+
             </div>
 
-            {/* Right Side: Self View PiP & Question Info */}
-            <div className="space-y-6 flex flex-col justify-between">
-              <div className="relative aspect-video bg-[#12211A] rounded-3xl border-3 border-[#12211A] overflow-hidden editorial-shadow flex items-center justify-center">
+            {/* RIGHT — CANDIDATE PREVIEW + QUESTION CARD (5 COLS) */}
+            <div className="lg:col-span-5 flex flex-col justify-between space-y-6">
+
+              {/* Candidate Camera Window */}
+              <div className="relative aspect-video bg-[#12211A] rounded-3xl border-3 border-[#12211A] overflow-hidden editorial-shadow flex items-center justify-center shrink-0">
                 {!isCameraOff ? (
                   <video ref={localVideoRef} autoPlay playsInline muted className="w-full h-full object-cover transform -scale-x-100" />
                 ) : (
@@ -918,16 +1054,21 @@ export default function LiveInterviewSession() {
                   </div>
                 )}
 
-                <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between">
-                  <span className="bg-[#12211A]/80 backdrop-blur-xs px-2.5 py-1 rounded-xl text-[10px] font-bold text-white border border-white/20">
-                    You (Candidate)
+                {/* YOU Badge + Mic/Camera Badges */}
+                <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between pointer-events-none">
+                  <span className="bg-[#12211A]/90 backdrop-blur-xs px-3 py-1 rounded-xl text-[10px] font-black text-[#F5D90A] border border-[#F5D90A]/30 tracking-wider uppercase">
+                    YOU
                   </span>
-                  <span className={`px-2.5 py-1 rounded-xl text-[10px] font-bold border flex items-center space-x-1 ${isMicMuted ? 'bg-rose-900/80 text-rose-200 border-rose-500' : interviewState === STATES.LISTENING ? 'bg-[#E7B92E] text-[#12211A] border-[#12211A]' : 'bg-[#12211A]/80 text-white border-white/20'}`}>
-                    {interviewState === STATES.LISTENING && !isMicMuted && (
-                      <span className="w-1.5 h-1.5 rounded-full bg-[#12211A] animate-pulse"></span>
-                    )}
-                    <span>{isMicMuted ? 'Muted' : interviewState === STATES.LISTENING ? 'Listening...' : 'Mic Ready'}</span>
-                  </span>
+                  <div className="flex items-center space-x-2">
+                    <span className={`px-2.5 py-1 rounded-xl text-[10px] font-extrabold border flex items-center space-x-1 ${isMicMuted ? 'bg-rose-900/90 text-rose-200 border-rose-500' : 'bg-emerald-900/90 text-emerald-200 border-emerald-500'}`}>
+                      {isMicMuted ? <MicOff className="w-3 h-3 text-rose-400" /> : <Mic className="w-3 h-3 text-emerald-400" />}
+                      <span>{isMicMuted ? 'Muted' : 'Mic On'}</span>
+                    </span>
+                    <span className={`px-2.5 py-1 rounded-xl text-[10px] font-extrabold border flex items-center space-x-1 ${isCameraOff ? 'bg-rose-900/90 text-rose-200 border-rose-500' : 'bg-emerald-900/90 text-emerald-200 border-emerald-500'}`}>
+                      {isCameraOff ? <VideoOff className="w-3 h-3 text-rose-400" /> : <Video className="w-3 h-3 text-emerald-400" />}
+                      <span>{isCameraOff ? 'Camera Off' : 'Camera On'}</span>
+                    </span>
+                  </div>
                 </div>
 
                 {/* Mic level meter while listening */}
@@ -938,16 +1079,30 @@ export default function LiveInterviewSession() {
                 )}
               </div>
 
-              {currentQuestionText && (
-                <div className="flex-1 flex flex-col justify-between">
-                  <QuestionCard
-                    question={{ questionText: currentQuestionText, category: currentQuestionCategory }}
-                    currentNumber={currentQuestionNumber}
-                    totalQuestions={totalQuestions}
-                  />
+              {/* 4. CLEAN QUESTION CARD */}
+              <div className="flex-1 bg-[#FBF9F3] border-3 border-[#12211A] rounded-3xl p-6 editorial-shadow flex flex-col justify-between space-y-4">
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-black uppercase tracking-widest text-[#C05C33]">
+                      QUESTION {currentQuestionNumber} OF {totalQuestions}
+                    </span>
+                    <span className="px-3 py-1 rounded-xl bg-[#DCEEDF] border border-[#12211A] text-[10px] font-black text-[#12211A]">
+                      {currentQuestionCategory || 'General'}
+                    </span>
+                  </div>
+
+                  <h4 className="font-serif-headline text-lg sm:text-xl font-bold text-[#12211A] leading-snug">
+                    {currentQuestionText || 'Loading question...'}
+                  </h4>
                 </div>
-              )}
+
+                <div className="pt-3 border-t-2 border-[#E4DDC9] flex items-center justify-between text-xs text-[#12211A]/70 font-semibold italic">
+                  <span>Take your time and explain your reasoning.</span>
+                </div>
+              </div>
+
             </div>
+
           </div>
 
           {/* Live Transcript Preview Bar */}
@@ -958,80 +1113,124 @@ export default function LiveInterviewSession() {
             </div>
           )}
 
-          {/* Muted-while-listening prompt */}
-          {interviewState === STATES.LISTENING && isMicMuted && (
-            <div className="p-4 bg-[#FEF9C3] border-2 border-[#12211A] rounded-2xl flex items-center justify-between text-xs font-bold text-[#12211A]">
-              <span>Microphone is muted — unmute to continue answering.</span>
-              <button onClick={toggleMic} className="px-4 py-2 bg-[#12211A] text-[#E7B92E] rounded-xl">Unmute</button>
-            </div>
-          )}
+          {/* 7. SINGLE CLEAR STATUS BAR */}
+          <div className="bg-[#12211A] text-[#FBF9F3] px-5 py-3 rounded-2xl border-2 border-[#12211A] flex items-center justify-center text-center shadow-sm">
+            {(interviewState === STATES.SPEAKING || interviewState === STATES.ASKING || interviewState === STATES.NEXT_QUESTION) && (
+              <span className="text-xs font-bold text-[#E7B92E] flex items-center space-x-2">
+                <Volume2 className="w-4 h-4 text-[#E7B92E] animate-pulse" />
+                <span>🔊 Alex is speaking...</span>
+              </span>
+            )}
+            {interviewState === STATES.LISTENING && (
+              <span className="text-xs font-bold text-[#FBF9F3] flex items-center space-x-2">
+                {isMicMuted ? (
+                  <span className="text-rose-300">⚠️ Microphone is muted — unmute to speak your answer</span>
+                ) : (
+                  <>
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping"></span>
+                    <span>🎙 Your turn — speak your answer</span>
+                  </>
+                )}
+              </span>
+            )}
+            {(interviewState === STATES.PROCESSING || interviewState === STATES.EVALUATING) && (
+              <span className="text-xs font-bold text-[#E7B92E] flex items-center space-x-2">
+                <Loader2 className="w-4 h-4 animate-spin text-[#E7B92E]" />
+                <span>◌ Processing your answer...</span>
+              </span>
+            )}
+            {interviewState === STATES.IDLE && (
+              <span className="text-xs font-bold text-[#DCEEDF]">● Interview Room Ready</span>
+            )}
+          </div>
 
-          {/* Floating Controls Bar */}
+          {/* 5. FLOATING CONTROLS BAR */}
           <div className="bg-[#FBF9F3] border-3 border-[#12211A] rounded-3xl p-4 editorial-shadow flex flex-wrap items-center justify-between gap-3">
 
-            <div className="flex flex-wrap items-center gap-3">
+            {/* Left Controls: Secondary Mute, Camera, Repeat */}
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
               <button
+                type="button"
                 onClick={toggleMic}
-                className={`p-3.5 rounded-2xl border-2 border-[#12211A] font-bold flex items-center space-x-2 transition-all ${isMicMuted ? 'bg-rose-100 text-rose-700' : 'bg-[#E7B92E] text-[#12211A]'}`}
+                className={`px-4 py-3 rounded-2xl border-2 border-[#12211A] font-bold text-xs flex items-center space-x-2 transition-all ${isMicMuted ? 'bg-rose-100 text-rose-700' : 'bg-[#E7B92E] text-[#12211A]'}`}
               >
-                {isMicMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-                <span className="text-xs hidden sm:inline">{isMicMuted ? 'Unmute' : 'Mute'}</span>
+                {isMicMuted ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+                <span>{isMicMuted ? 'Unmute' : 'Mute'}</span>
               </button>
 
               <button
+                type="button"
                 onClick={toggleCamera}
-                className={`p-3.5 rounded-2xl border-2 border-[#12211A] font-bold flex items-center space-x-2 transition-all ${isCameraOff ? 'bg-rose-100 text-rose-700' : 'bg-[#F5F1E7] text-[#12211A]'}`}
+                className={`px-4 py-3 rounded-2xl border-2 border-[#12211A] font-bold text-xs flex items-center space-x-2 transition-all ${isCameraOff ? 'bg-rose-100 text-rose-700' : 'bg-[#F5F1E7] text-[#12211A]'}`}
               >
-                {isCameraOff ? <VideoOff className="w-5 h-5" /> : <Video className="w-5 h-5" />}
-                <span className="text-xs hidden sm:inline">{isCameraOff ? 'Start Camera' : 'Stop Camera'}</span>
+                {isCameraOff ? <VideoOff className="w-4 h-4" /> : <Video className="w-4 h-4" />}
+                <span>{isCameraOff ? 'Start Camera' : 'Stop Camera'}</span>
               </button>
 
-              {interviewState === STATES.LISTENING && !isMicMuted && (
-                <button
-                  onClick={handleManualStopRecording}
-                  className="px-4 py-3.5 bg-[#C05C33] text-[#FBF9F3] border-2 border-[#12211A] rounded-2xl text-xs font-bold flex items-center space-x-2"
-                >
-                  <Square className="w-4 h-4 fill-current" />
-                  <span className="hidden sm:inline">Stop & Submit</span>
-                </button>
-              )}
-
               <button
+                type="button"
                 onClick={handleRepeatQuestion}
                 disabled={interviewState === STATES.PROCESSING || interviewState === STATES.EVALUATING}
-                className="px-4 py-3.5 bg-[#DCEEDF] text-[#12211A] border-2 border-[#12211A] rounded-2xl text-xs font-bold hover:bg-[#B7D8BE] transition-all flex items-center space-x-2 disabled:opacity-50"
+                className="px-4 py-3 bg-[#DCEEDF] text-[#12211A] border-2 border-[#12211A] rounded-2xl text-xs font-bold hover:bg-[#B7D8BE] transition-all flex items-center space-x-2 disabled:opacity-50"
               >
                 <RotateCcw className="w-4 h-4" />
-                <span className="hidden sm:inline">Repeat Question</span>
+                <span className="hidden sm:inline">Repeat</span>
               </button>
             </div>
 
-            <div className="flex flex-wrap items-center gap-3">
+            {/* Primary Center Action: Submit Answer */}
+            <div className="flex items-center justify-center">
               <button
+                type="button"
+                onClick={handleManualStopRecording}
+                disabled={interviewState === STATES.PROCESSING || interviewState === STATES.EVALUATING}
+                className="px-6 py-3.5 bg-[#C05C33] hover:bg-[#a84d28] text-[#FBF9F3] border-3 border-[#12211A] rounded-2xl text-xs sm:text-sm font-black flex items-center space-x-2.5 editorial-shadow transition-all disabled:opacity-50 cursor-pointer"
+              >
+                {interviewState === STATES.PROCESSING || interviewState === STATES.EVALUATING ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin text-[#E7B92E]" />
+                    <span>Submitting...</span>
+                  </>
+                ) : (
+                  <>
+                    <Square className="w-4 h-4 fill-current text-[#FDFBF3]" />
+                    <span>🎙 Submit Answer</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            {/* Right Controls: Utilities & End Interview */}
+            <div className="flex flex-[#12211A] flex-wrap items-center gap-2 sm:gap-3">
+              <button
+                type="button"
                 onClick={handleSwitchToTextMode}
-                className="px-4 py-3 bg-[#F5F1E7] text-[#12211A] border-2 border-[#12211A] rounded-2xl text-xs font-bold hover:bg-[#E4DDC9] transition-all flex items-center space-x-2"
+                className="px-3.5 py-3 bg-[#F5F1E7] text-[#12211A] border-2 border-[#12211A] rounded-2xl text-xs font-bold hover:bg-[#E4DDC9] transition-all flex items-center space-x-1.5"
               >
                 <Type className="w-4 h-4" />
-                <span className="hidden sm:inline">Text Mode</span>
+                <span className="hidden md:inline">Text Mode</span>
               </button>
 
               <button
+                type="button"
                 onClick={() => setIsDrawerOpen(true)}
-                className="px-4 py-3 bg-[#DCEEDF] text-[#12211A] border-2 border-[#12211A] rounded-2xl text-xs font-bold hover:bg-[#B7D8BE] transition-all flex items-center space-x-2"
+                className="px-3.5 py-3 bg-[#DCEEDF] text-[#12211A] border-2 border-[#12211A] rounded-2xl text-xs font-bold hover:bg-[#B7D8BE] transition-all flex items-center space-x-1.5"
               >
                 <MessageSquare className="w-4 h-4 text-[#1D3327]" />
                 <span>Transcript ({liveTurns.length})</span>
               </button>
 
               <button
+                type="button"
                 onClick={handleEndInterview}
                 disabled={isEndingCall}
-                className="px-6 py-3 bg-[#C05C33] text-[#FBF9F3] border-2 border-[#12211A] rounded-2xl text-xs font-bold hover:bg-[#a84d28] transition-all editorial-shadow flex items-center space-x-2"
+                className="px-5 py-3 bg-rose-700 text-white border-2 border-[#12211A] rounded-2xl text-xs font-bold hover:bg-rose-800 transition-all editorial-shadow flex items-center space-x-1.5"
               >
                 <PhoneOff className="w-4 h-4" />
-                <span>{isEndingCall ? 'Ending Call...' : 'End Interview'}</span>
+                <span>{isEndingCall ? 'Ending...' : 'End'}</span>
               </button>
             </div>
+
           </div>
         </div>
       )}

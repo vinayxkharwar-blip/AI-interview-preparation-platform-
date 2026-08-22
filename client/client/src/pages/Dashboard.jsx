@@ -97,7 +97,7 @@ export default function Dashboard() {
   };
 
   const latestResume = resumes.length > 0 ? resumes[0] : null;
-  const atsScore = latestResume?.parsedData?.atsScore || 88;
+  const atsScore = typeof latestResume?.parsedData?.atsScore === 'number' ? latestResume.parsedData.atsScore : 80;
   const featuredJob = jobs.length > 0 ? jobs[0] : null;
 
   // Composite Career Health Score (0-100)

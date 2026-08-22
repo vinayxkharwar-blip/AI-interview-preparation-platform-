@@ -6,7 +6,8 @@ import AnswerRecorder from '../components/AnswerRecorder';
 import FeedbackCard from '../components/FeedbackCard';
 import SessionSummary from '../components/SessionSummary';
 import ImprovementPlanCard from '../components/ImprovementPlanCard';
-import { Loader2, ArrowRight, CheckCircle2, RotateCcw, AlertCircle, Sparkles, Video } from 'lucide-react';
+import PostInterviewLearning from '../components/PostInterviewLearning';
+import { Loader2, AlertCircle, Sparkles, Video } from 'lucide-react';
 
 export default function InterviewSession() {
   const { id: sessionId } = useParams();
@@ -152,6 +153,7 @@ export default function InterviewSession() {
   }
 
   if (sessionCompleted) {
+    const feedbackList = Object.values(feedbackMap);
     return (
       <div className="max-w-5xl mx-auto px-4 py-8 space-y-8 animate-fadeIn">
         <SessionSummary
@@ -161,6 +163,11 @@ export default function InterviewSession() {
           onStartNew={() => navigate('/new-session')}
         />
         {improvementPlan && <ImprovementPlanCard plan={improvementPlan} />}
+        <PostInterviewLearning
+          session={session}
+          improvementPlan={improvementPlan}
+          feedbackList={feedbackList}
+        />
       </div>
     );
   }

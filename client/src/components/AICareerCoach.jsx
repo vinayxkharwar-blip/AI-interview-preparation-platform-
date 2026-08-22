@@ -8,7 +8,6 @@ import {
   Bot, 
   User, 
   MessageSquare, 
-  ChevronDown, 
   Target, 
   Briefcase, 
   FileText, 

@@ -113,17 +113,16 @@ export default function Navbar() {
             </div>
           )}
 
-          {/* User Profile, Notifications & Actions */}
+          {/* User Profile & Actions */}
           {user ? (
             <div className="flex items-center space-x-2 shrink-0">
-              <NotificationCenter />
               <Link
                 to="/"
                 className="hidden lg:flex items-center space-x-1 text-xs font-bold text-[#0F1E1B]/70 hover:text-[#0F1E1B] px-2.5 py-1 rounded-lg hover:bg-[#F5F2E6]"
-                title="View Public Landing Page"
+                title="View Home Page"
               >
                 <Home className="w-3.5 h-3.5" />
-                <span>Landing Page</span>
+                <span>HOME</span>
               </Link>
               <div className="hidden sm:flex items-center space-x-2 px-3 py-1.5 rounded-xl bg-[#F5F2E6] border-2 border-[#0F1E1B] text-xs font-bold shadow-xs">
                 <User className="w-3.5 h-3.5 text-[#C1440E]" />

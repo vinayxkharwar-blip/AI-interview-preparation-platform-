@@ -13,7 +13,6 @@ import {
   ArrowRight,
   RefreshCw,
   Target,
-  Calendar,
   BookOpen
 } from 'lucide-react';
 
