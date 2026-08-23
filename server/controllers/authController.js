@@ -62,10 +62,6 @@ export const formatUser = (u) => {
 // @route POST /api/auth/register
 export const registerUser = async (req, res) => {
   try {
-    if (mongoose.connection.readyState !== 1) {
-      return res.status(503).json({ message: 'Database connection unavailable. Please try again later.' });
-    }
-
     const { name, email, password, targetRole } = req.body;
 
     if (!name || !email || !password) {

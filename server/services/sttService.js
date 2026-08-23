@@ -3,7 +3,7 @@ import { openaiClient } from '../config/openai.js';
 
 export const transcribeAudio = async (filePath) => {
   if (!openaiClient) {
-    return 'I believe the event loop in JavaScript operates with a call stack and queues. Promises go into the microtask queue, while setTimeout callbacks go into the macrotask queue. The microtasks are always processed first before the next macrotask.';
+    return '';
   }
 
   try {
@@ -14,9 +14,9 @@ export const transcribeAudio = async (filePath) => {
       language: 'en',
     });
 
-    return transcription.text;
+    return (transcription.text || '').trim();
   } catch (error) {
     console.error('[STT Service Error]', error.message);
-    return 'I implemented JWT authentication by generating a signed JWT token on login, returning it to the client, and storing it in LocalStorage or secure cookies. For protected routes, the auth header bearer token is validated.';
+    return '';
   }
 };

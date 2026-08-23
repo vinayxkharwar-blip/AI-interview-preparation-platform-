@@ -20,6 +20,9 @@ export default function corder({ onAnswerSubmitted, isSubmitting }) {
   const audioChunksRef = useRef([]);
   const timerRef = useRef(null);
 
+  const recognitionRef = useRef(null);
+  const localTranscriptRef = useRef('');
+
   // Check MediaRecorder & audio/webm support
   const checkAudioWebmSupport = () => {
     if (typeof window === 'undefined' || !window.MediaRecorder || !navigator.mediaDevices?.getUserMedia) {
@@ -43,6 +46,9 @@ export default function corder({ onAnswerSubmitted, isSubmitting }) {
   useEffect(() => {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
+      if (recognitionRef.current) {
+        try { recognitionRef.current.stop(); } catch (e) {}
+      }
     };
   }, []);
 
@@ -66,6 +72,7 @@ export default function corder({ onAnswerSubmitted, isSubmitting }) {
       setAudioBlob(null);
       setAudioUrl('');
       setTranscript('');
+      localTranscriptRef.current = '';
       audioChunksRef.current = [];
 
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -84,8 +91,46 @@ export default function corder({ onAnswerSubmitted, isSubmitting }) {
         setAudioUrl(url);
 
         stream.getTracks().forEach((track) => track.stop());
+        if (recognitionRef.current) {
+          try { recognitionRef.current.stop(); } catch (e) {}
+          recognitionRef.current = null;
+        }
         handleTranscribeAudio(audioBlob);
       };
+
+      // Start Browser Speech Recognition for live text feedback
+      const SpeechRecognition = typeof window !== 'undefined' && (window.SpeechRecognition || window.webkitSpeechRecognition);
+      if (SpeechRecognition) {
+        try {
+          const recognition = new SpeechRecognition();
+          recognition.continuous = true;
+          recognition.interimResults = true;
+          recognition.lang = 'en-US';
+
+          recognition.onresult = (event) => {
+            let interim = '';
+            let final = '';
+            for (let i = 0; i < event.results.length; i++) {
+              const part = event.results[i][0].transcript;
+              if (event.results[i].isFinal) {
+                final += part + ' ';
+              } else {
+                interim += part;
+              }
+            }
+            const fullText = (final + interim).trim();
+            if (fullText) {
+              localTranscriptRef.current = fullText;
+              setTranscript(fullText);
+            }
+          };
+
+          recognition.start();
+          recognitionRef.current = recognition;
+        } catch (srErr) {
+          console.warn('[SpeechRecognition Notice]', srErr.message);
+        }
+      }
 
       mediaRecorderRef.current.start();
       setIsRecording(true);
@@ -117,12 +162,18 @@ export default function corder({ onAnswerSubmitted, isSubmitting }) {
       mediaRecorderRef.current.stop();
       setIsRecording(false);
       if (timerRef.current) clearInterval(timerRef.current);
+      if (recognitionRef.current) {
+        try { recognitionRef.current.stop(); } catch (e) {}
+        recognitionRef.current = null;
+      }
     }
   };
 
   const handleTranscribeAudio = async (blob) => {
     setTranscribeLoading(true);
     setError('');
+
+    const clientTranscript = (localTranscriptRef.current || transcript || '').trim();
 
     const formData = new FormData();
     formData.append('audio', blob, 'user_answer.webm');
@@ -131,11 +182,12 @@ export default function corder({ onAnswerSubmitted, isSubmitting }) {
       const res = await axiosClient.post('/answers/transcribe', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
-      setTranscript(res.data.transcript || '');
+      const serverTranscript = (res.data.transcript || '').trim();
+      setTranscript(serverTranscript || clientTranscript);
       setTranscribeLoading(false);
     } catch (err) {
       console.error('Transcription error:', err);
-      setError(err.response?.data?.message || 'Speech-to-text transcription fallback. You can type or edit your response manually.');
+      setTranscript(clientTranscript);
       setTranscribeLoading(false);
     }
   };

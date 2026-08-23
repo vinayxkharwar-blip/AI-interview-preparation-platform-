@@ -65,6 +65,8 @@ export default function LiveInterviewSession() {
   const [liveCaption, setLiveCaption] = useState('Connecting to interviewer Alex...');
   const [liveTranscriptPreview, setLiveTranscriptPreview] = useState('');
   const [micLevel, setMicLevel] = useState(0);
+  const [isInlineTextOpen, setIsInlineTextOpen] = useState(false);
+  const [inlineTextAnswer, setInlineTextAnswer] = useState('');
 
   // Transcript & Drawer states
   const [liveTurns, setLiveTurns] = useState([]);
@@ -89,6 +91,8 @@ export default function LiveInterviewSession() {
   const noSpeechTimeoutRef = useRef(null);
   const maxDurationTimeoutRef = useRef(null);
   const isStoppingRef = useRef(false);
+  const recognitionRef = useRef(null);
+  const recognizedTranscriptRef = useRef('');
 
   // Last spoken line, kept for "Repeat question" control
   const lastSpokenLineRef = useRef('');
@@ -200,6 +204,15 @@ export default function LiveInterviewSession() {
     if (silenceAnimFrameRef.current) cancelAnimationFrame(silenceAnimFrameRef.current);
     if (noSpeechTimeoutRef.current) clearTimeout(noSpeechTimeoutRef.current);
     if (maxDurationTimeoutRef.current) clearTimeout(maxDurationTimeoutRef.current);
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.onend = null;
+        recognitionRef.current.onerror = null;
+        recognitionRef.current.onresult = null;
+        recognitionRef.current.stop();
+      } catch (e) { }
+      recognitionRef.current = null;
+    }
     if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
       try { audioContextRef.current.close(); } catch (e) { }
     }
@@ -221,6 +234,7 @@ export default function LiveInterviewSession() {
   }, [cleanupRecordingPipeline]);
 
   // ============================================================================
+  // ============================================================================
   // TTS: speak a line, then invoke callback. Robust across browser autoplay quirks.
   // ============================================================================
   const speakLine = useCallback((text, onComplete) => {
@@ -228,6 +242,14 @@ export default function LiveInterviewSession() {
       if (onComplete) onComplete();
       return;
     }
+
+    // Immediately stop microphone and recording to prevent self-voice echo loop
+    suppressProcessingRef.current = true;
+    cleanupRecordingPipeline();
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      try { mediaRecorderRef.current.stop(); } catch (e) {}
+    }
+
     console.log('[VOICE DEBUG] AI question started:', text);
     console.log('[VOICE DEBUG] TTS response started:', text);
     lastSpokenLineRef.current = text;
@@ -265,7 +287,10 @@ export default function LiveInterviewSession() {
           hasEnded = true;
           console.log('[VOICE DEBUG] AI question finished');
           console.log('[VOICE DEBUG] TTS response finished');
-          if (onComplete) onComplete();
+          // 800ms cooldown buffer so microphone does not pick up trailing speaker audio/reverb
+          setTimeout(() => {
+            if (onComplete) onComplete();
+          }, 800);
         };
 
         utterance.onend = finishSpeech;
@@ -302,7 +327,7 @@ export default function LiveInterviewSession() {
         if (onComplete) onComplete();
       }
     })();
-  }, [enterErrorState]);
+  }, [enterErrorState, cleanupRecordingPipeline]);
 
   // ============================================================================
   // STT pipeline: start listening with live silence detection via Web Audio API
@@ -372,6 +397,66 @@ export default function LiveInterviewSession() {
       setInterviewState(STATES.LISTENING);
       setLiveCaption('Listening for your answer...');
       setLiveTranscriptPreview('');
+      recognizedTranscriptRef.current = '';
+
+      // Initialize Browser Web Speech Recognition for accurate real-time speech-to-text
+      const SpeechRecognition = typeof window !== 'undefined' && (window.SpeechRecognition || window.webkitSpeechRecognition);
+      if (SpeechRecognition) {
+        try {
+          const recognition = new SpeechRecognition();
+          recognition.continuous = true;
+          recognition.interimResults = true;
+          recognition.lang = 'en-US';
+
+          recognition.onresult = (event) => {
+            let interim = '';
+            let final = '';
+            for (let i = 0; i < event.results.length; i++) {
+              const part = event.results[i][0].transcript;
+              if (event.results[i].isFinal) {
+                final += part + ' ';
+              } else {
+                interim += part;
+              }
+            }
+            const fullText = (final + interim).trim();
+
+            if (fullText) {
+              const lastAlex = (lastSpokenLineRef.current || '').toLowerCase().replace(/[^a-z0-9\s]/g, '');
+              const cleanSpoken = fullText.toLowerCase().replace(/[^a-z0-9\s]/g, '');
+
+              // Filter out speaker echo if the mic picked up Alex's voice
+              if (
+                cleanSpoken.length > 5 &&
+                (lastAlex.includes(cleanSpoken) ||
+                 cleanSpoken.includes(lastAlex.slice(0, 25)) ||
+                 cleanSpoken.includes('didnt hear a response') ||
+                 cleanSpoken.includes('concludes our interview') ||
+                 cleanSpoken.includes('preparing your performance') ||
+                 cleanSpoken.includes('listening for your answer'))
+              ) {
+                console.log('[SpeechRecognition] Discarded speaker echo:', cleanSpoken);
+                return;
+              }
+
+              recognizedTranscriptRef.current = fullText;
+              setLiveTranscriptPreview(fullText);
+              hasSpokenRef.current = true;
+              lastLoudTimeRef.current = Date.now();
+              if (noSpeechTimeoutRef.current) clearTimeout(noSpeechTimeoutRef.current);
+            }
+          };
+
+          recognition.onerror = (e) => {
+            console.warn('[SpeechRecognition Notice]', e.error);
+          };
+
+          recognition.start();
+          recognitionRef.current = recognition;
+        } catch (srErr) {
+          console.warn('[SpeechRecognition Init Warning]', srErr.message);
+        }
+      }
 
       // Silence detection via analyser volume monitoring (using audioOnlyStream)
       const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -394,23 +479,21 @@ export default function LiveInterviewSession() {
         const now = Date.now();
         if (level > SILENCE_VOLUME_CUTOFF) {
           lastLoudTimeRef.current = now;
-          if (!hasSpokenRef.current) {
-            hasSpokenRef.current = true;
-            console.log('[VOICE DEBUG] User speech started');
-            if (noSpeechTimeoutRef.current) clearTimeout(noSpeechTimeoutRef.current);
-          }
         }
 
         const elapsedSinceStart = now - recordingStartTimeRef.current;
         const silenceDuration = now - lastLoudTimeRef.current;
+        const candidateWordCount = (recognizedTranscriptRef.current || '').split(/\s+/).filter(Boolean).length;
 
+        // Only auto-stop if the candidate actually spoke at least 3 distinct non-echo words and then paused
         if (
           hasSpokenRef.current &&
-          elapsedSinceStart > MIN_RECORDING_MS_BEFORE_AUTO_STOP &&
+          candidateWordCount >= 3 &&
+          elapsedSinceStart > 3500 &&
           silenceDuration > SILENCE_THRESHOLD_MS
         ) {
           console.log('[VOICE DEBUG] User speech ended');
-          console.log('[VOICE DEBUG] Silence detected');
+          console.log('[VOICE DEBUG] Silence detected after real speech');
           stopListening();
           return;
         }
@@ -445,15 +528,16 @@ export default function LiveInterviewSession() {
 
   const processCurrentAnswer = () => {
     console.log('[SUBMIT DEBUG] Answer processing started');
+    const clientTranscript = (recognizedTranscriptRef.current || liveTranscriptPreview || '').trim();
     if (audioChunksRef.current && audioChunksRef.current.length > 0) {
       const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
       console.log('[SUBMIT DEBUG] Answer available: audio blob size', blob.size);
       console.log('[SUBMIT DEBUG] Calling submit handler');
       handleRecordedAnswer(blob);
-    } else if (liveTranscriptPreview && liveTranscriptPreview.trim()) {
+    } else if (clientTranscript) {
       console.log('[SUBMIT DEBUG] Answer available: transcript preview');
       console.log('[SUBMIT DEBUG] Calling submit handler');
-      submitTurn(liveTranscriptPreview.trim());
+      submitTurn(clientTranscript);
     } else {
       console.log('[SUBMIT DEBUG] Answer available: fallback empty turn');
       console.log('[SUBMIT DEBUG] Calling submit handler');
@@ -489,9 +573,11 @@ export default function LiveInterviewSession() {
     setLiveCaption('Transcribing your answer...');
     console.log('[VOICE DEBUG] Answer length/audio length:', blob ? blob.size : 0);
 
+    const clientTranscript = (recognizedTranscriptRef.current || liveTranscriptPreview || '').trim();
+
     if (!blob || blob.size < 150) {
-      console.log('[VOICE DEBUG] Audio blob small or empty, continuing with transcript preview fallback');
-      await submitTurn(liveTranscriptPreview || '');
+      console.log('[VOICE DEBUG] Audio blob small or empty, continuing with client transcript');
+      await submitTurn(clientTranscript);
       return;
     }
 
@@ -503,13 +589,14 @@ export default function LiveInterviewSession() {
         headers: { 'Content-Type': 'multipart/form-data' },
         timeout: 30000,
       });
-      const transcript = (res.data.transcript || '').trim();
-      setLiveTranscriptPreview(transcript);
-      await submitTurn(transcript);
+      const serverTranscript = (res.data.transcript || '').trim();
+      const finalTranscript = serverTranscript || clientTranscript;
+      setLiveTranscriptPreview(finalTranscript);
+      await submitTurn(finalTranscript);
     } catch (err) {
       console.error('[Transcription Error]', err);
-      console.log('[VOICE DEBUG] Transcription error fallback, proceeding to submit turn');
-      await submitTurn(liveTranscriptPreview || '');
+      console.log('[VOICE DEBUG] Transcription error fallback, proceeding to submit client transcript');
+      await submitTurn(clientTranscript);
     }
   };
 
@@ -1105,11 +1192,70 @@ export default function LiveInterviewSession() {
 
           </div>
 
-          {/* Live Transcript Preview Bar */}
-          {liveTranscriptPreview && (interviewState === STATES.PROCESSING || interviewState === STATES.EVALUATING) && (
+          {/* Live Candidate Speech Transcript Preview Bar */}
+          {liveTranscriptPreview && (
             <div className="p-3.5 bg-[#FBF9F3] border-2 border-[#12211A] rounded-2xl flex items-center space-x-2 text-xs font-bold text-[#12211A] animate-fadeIn">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-              <span>You said: <strong className="font-normal italic">"{liveTranscriptPreview}"</strong></span>
+              {interviewState === STATES.LISTENING ? (
+                <>
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0"></span>
+                  <span>Live Speech: <strong className="font-normal italic">"{liveTranscriptPreview}"</strong></span>
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>Your Answer: <strong className="font-normal italic">"{liveTranscriptPreview}"</strong></span>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* Optional Inline Text Mode Response Box */}
+          {isInlineTextOpen && (
+            <div className="bg-[#FBF9F3] border-3 border-[#12211A] rounded-3xl p-5 editorial-shadow space-y-3 animate-fadeIn">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold uppercase tracking-wider text-[#12211A] flex items-center space-x-2">
+                  <Type className="w-4 h-4 text-[#C05C33]" />
+                  <span>Type / Edit Your Answer</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setIsInlineTextOpen(false)}
+                  className="text-xs font-bold text-[#12211A]/60 hover:text-[#12211A] cursor-pointer"
+                >
+                  ✕ Close
+                </button>
+              </div>
+              <textarea
+                value={inlineTextAnswer}
+                onChange={(e) => setInlineTextAnswer(e.target.value)}
+                placeholder="Type your technical response here, or edit speech transcript..."
+                rows={3}
+                className="w-full p-3.5 rounded-2xl border-2 border-[#12211A] bg-white text-[#12211A] text-sm focus:outline-none focus:ring-2 focus:ring-[#E7B92E]"
+              />
+              <div className="flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={handleSwitchToTextMode}
+                  className="text-[11px] font-bold text-[#C05C33] hover:underline"
+                >
+                  Switch permanently to Standard Text Interface →
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const text = inlineTextAnswer.trim();
+                    if (text) {
+                      submitTurn(text);
+                      setInlineTextAnswer('');
+                      setIsInlineTextOpen(false);
+                    }
+                  }}
+                  disabled={!inlineTextAnswer.trim() || interviewState === STATES.PROCESSING || interviewState === STATES.EVALUATING}
+                  className="px-5 py-2.5 bg-[#1D3327] hover:bg-[#254233] text-white border-2 border-[#12211A] rounded-xl text-xs font-black transition-all disabled:opacity-50 cursor-pointer"
+                >
+                  Submit Written Response →
+                </button>
+              </div>
             </div>
           )}
 
@@ -1204,8 +1350,8 @@ export default function LiveInterviewSession() {
             <div className="flex flex-[#12211A] flex-wrap items-center gap-2 sm:gap-3">
               <button
                 type="button"
-                onClick={handleSwitchToTextMode}
-                className="px-3.5 py-3 bg-[#F5F1E7] text-[#12211A] border-2 border-[#12211A] rounded-2xl text-xs font-bold hover:bg-[#E4DDC9] transition-all flex items-center space-x-1.5"
+                onClick={() => setIsInlineTextOpen((prev) => !prev)}
+                className={`px-3.5 py-3 border-2 border-[#12211A] rounded-2xl text-xs font-bold transition-all flex items-center space-x-1.5 cursor-pointer ${isInlineTextOpen ? 'bg-[#E7B92E] text-[#12211A]' : 'bg-[#F5F1E7] text-[#12211A] hover:bg-[#E4DDC9]'}`}
               >
                 <Type className="w-4 h-4" />
                 <span className="hidden md:inline">Text Mode</span>
@@ -1214,7 +1360,7 @@ export default function LiveInterviewSession() {
               <button
                 type="button"
                 onClick={() => setIsDrawerOpen(true)}
-                className="px-3.5 py-3 bg-[#DCEEDF] text-[#12211A] border-2 border-[#12211A] rounded-2xl text-xs font-bold hover:bg-[#B7D8BE] transition-all flex items-center space-x-1.5"
+                className="px-3.5 py-3 bg-[#DCEEDF] text-[#12211A] border-2 border-[#12211A] rounded-2xl text-xs font-bold hover:bg-[#B7D8BE] transition-all flex items-center space-x-1.5 cursor-pointer"
               >
                 <MessageSquare className="w-4 h-4 text-[#1D3327]" />
                 <span>Transcript ({liveTurns.length})</span>
@@ -1224,7 +1370,7 @@ export default function LiveInterviewSession() {
                 type="button"
                 onClick={handleEndInterview}
                 disabled={isEndingCall}
-                className="px-5 py-3 bg-rose-700 text-white border-2 border-[#12211A] rounded-2xl text-xs font-bold hover:bg-rose-800 transition-all editorial-shadow flex items-center space-x-1.5"
+                className="px-5 py-3 bg-rose-700 text-white border-2 border-[#12211A] rounded-2xl text-xs font-bold hover:bg-rose-800 transition-all editorial-shadow flex items-center space-x-1.5 cursor-pointer"
               >
                 <PhoneOff className="w-4 h-4" />
                 <span>{isEndingCall ? 'Ending...' : 'End'}</span>

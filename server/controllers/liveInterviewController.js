@@ -7,6 +7,7 @@ import ImprovementPlan from '../models/ImprovementPlan.js';
 import Resume from '../models/Resume.js';
 import { memorySessions, memoryQuestions, memoryAnswers, memoryFeedback, memoryImprovementPlans } from './sessionController.js';
 import { generateLLMJson } from '../services/llmService.js';
+import { generateContextualDialogueTurn } from '../services/dialogueEngine.js';
 import { buildImprovementPlanPrompt } from '../prompts/improvementPrompts.js';
 import { buildLiveInterviewTurnPrompt } from '../prompts/liveInterviewPrompts.js';
 import {
@@ -205,38 +206,14 @@ export const handleLiveTurn = async (req, res) => {
     }
 
     if (!turnResult || !turnResult.interviewerLine) {
-      // High quality fallback response logic if LLM offline / malformed response
-      const wordCount = (userTranscript || '').split(/\s+/).filter(Boolean).length;
-      let decision = 'next_question';
-      let nextQuestionText = '';
-      let line = '';
-      const isFinal = questionsAskedSoFar >= totalQuestions;
-
-      if (!userTranscript || wordCount === 0) {
-        decision = 'followup';
-        line = `I didn't quite catch that — could you repeat or expand on your answer to: "${currentQuestion.questionText}"?`;
-        nextQuestionText = currentQuestion.questionText;
-      } else if (wordCount < 10) {
-        decision = 'followup';
-        line = `Thanks for starting off! Could you elaborate a bit more on that, especially around ${currentQuestion.category || 'the core technical details'}?`;
-        nextQuestionText = currentQuestion.questionText;
-      } else if (isFinal) {
-        decision = 'complete';
-        line = `Great, thank you for your thoughtful answers! That wraps up our questions for this session — I'm putting together your performance review now.`;
-        nextQuestionText = '';
-      } else {
-        decision = 'next_question';
-        nextQuestionText = `Building on your experience with ${targetRole}, can you walk me through a recent technical challenge you solved and the trade-offs you considered?`;
-        line = `Great explanation! Let's move to the next question: "${nextQuestionText}"`;
-      }
-
-      turnResult = {
-        interviewerLine: line,
-        nextQuestionText,
-        keyPointsCovered: [],
-        decision,
-        turnScore: wordCount === 0 ? 2 : wordCount < 10 ? 4 : wordCount > 20 ? 8 : 6,
-      };
+      turnResult = generateContextualDialogueTurn({
+        userTranscript,
+        currentQuestionText: currentQuestion.questionText,
+        currentQuestionIndex,
+        totalQuestions,
+        conversationHistory,
+        targetRole,
+      });
     }
 
     // Normalize/guard fields so the frontend never receives an unusable shape.

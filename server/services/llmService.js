@@ -1,5 +1,6 @@
 import { openaiClient, isOpenAIConfigured } from '../config/openai.js';
 import { genAIClient, isGeminiConfigured } from '../config/gemini.js';
+import { generateContextualDialogueTurn } from './dialogueEngine.js';
 
 const extractResumeFallback = (rawText = '') => {
   const commonSkills = [
@@ -93,6 +94,38 @@ const extractResumeFallback = (rawText = '') => {
 
 const mockLLMResponse = (prompt) => {
   const lower = prompt.toLowerCase();
+
+  // 1. LIVE INTERVIEW VOICE TURN HANDLER (Checked first!)
+  if (lower.includes('alex') || lower.includes('interviewerline') || lower.includes('spoken interview') || lower.includes('candidate\'s current spoken answer')) {
+    const ansMatch = prompt.match(/Candidate's Current Spoken Answer \(transcribed\):\s*"([\s\S]*?)"/i);
+    const candidateAnswer = ansMatch ? ansMatch[1].trim() : '';
+
+    // Extract turn progress (e.g. "this was question 2 of 5")
+    const progressMatch = prompt.match(/this was question (\d+) of (\d+)/i);
+    const questionsAskedSoFar = progressMatch ? parseInt(progressMatch[1], 10) : 1;
+    const totalQuestions = progressMatch ? parseInt(progressMatch[2], 10) : 5;
+
+    // Extract previous questions and current question to avoid repeating
+    const prevQMatch = prompt.match(/Previous Questions Asked \(in order\):\s*(\[[^\]]*\])/i);
+    let previousQuestions = [];
+    if (prevQMatch) {
+      try { previousQuestions = JSON.parse(prevQMatch[1]); } catch (e) { }
+    }
+    const currentQMatch = prompt.match(/Question Just Asked:\s*"([\s\S]*?)"/i);
+    const currentQText = currentQMatch ? currentQMatch[1].trim() : '';
+
+    const roleMatch = prompt.match(/Job Role:\s*([^\n]+)/i);
+    const targetRole = roleMatch ? roleMatch[1].trim() : 'Software Engineer';
+
+    return generateContextualDialogueTurn({
+      userTranscript: candidateAnswer,
+      currentQuestionText: currentQText,
+      currentQuestionIndex: Math.max(0, questionsAskedSoFar - 1),
+      totalQuestions,
+      conversationHistory: previousQuestions.map((q) => ({ questionText: q })),
+      targetRole,
+    });
+  }
 
   if (lower.includes('generate') || lower.includes('interview questions') || lower.includes('questionnumber')) {
     return {
@@ -269,10 +302,11 @@ export const generateLLMJson = async (prompt, systemMessage = "You are a helpful
   // 1. TRY GEMINI API IF CONFIGURED
   if (isGeminiConfigured && genAIClient) {
     const geminiModels = [
-      'gemini-3.5-flash',
-      'gemini-3.6-flash',
+      'gemini-2.0-flash',
+      'gemini-1.5-flash',
+      'gemini-1.5-pro',
       'gemini-2.5-flash',
-      'gemini-2.5-flash-lite'
+      'gemini-2.0-flash-lite'
     ];
 
     for (const modelName of geminiModels) {
