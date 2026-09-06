@@ -6,7 +6,7 @@ import { generateLLMJson } from '../services/llmService.js';
 // Memory fallback store
 export const memoryCoverLetters = [];
 
-// @desc Generate tailored AI Cover Letter via OpenAI LLM
+// @desc Generate tailored AI Cover Letter via Gemini LLM
 // @route POST /api/cover-letter
 export const generateCoverLetter = async (req, res) => {
   try {

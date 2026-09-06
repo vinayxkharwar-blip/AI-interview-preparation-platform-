@@ -21,6 +21,8 @@ const resumeSchema = new mongoose.Schema(
       required: true,
     },
     parsedData: {
+      atsScore: { type: Number },
+      targetRole: { type: String },
       skills: [{ type: String }],
       experience: [
         {
@@ -30,6 +32,13 @@ const resumeSchema = new mongoose.Schema(
           highlights: [String],
         },
       ],
+      education: [
+        {
+          degree: String,
+          institution: String,
+          year: String,
+        },
+      ],
       projects: [
         {
           name: String,
@@ -37,11 +46,13 @@ const resumeSchema = new mongoose.Schema(
           techStack: [String],
         },
       ],
-      targetRole: String,
+      certifications: [{ type: String }],
+      strengths: [{ type: String }],
+      weaknesses: [{ type: String }],
       summary: String,
     },
   },
-  { timestamps: true }
+  { timestamps: true, strict: false }
 );
 
 export default mongoose.model('Resume', resumeSchema);

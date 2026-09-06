@@ -9,16 +9,9 @@ import { memorySessions, memoryQuestions, memoryAnswers, memoryFeedback, memoryI
 import { generateLLMJson } from '../services/llmService.js';
 import { buildImprovementPlanPrompt } from '../prompts/improvementPrompts.js';
 import { buildLiveInterviewTurnPrompt } from '../prompts/liveInterviewPrompts.js';
-import {
-  isHeyGenConfigured,
-  createHeyGenStream,
-  submitHeyGenSdpAnswer,
-  submitHeyGenIceCandidate,
-  speakHeyGenStream,
-  closeHeyGenStream,
-} from '../services/heygenService.js';
 import mongoose from 'mongoose';
 import { checkOwnership } from '../utils/authz.js';
+import { synthesizeGeminiSpeech } from '../services/ttsService.js';
 
 // @desc Generate LiveKit WebRTC Access Token for live session
 // @route POST /api/sessions/:id/live/token
@@ -267,216 +260,6 @@ export const handleLiveTurn = async (req, res) => {
   }
 };
 
-// ============================================================================
-// HEYGEN STREAMING AVATAR API CONTROLLERS
-// ============================================================================
-
-// @desc Initialize HeyGen Real-Time WebRTC Avatar Stream Session
-// @route POST /api/sessions/:id/live/heygen-stream
-export const createHeyGenStreamSession = async (req, res) => {
-  try {
-    const { id: parentSessionId } = req.params;
-    let session = null;
-    if (mongoose.connection.readyState === 1 && mongoose.Types.ObjectId.isValid(parentSessionId)) {
-      try {
-        session = await Session.findById(parentSessionId);
-      } catch (e) {
-        console.log('[LiveInterview HeyGen Stream DB Notice]', e.message);
-      }
-    }
-    if (!session) {
-      session = memorySessions.find((s) => String(s._id) === String(parentSessionId) || String(s.id) === String(parentSessionId));
-    }
-    if (!session) {
-      return res.status(404).json({ message: 'Session not found.' });
-    }
-    if (!checkOwnership(session, req.user)) {
-      return res.status(403).json({ message: 'Forbidden: You do not have access to this session' });
-    }
-
-    if (!isHeyGenConfigured()) {
-      return res.json({
-        isFallback: true,
-        message: 'HEYGEN_API_KEY is not configured in .env. Using high-performance animated visualizer mode.',
-      });
-    }
-
-    const { avatarName, voiceId } = req.body || {};
-    const streamData = await createHeyGenStream(avatarName, voiceId);
-
-    if (streamData && streamData.sessionToken) {
-      session.heygenToken = streamData.sessionToken;
-      session.heygenSessionId = streamData.sessionId;
-      if (typeof session.save === 'function') {
-        try {
-          await session.save();
-        } catch (saveErr) {
-          console.log('[LiveInterview HeyGen Token Save Notice]', saveErr.message);
-        }
-      }
-    }
-
-    res.json({
-      isFallback: false,
-      ...streamData,
-    });
-  } catch (error) {
-    console.warn('[LiveInterview HeyGen Stream Notice]', error.message);
-    res.json({
-      isFallback: true,
-      message: 'HeyGen WebRTC Avatar Stream fallback mode activated: ' + error.message,
-    });
-  }
-};
-
-// @desc Submit SDP Answer for HeyGen Stream Session
-// @route POST /api/sessions/:id/live/heygen-sdp
-export const sendHeyGenSdpAnswer = async (req, res) => {
-  try {
-    const { id: parentSessionId } = req.params;
-    let session = null;
-    if (mongoose.connection.readyState === 1 && mongoose.Types.ObjectId.isValid(parentSessionId)) {
-      try {
-        session = await Session.findById(parentSessionId);
-      } catch (e) {
-        console.log('[LiveInterview HeyGen SDP DB Notice]', e.message);
-      }
-    }
-    if (!session) {
-      session = memorySessions.find((s) => String(s._id) === String(parentSessionId) || String(s.id) === String(parentSessionId));
-    }
-    if (!session) {
-      return res.status(404).json({ message: 'Session not found.' });
-    }
-    if (!checkOwnership(session, req.user)) {
-      return res.status(403).json({ message: 'Forbidden: You do not have access to this session' });
-    }
-
-    // Note: req.body.sessionId is a HeyGen-specific WebRTC stream ID passed directly to HeyGen's API.
-    const { sessionId, answer } = req.body;
-    if (!sessionId || !answer) {
-      return res.status(400).json({ message: 'sessionId and answer are required.' });
-    }
-
-    const result = await submitHeyGenSdpAnswer(sessionId, answer, session?.heygenToken);
-    res.json(result);
-  } catch (error) {
-    console.error('[LiveInterview HeyGen SDP Error]', error.message);
-    res.status(500).json({ message: 'Failed to submit SDP answer to HeyGen.' });
-  }
-};
-
-// @desc Submit ICE Candidate for HeyGen Stream Session
-// @route POST /api/sessions/:id/live/heygen-ice
-export const sendHeyGenIceCandidate = async (req, res) => {
-  try {
-    const { id: parentSessionId } = req.params;
-    let session = null;
-    if (mongoose.connection.readyState === 1 && mongoose.Types.ObjectId.isValid(parentSessionId)) {
-      try {
-        session = await Session.findById(parentSessionId);
-      } catch (e) {
-        console.log('[LiveInterview HeyGen ICE DB Notice]', e.message);
-      }
-    }
-    if (!session) {
-      session = memorySessions.find((s) => String(s._id) === String(parentSessionId) || String(s.id) === String(parentSessionId));
-    }
-    if (!session) {
-      return res.status(404).json({ message: 'Session not found.' });
-    }
-    if (!checkOwnership(session, req.user)) {
-      return res.status(403).json({ message: 'Forbidden: You do not have access to this session' });
-    }
-
-    // Note: req.body.sessionId is a HeyGen-specific WebRTC stream ID passed directly to HeyGen's API.
-    const { sessionId, candidate } = req.body;
-    if (!sessionId || !candidate) {
-      return res.status(400).json({ message: 'sessionId and candidate are required.' });
-    }
-
-    const result = await submitHeyGenIceCandidate(sessionId, candidate, session?.heygenToken);
-    res.json(result);
-  } catch (error) {
-    console.error('[LiveInterview HeyGen ICE Error]', error.message);
-    res.status(500).json({ message: 'Failed to submit ICE candidate to HeyGen.' });
-  }
-};
-
-// @desc Submit Script Text to Speak on HeyGen Avatar Stream
-// @route POST /api/sessions/:id/live/heygen-speak
-export const speakHeyGenTurn = async (req, res) => {
-  try {
-    const { id: parentSessionId } = req.params;
-    let session = null;
-    if (mongoose.connection.readyState === 1 && mongoose.Types.ObjectId.isValid(parentSessionId)) {
-      try {
-        session = await Session.findById(parentSessionId);
-      } catch (e) {
-        console.log('[LiveInterview HeyGen Speak DB Notice]', e.message);
-      }
-    }
-    if (!session) {
-      session = memorySessions.find((s) => String(s._id) === String(parentSessionId) || String(s.id) === String(parentSessionId));
-    }
-    if (!session) {
-      return res.status(404).json({ message: 'Session not found.' });
-    }
-    if (!checkOwnership(session, req.user)) {
-      return res.status(403).json({ message: 'Forbidden: You do not have access to this session' });
-    }
-
-    // Note: req.body.sessionId is a HeyGen-specific WebRTC stream ID passed directly to HeyGen's API.
-    const { sessionId, text, taskType } = req.body;
-    if (!sessionId || !text) {
-      return res.status(400).json({ message: 'sessionId and text are required.' });
-    }
-
-    const result = await speakHeyGenStream(sessionId, text, taskType, session?.heygenToken);
-    res.json(result);
-  } catch (error) {
-    console.error('[LiveInterview HeyGen Speak Error]', error.message);
-    res.status(500).json({ message: 'Failed to submit speak task to HeyGen avatar stream.' });
-  }
-};
-
-// @desc Close HeyGen Stream Session
-// @route POST /api/sessions/:id/live/heygen-stop
-export const stopHeyGenStreamSession = async (req, res) => {
-  try {
-    const { id: parentSessionId } = req.params;
-    let session = null;
-    if (mongoose.connection.readyState === 1 && mongoose.Types.ObjectId.isValid(parentSessionId)) {
-      try {
-        session = await Session.findById(parentSessionId);
-      } catch (e) {
-        console.log('[LiveInterview HeyGen Stop DB Notice]', e.message);
-      }
-    }
-    if (!session) {
-      session = memorySessions.find((s) => String(s._id) === String(parentSessionId) || String(s.id) === String(parentSessionId));
-    }
-    if (!session) {
-      return res.status(404).json({ message: 'Session not found.' });
-    }
-    if (!checkOwnership(session, req.user)) {
-      return res.status(403).json({ message: 'Forbidden: You do not have access to this session' });
-    }
-
-    // Note: req.body.sessionId is a HeyGen-specific WebRTC stream ID passed directly to HeyGen's API.
-    const { sessionId } = req.body;
-    if (sessionId) {
-      await closeHeyGenStream(sessionId, session?.heygenToken);
-    }
-    res.json({ message: 'HeyGen avatar stream session stopped successfully.' });
-  } catch (error) {
-    console.warn('[LiveInterview HeyGen Stop Notice]', error.message);
-    res.json({ message: 'HeyGen session stop notice.' });
-  }
-};
-
-
-
 // @desc Complete live interview session & synthesize performance report
 // @route POST /api/sessions/:id/live/complete
 export const completeLiveSession = async (req, res) => {
@@ -624,5 +407,29 @@ export const completeLiveSession = async (req, res) => {
   } catch (error) {
     console.error('[LiveInterview Complete Error]', error);
     res.status(500).json({ message: error.message || 'Failed to complete live interview session.' });
+  }
+};
+
+// @desc Synthesize live speech audio using Gemini TTS
+// @route POST /api/sessions/:id/live/tts
+export const streamLiveTts = async (req, res) => {
+  try {
+    const { text, voice = 'Puck' } = req.body;
+    if (!text || !text.trim()) {
+      return res.status(400).json({ message: 'Text is required for TTS synthesis.' });
+    }
+
+    const ttsResult = await synthesizeGeminiSpeech(text, voice);
+    res.json({
+      audioUrl: `data:audio/wav;base64,${ttsResult.audioBase64}`,
+      mimeType: ttsResult.mimeType,
+      voice: ttsResult.voiceName,
+    });
+  } catch (error) {
+    console.warn('[LiveInterview TTS Fallback Notice]', error.message);
+    res.status(200).json({
+      isFallback: true,
+      message: 'Gemini TTS unavailable, fallback to browser speech synthesis.',
+    });
   }
 };

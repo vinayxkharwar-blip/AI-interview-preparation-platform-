@@ -3,6 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import mongoose from 'mongoose';
 import { connectDB } from './config/db.js';
 
 import authRoutes from './routes/authRoutes.js';
@@ -24,7 +25,7 @@ dotenv.config({ path: path.join(__dirname, '.env') });
 const validateEnv = () => {
   const jwtSecret = process.env.JWT_SECRET;
   const mongoUri = process.env.MONGO_URI || process.env.MONGODB_URI;
-  const openaiKey = process.env.OPENAI_API_KEY;
+  const geminiKey = process.env.GEMINI_API_KEY;
   const port = process.env.PORT;
 
   // Hard failure checks
@@ -45,18 +46,14 @@ const validateEnv = () => {
     warnings.push('PORT: Missing from environment variables (defaulting to 5000)');
   }
 
-  if (!openaiKey || !openaiKey.trim()) {
-    warnings.push('OPENAI_API_KEY: Missing (AI evaluations and question generation will fallback gracefully to heuristic evaluation)');
+  if (!geminiKey || !geminiKey.trim()) {
+    warnings.push('GEMINI_API_KEY: Missing (AI evaluations, STT, and TTS will fallback gracefully to heuristics)');
   }
 
-  const heygenKey = process.env.HEYGEN_API_KEY;
   const livekitKey = process.env.LIVEKIT_API_KEY;
   const livekitSecret = process.env.LIVEKIT_API_SECRET;
   const livekitUrl = process.env.LIVEKIT_URL;
 
-  if (!heygenKey || heygenKey === 'your_heygen_api_key' || heygenKey.includes('••••')) {
-    warnings.push('HEYGEN_API_KEY: Missing or placeholder (HeyGen Real-Time Avatar will fall back to animated visualizer & Web Speech API)');
-  }
   if (!livekitKey || livekitKey === 'your_livekit_api_key') {
     warnings.push('LIVEKIT_API_KEY: Missing or placeholder');
   }
@@ -70,7 +67,7 @@ const validateEnv = () => {
   if (warnings.length > 0) {
     console.warn(`\n⚠️  [Environment Configuration Warnings]`);
     warnings.forEach((w) => console.warn(`   - ${w}`));
-    console.warn(`   (To enable full LiveKit & HeyGen Avatar streaming, update server/.env with valid credentials)\n`);
+    console.warn(`   (To enable full LiveKit media streaming, update server/.env with valid credentials)\n`);
   } else {
     console.log(`✅ [Environment Check] All environment credentials successfully loaded.`);
   }
@@ -82,6 +79,11 @@ const app = express();
 
 // Connect to MongoDB
 connectDB();
+
+app.use((req, res, next) => {
+  req.dbAvailable = mongoose.connection.readyState === 1;
+  next();
+});
 
 // Middleware
 const allowedOrigins = [

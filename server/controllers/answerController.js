@@ -15,18 +15,7 @@ export const transcribeAnswerAudio = async (req, res) => {
       return res.status(400).json({ message: 'No audio file provided for transcription.' });
     }
 
-    let transcript = '';
-    try {
-      transcript = await transcribeAudio(req.file.path);
-    } finally {
-      if (req.file && req.file.path) {
-        fs.unlink(req.file.path, (unlinkErr) => {
-          if (unlinkErr) {
-            console.error('[Audio Cleanup Warning] Could not delete temp file:', unlinkErr.message);
-          }
-        });
-      }
-    }
+    const transcript = await transcribeAudio(req.file.path);
 
     res.json({
       transcript,

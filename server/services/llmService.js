@@ -1,4 +1,3 @@
-import { openaiClient, isOpenAIConfigured } from '../config/openai.js';
 import { genAIClient, isGeminiConfigured } from '../config/gemini.js';
 
 const extractResumeFallback = (rawText = '') => {
@@ -254,7 +253,7 @@ const extractNumericScore = (obj) => {
 };
 
 /**
- * Calls Gemini or OpenAI GPT and returns parsed JSON.
+ * Calls Gemini LLM and returns parsed JSON.
  * Every returned object includes a `_meta` field so callers (and the UI) can tell
  * whether the response came from a real model call or the offline mock fallback,
  * and why, if it fell back.
@@ -313,66 +312,8 @@ export const generateLLMJson = async (prompt, systemMessage = "You are a helpful
     }
   }
 
-  // 2. TRY OPENAI API IF CONFIGURED
-  if (isOpenAIConfigured && openaiClient) {
-    const client = openaiClient;
-    const candidateModels = [
-      { name: 'gpt-4o-mini' },
-      { name: 'gpt-4o' },
-      { name: 'gpt-3.5-turbo' },
-    ];
-
-    let lastError = null;
-    let lastErrorWasRateLimit = false;
-
-    for (const config of candidateModels) {
-      try {
-        console.log(`[LLM Service] Sending request to OpenAI model "${config.name}"...`);
-        const response = await client.chat.completions.create({
-          model: config.name,
-          messages: [
-            { role: 'system', content: `${systemMessage} Respond strictly with a valid JSON object.` },
-            { role: 'user', content: prompt }
-          ],
-          response_format: { type: 'json_object' }
-        });
-
-        const rawText = response.choices[0]?.message?.content || '{}';
-        console.log(`[LLM Service] Raw OpenAI Response from "${config.name}":`);
-        console.log(rawText);
-        console.log('----------------------------------------------------');
-
-        const cleanedText = rawText
-          .replace(/```json/gi, '')
-          .replace(/```/g, '')
-          .trim();
-
-        const parsed = JSON.parse(cleanedText);
-
-        const extractedScore = extractNumericScore(parsed);
-        if (extractedScore !== null) {
-          parsed.atsScore = Math.min(100, Math.max(0, extractedScore));
-        } else if (prompt.toLowerCase().includes('resume')) {
-          const fallbackObj = extractResumeFallback(prompt);
-          parsed.atsScore = fallbackObj.atsScore;
-        }
-
-        return {
-          ...parsed,
-          _meta: { source: 'openai', model: config.name }
-        };
-      } catch (modelErr) {
-        lastError = modelErr;
-        const rawErrMsg = modelErr.message || '';
-        const safeErrMsg = rawErrMsg.replace(/key=[^&\s]+/gi, 'key=***REDACTED***');
-        lastErrorWasRateLimit = /429|quota|rate limit/i.test(rawErrMsg);
-        console.error(`[LLM Service Error] Call to OpenAI model "${config.name}" failed: ${safeErrMsg}`);
-      }
-    }
-  }
-
-  // 3. DYNAMIC MOCK FALLBACK
-  console.error('[LLM Service Notice] No active LLM API succeeded (Gemini / OpenAI). Triggering dynamic mock fallback.');
+  // 2. DYNAMIC MOCK FALLBACK
+  console.error('[LLM Service Notice] Gemini API was unavailable or exhausted. Triggering dynamic mock fallback.');
   const mock = mockLLMResponse(prompt);
   return {
     ...mock,

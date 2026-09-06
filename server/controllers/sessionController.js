@@ -22,6 +22,10 @@ export const memoryImprovementPlans = [];
 // @route POST /api/sessions/start
 export const startSession = async (req, res) => {
   try {
+    if (req.dbAvailable === false || mongoose.connection.readyState !== 1) {
+      return res.status(503).json({ message: 'Database connection unavailable. Please check MongoDB Atlas network access settings.' });
+    }
+
     if (!req.user || !req.user._id) {
       return res.status(400).json({ message: 'Cannot generate questions: user profile data is missing' });
     }

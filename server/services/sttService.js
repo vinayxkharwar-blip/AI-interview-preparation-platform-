@@ -1,22 +1,37 @@
 import fs from 'fs';
-import { openaiClient } from '../config/openai.js';
+import path from 'path';
+import { genAIClient, isGeminiConfigured } from '../config/gemini.js';
+
+const MIME_BY_EXT = {
+  '.webm': 'audio/webm',
+  '.wav': 'audio/wav',
+  '.mp3': 'audio/mp3',
+  '.m4a': 'audio/mp4',
+  '.ogg': 'audio/ogg',
+};
+
+const transcribeWithGemini = async (filePath) => {
+  const ext = path.extname(filePath).toLowerCase();
+  const mimeType = MIME_BY_EXT[ext] || 'audio/webm';
+  const audioBase64 = fs.readFileSync(filePath).toString('base64');
+
+  const model = genAIClient.getGenerativeModel({ model: 'gemini-3.6-flash' });
+  const result = await model.generateContent([
+    { text: 'Transcribe this audio exactly as spoken. Return ONLY the raw transcript text, no commentary, no quotes.' },
+    { inlineData: { mimeType, data: audioBase64 } },
+  ]);
+  return result.response.text().trim();
+};
 
 export const transcribeAudio = async (filePath) => {
-  if (!openaiClient) {
-    return 'I believe the event loop in JavaScript operates with a call stack and queues. Promises go into the microtask queue, while setTimeout callbacks go into the macrotask queue. The microtasks are always processed first before the next macrotask.';
-  }
-
   try {
-    const fileStream = fs.createReadStream(filePath);
-    const transcription = await openaiClient.audio.transcriptions.create({
-      file: fileStream,
-      model: 'whisper-1',
-      language: 'en',
-    });
-
-    return transcription.text;
+    if (isGeminiConfigured && genAIClient) {
+      return await transcribeWithGemini(filePath);
+    }
+    throw new Error('Gemini STT is not configured (GEMINI_API_KEY missing).');
   } catch (error) {
     console.error('[STT Service Error]', error.message);
-    return 'I implemented JWT authentication by generating a signed JWT token on login, returning it to the client, and storing it in LocalStorage or secure cookies. For protected routes, the auth header bearer token is validated.';
+    return "Sorry, I couldn't transcribe that answer clearly — could you repeat it?";
   }
 };
+
