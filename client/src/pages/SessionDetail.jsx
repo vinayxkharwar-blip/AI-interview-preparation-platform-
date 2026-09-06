@@ -3,8 +3,9 @@ import { useParams, Link } from 'react-router-dom';
 import axiosClient from '../api/axiosClient';
 import SessionSummary from '../components/SessionSummary';
 import ImprovementPlanCard from '../components/ImprovementPlanCard';
+import PostInterviewLearning from '../components/PostInterviewLearning';
 import FeedbackCard from '../components/FeedbackCard';
-import { Loader2, ArrowLeft, HelpCircle, CheckCircle2 } from 'lucide-react';
+import { Loader2, ArrowLeft } from 'lucide-react';
 import { toHundredScale } from '../utils/score';
 
 export default function SessionDetail() {
@@ -63,6 +64,13 @@ export default function SessionDetail() {
 
       {/* AI Improvement Plan */}
       {improvementPlan && <ImprovementPlanCard plan={improvementPlan} />}
+
+      {/* AI Recommended Post-Interview Preparation */}
+      <PostInterviewLearning
+        session={session}
+        improvementPlan={improvementPlan}
+        feedbackList={feedback}
+      />
 
       {/* Detailed Q&A Breakdown */}
       <div className="bg-[#FDFBF3] text-[#0F1E1B] p-6 sm:p-8 rounded-3xl border-3 border-[#0F1E1B] editorial-shadow-lg space-y-6">

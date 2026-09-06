@@ -15,20 +15,44 @@ import analyticsRoutes from './routes/analyticsRoutes.js';
 import jobRoutes from './routes/jobRoutes.js';
 import applicationRoutes from './routes/applicationRoutes.js';
 import coverLetterRoutes from './routes/coverLetterRoutes.js';
-
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+import fs from 'fs';
 
 dotenv.config({ path: path.join(__dirname, '.env') });
 
 const validateEnv = () => {
+  const jwtSecret = process.env.JWT_SECRET;
+  const mongoUri = process.env.MONGO_URI || process.env.MONGODB_URI;
+  const openaiKey = process.env.OPENAI_API_KEY;
+  const port = process.env.PORT;
+
+  // Hard failure checks
+  if (!jwtSecret || !jwtSecret.trim()) {
+    console.error('❌ [Environment FATAL Error] JWT_SECRET is missing or undefined! Server cannot start without a configured JWT_SECRET.');
+    process.exit(1);
+  }
+
+  if (!mongoUri || !mongoUri.trim()) {
+    console.error('❌ [Environment FATAL Error] MONGO_URI (or MONGODB_URI) is missing! Server cannot start without a database connection string.');
+    process.exit(1);
+  }
+
+  // Soft warning checks
   const warnings = [];
+
+  if (!port) {
+    warnings.push('PORT: Missing from environment variables (defaulting to 5000)');
+  }
+
+  if (!openaiKey || !openaiKey.trim()) {
+    warnings.push('OPENAI_API_KEY: Missing (AI evaluations and question generation will fallback gracefully to heuristic evaluation)');
+  }
+
   const heygenKey = process.env.HEYGEN_API_KEY;
-  const didKey = process.env.DID_API_KEY || process.env.D_ID_API_KEY;
   const livekitKey = process.env.LIVEKIT_API_KEY;
   const livekitSecret = process.env.LIVEKIT_API_SECRET;
   const livekitUrl = process.env.LIVEKIT_URL;
-  const geminiKey = process.env.GEMINI_API_KEY;
 
   if (!heygenKey || heygenKey === 'your_heygen_api_key' || heygenKey.includes('••••')) {
     warnings.push('HEYGEN_API_KEY: Missing or placeholder (HeyGen Real-Time Avatar will fall back to animated visualizer & Web Speech API)');
@@ -42,16 +66,13 @@ const validateEnv = () => {
   if (!livekitUrl || livekitUrl.includes('cloudse')) {
     warnings.push('LIVEKIT_URL: Missing or malformed');
   }
-  if (!geminiKey) {
-    warnings.push('GEMINI_API_KEY: Missing (LLM evaluation will fallback to heuristic evaluation)');
-  }
 
   if (warnings.length > 0) {
     console.warn(`\n⚠️  [Environment Configuration Warnings]`);
     warnings.forEach((w) => console.warn(`   - ${w}`));
     console.warn(`   (To enable full LiveKit & HeyGen Avatar streaming, update server/.env with valid credentials)\n`);
   } else {
-    console.log(`✅ [Environment Check] All LiveKit, HeyGen Avatar, and Gemini credentials successfully loaded.`);
+    console.log(`✅ [Environment Check] All environment credentials successfully loaded.`);
   }
 };
 
@@ -63,7 +84,25 @@ const app = express();
 connectDB();
 
 // Middleware
-app.use(cors());
+const allowedOrigins = [
+  process.env.CLIENT_URL,
+  'http://localhost:5173',
+  'http://localhost:3000',
+  'http://127.0.0.1:5173',
+].filter(Boolean);
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error('CORS policy restriction: Request origin not allowed.'));
+      }
+    },
+    credentials: true,
+  })
+);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 

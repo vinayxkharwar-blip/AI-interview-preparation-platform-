@@ -15,8 +15,6 @@ export const transcribeAnswerAudio = async (req, res) => {
       return res.status(400).json({ message: 'No audio file provided for transcription.' });
     }
 
-    console.log(`[Answer Controller] Transcribing audio file: ${req.file.originalname}`);
-
     let transcript = '';
     try {
       transcript = await transcribeAudio(req.file.path);
@@ -93,19 +91,14 @@ export const submitAnswer = async (req, res) => {
     memoryAnswers.push(savedAnswer);
 
     // 3. Call LLM for 1-10 scoring & feedback evaluation
-    console.log('====================================================');
-    console.log('[Answer Controller] Evaluating candidate answer with LLM rubric...');
-    console.log('[Answer Controller] Candidate Transcript:', transcript);
     const feedbackPrompt = buildAnswerFeedbackPrompt({
       questionText,
       category,
       expectedKeyPoints,
       candidateAnswer: transcript,
     });
-    console.log('[Answer Controller] Built Feedback Prompt:\n', feedbackPrompt);
 
     const fbLLMResult = await generateLLMJson(feedbackPrompt, 'You are an AI interview grading assistant.');
-    console.log('[Answer Controller] Received LLM Evaluation Result:\n', fbLLMResult);
 
     const scoreToSave = typeof fbLLMResult?.score === 'number' ? fbLLMResult.score : 7;
     const strengthsToSave = Array.isArray(fbLLMResult?.strengths) && fbLLMResult.strengths.length > 0

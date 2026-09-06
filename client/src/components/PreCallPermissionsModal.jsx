@@ -41,17 +41,11 @@ export default function PreCallPermissionsModal({ onPermissionsGranted, onCancel
     setErrorMessage('');
     stopTracks();
 
-    const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('Media access timeout')), 3500)
-    );
-
     try {
-      const getMediaPromise = navigator.mediaDevices.getUserMedia({
+      const stream = await navigator.mediaDevices.getUserMedia({
         video: { width: { ideal: 640 }, height: { ideal: 480 } },
         audio: true,
       });
-
-      const stream = await Promise.race([getMediaPromise, timeoutPromise]);
 
       streamRef.current = stream;
 

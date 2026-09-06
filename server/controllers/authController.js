@@ -62,6 +62,10 @@ export const formatUser = (u) => {
 // @route POST /api/auth/register
 export const registerUser = async (req, res) => {
   try {
+    if (mongoose.connection.readyState !== 1) {
+      return res.status(503).json({ message: 'Database connection unavailable. Please try again later.' });
+    }
+
     const { name, email, password, targetRole } = req.body;
 
     if (!name || !email || !password) {
@@ -159,7 +163,6 @@ export const loginUser = async (req, res) => {
 
     // Auto-create test/demo user if logging in with test credentials
     if (!user && (cleanEmail.includes('test') || cleanEmail.includes('demo') || password === 'password123')) {
-      console.log('[Auth Service] Auto-creating test candidate account for:', cleanEmail);
       const salt = await bcrypt.genSalt(10);
       const hashedPassword = await bcrypt.hash(password, salt);
       user = {

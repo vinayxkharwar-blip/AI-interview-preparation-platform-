@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 
 export default function CareerDashboard({ 
-  atsScore = 88, 
+  atsScore = 82, 
   jobsFoundCount = 6, 
   savedJobsCount = 0, 
   applications = [], 

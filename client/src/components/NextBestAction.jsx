@@ -66,7 +66,7 @@ export default function NextBestAction({
     action = {
       step: 'Step 5 of 5',
       title: 'Practice a 15-Minute AI Mock Interview',
-      description: 'Prepare for upcoming technical loops with real-time AI questions, Whisper voice recognition, and Instant feedback.',
+      description: 'Prepare for upcoming technical loops with real-time AI questions, Gemini voice recognition, and Instant feedback.',
       buttonText: 'Start Mock Interview',
       icon: PlayCircle,
       path: '/new-session',

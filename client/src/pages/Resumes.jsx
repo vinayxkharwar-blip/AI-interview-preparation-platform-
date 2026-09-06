@@ -26,7 +26,6 @@ import {
 
 export default function Resumes() {
   const navigate = useNavigate();
-  const token = localStorage.getItem('token');
 
   const [resumes, setResumes] = useState([]);
   const [recommendedJobs, setRecommendedJobs] = useState([]);
@@ -43,31 +42,16 @@ export default function Resumes() {
       setResumes(resumesData);
 
       // 2. Fetch top recommended jobs
-      const jobsRes = await fetch('/api/jobs/recommendations', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (jobsRes.ok) {
-        const jobsData = await jobsRes.json();
-        setRecommendedJobs(jobsData);
-      }
+      const jobsRes = await axiosClient.get('/jobs/recommendations');
+      setRecommendedJobs(jobsRes.data || []);
 
       // 3. Fetch saved jobs
-      const savedRes = await fetch('/api/jobs/saved', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (savedRes.ok) {
-        const savedData = await savedRes.json();
-        setSavedJobs(savedData);
-      }
+      const savedRes = await axiosClient.get('/jobs/saved');
+      setSavedJobs(savedRes.data || []);
 
       // 4. Fetch applications
-      const appsRes = await fetch('/api/applications', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (appsRes.ok) {
-        const appsData = await appsRes.json();
-        setApplications(appsData);
-      }
+      const appsRes = await axiosClient.get('/applications');
+      setApplications(appsRes.data || []);
     } catch (err) {
       console.error('Failed to fetch resume page data:', err);
     } finally {
@@ -91,47 +75,32 @@ export default function Resumes() {
       const savedItem = savedJobs.find((sj) => sj.jobId === job.id || sj.jobId === job.jobId);
       if (savedItem) {
         try {
-          const res = await fetch(`/api/jobs/save/${savedItem._id || savedItem.id}`, {
-            method: 'DELETE',
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          if (res.ok) {
-            setSavedJobs(savedJobs.filter((sj) => sj.jobId !== (job.id || job.jobId)));
-          }
+          await axiosClient.delete(`/jobs/save/${savedItem._id || savedItem.id}`);
+          setSavedJobs(savedJobs.filter((sj) => sj.jobId !== (job.id || job.jobId)));
         } catch (e) {
           console.error(e);
         }
       }
     } else {
       try {
-        const res = await fetch('/api/jobs/save', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            jobId: job.id || job.jobId,
-            title: job.title,
-            company: job.company,
-            logo: job.logo,
-            location: job.location,
-            salary: job.salary,
-            jobType: job.jobType,
-            experience: job.experience,
-            description: job.description,
-            skills: job.skills,
-            applyUrl: job.applyUrl,
-            matchedSkills: job.matchedSkills,
-            missingSkills: job.missingSkills,
-            matchPercentage: job.matchPercentage,
-          }),
+        const res = await axiosClient.post('/jobs/save', {
+          jobId: job.id || job.jobId,
+          title: job.title,
+          company: job.company,
+          logo: job.logo,
+          location: job.location,
+          salary: job.salary,
+          jobType: job.jobType,
+          experience: job.experience,
+          description: job.description,
+          skills: job.skills,
+          applyUrl: job.applyUrl,
+          matchedSkills: job.matchedSkills,
+          missingSkills: job.missingSkills,
+          matchPercentage: job.matchPercentage,
         });
 
-        if (res.ok) {
-          const data = await res.json();
-          setSavedJobs([data.savedJob, ...savedJobs]);
-        }
+        setSavedJobs([res.data.savedJob, ...savedJobs]);
       } catch (e) {
         console.error(e);
       }
@@ -141,27 +110,17 @@ export default function Resumes() {
   // Handle Apply Job
   const handleApplyJob = async (job) => {
     try {
-      const res = await fetch('/api/applications', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          jobId: job.id || job.jobId,
-          title: job.title,
-          company: job.company,
-          logo: job.logo,
-          location: job.location,
-          status: 'applied',
-          applyUrl: job.applyUrl,
-        }),
+      const res = await axiosClient.post('/applications', {
+        jobId: job.id || job.jobId,
+        title: job.title,
+        company: job.company,
+        logo: job.logo,
+        location: job.location,
+        status: 'applied',
+        applyUrl: job.applyUrl,
       });
 
-      if (res.ok) {
-        const data = await res.json();
-        setApplications([data.application, ...applications]);
-      }
+      setApplications([res.data.application, ...applications]);
     } catch (e) {
       console.error(e);
     }
@@ -169,7 +128,7 @@ export default function Resumes() {
 
   const latestResume = resumes.length > 0 ? resumes[0] : null;
   const parsed = latestResume?.parsedData || {};
-  const atsScore = parsed.atsScore || 88;
+  const atsScore = typeof parsed.atsScore === 'number' ? parsed.atsScore : 82;
   const targetRole = parsed.targetRole || 'Full Stack Engineer';
 
   // Career Progress Checklist items

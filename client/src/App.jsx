@@ -116,7 +116,7 @@ function MainLayout() {
       {!isLandingPage && (
         <footer className="py-8 text-center text-xs text-[#0F1E1B]/70 bg-[#E6E4DC] border-t border-[#0F1E1B]/10">
           <div className="max-w-7xl mx-auto px-4 font-semibold">
-            <p>PrepPulse.ai • AI-Powered Interview Preparation Platform • MERN Stack + Gemini & Whisper Voice AI</p>
+            <p>PrepPulse.ai • AI-Powered Interview Preparation Platform • MERN Stack + Google Gemini AI & Voice STT</p>
           </div>
         </footer>
       )}

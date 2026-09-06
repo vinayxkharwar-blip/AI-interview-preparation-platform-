@@ -4,9 +4,11 @@ import Question from '../models/Question.js';
 import Answer from '../models/Answer.js';
 import Feedback from '../models/Feedback.js';
 import ImprovementPlan from '../models/ImprovementPlan.js';
+import Resume from '../models/Resume.js';
 import { memorySessions, memoryQuestions, memoryAnswers, memoryFeedback, memoryImprovementPlans } from './sessionController.js';
 import { generateLLMJson } from '../services/llmService.js';
 import { buildImprovementPlanPrompt } from '../prompts/improvementPrompts.js';
+import { buildLiveInterviewTurnPrompt } from '../prompts/liveInterviewPrompts.js';
 import {
   isHeyGenConfigured,
   createHeyGenStream,
@@ -105,23 +107,30 @@ export const createLiveKitToken = async (req, res) => {
   }
 };
 
-// @desc Handle conversational turn with AI Interviewer "Alex"
+// @desc Handle conversational turn with AI Interviewer "Alex" — evaluates the candidate's
+// current answer AND generates exactly ONE dynamic, personalized follow-up/next question.
 // @route POST /api/sessions/:id/live/turn
 export const handleLiveTurn = async (req, res) => {
   try {
     const { id: sessionId } = req.params;
-    const { userTranscript = '', currentQuestionIndex = 0, conversationHistory = [] } = req.body;
+    const {
+      userTranscript = '',
+      currentQuestionIndex = 0,
+      currentQuestionText = '',
+      conversationHistory = [],
+    } = req.body;
 
-    console.log(`[LiveInterview Turn] Session: ${sessionId} | Current Question Index: ${currentQuestionIndex}`);
-    console.log(`[LiveInterview Turn] User Transcript: "${userTranscript.substring(0, 80)}..."`);
+    console.log(`[LiveInterview Turn] Session: ${sessionId} | Turn #: ${currentQuestionIndex + 1}`);
+    console.log(`[LiveInterview Turn] User Transcript: "${(userTranscript || '').substring(0, 80)}..."`);
 
-    // Fetch session and questions
+    // Fetch session (and resume for personalization context)
     let session = null;
     let questions = [];
+    let parsedResume = null;
 
     if (mongoose.connection.readyState === 1 && mongoose.Types.ObjectId.isValid(sessionId)) {
       try {
-        session = await Session.findById(sessionId);
+        session = await Session.findById(sessionId).populate('resume');
         questions = await Question.find({ session: sessionId }).sort({ questionNumber: 1 });
       } catch (e) {
         console.log('[LiveInterview Turn DB Notice]', e.message);
@@ -141,87 +150,117 @@ export const handleLiveTurn = async (req, res) => {
       questions = memoryQuestions.filter((q) => String(q.session) === String(sessionId));
     }
 
-    const currentQuestion = questions[currentQuestionIndex] || {
-      questionText: 'Tell me about yourself and your technical background.',
-      expectedKeyPoints: ['Technical stack', 'Recent projects', 'Role fit'],
-      category: 'General',
-    };
+    // Resolve resume context gracefully: populated doc, memory session ref, or absent entirely.
+    if (session?.resume && typeof session.resume === 'object' && session.resume.parsedData) {
+      parsedResume = session.resume.parsedData;
+    } else if (session?.resume && mongoose.Types.ObjectId.isValid(session.resume)) {
+      try {
+        const resumeDoc = await Resume.findById(session.resume);
+        if (resumeDoc) parsedResume = resumeDoc.parsedData;
+      } catch (e) {
+        console.log('[LiveInterview Turn Resume Notice]', e.message);
+      }
+    }
 
     const targetRole = session?.targetRole || 'Software Engineer';
     const interviewType = session?.interviewType || 'technical';
+    const difficulty = session?.difficulty || 'mid';
+    const totalQuestions = Number(session?.totalQuestions) || 5;
+    const questionsAskedSoFar = currentQuestionIndex + 1;
 
-    // Construct LLM Prompt for AI Interviewer "Alex"
-    const systemPrompt = `You are Alex, an expert, encouraging, yet rigorous technical interviewer conducting a live video-call interview for a ${targetRole} role (${interviewType} focus).
-Your tone is professional, conversational, concise (2-4 sentences max per spoken line), and human-like.
-Analyze the candidate's spoken response against the current question and its expected key concepts.
+    // The question the candidate just answered: prefer explicit text sent from frontend
+    // (dynamic questions aren't stored in the pre-generated Question list), fall back to
+    // the pre-generated list for question #1, then a safe generic opener.
+    const currentQuestion = currentQuestionText
+      ? { questionText: currentQuestionText }
+      : (questions[currentQuestionIndex] || {
+        questionText: 'Tell me about yourself and your technical background.',
+        category: 'General',
+      });
 
-Current Question: "${currentQuestion.questionText}"
-Expected Key Concepts: ${JSON.stringify(currentQuestion.expectedKeyPoints || [])}
-Candidate Spoken Response: "${userTranscript || '[No audio response heard]'}"
+    const previousQuestions = conversationHistory.map((t) => t.questionText).filter(Boolean);
+    const previousAnswers = conversationHistory.map((t) => t.userTranscript).filter(Boolean);
 
-Conversation History so far:
-${JSON.stringify(conversationHistory.slice(-4))}
-
-Formulate your spoken response as Alex.
-Return your answer exclusively as a JSON object with this structure:
-{
-  "interviewerLine": "Your exact spoken response to the candidate as Alex.",
-  "keyPointsCovered": ["List of expected key points the candidate successfully mentioned"],
-  "decision": "followup" or "next_question" or "complete",
-  "nextQuestionIndex": number (same index if decision is followup, index + 1 if decision is next_question),
-  "turnScore": number between 1 and 10 evaluating this turn's response quality
-}`;
+    const prompt = buildLiveInterviewTurnPrompt({
+      parsedResume,
+      targetRole,
+      company: session?.company,
+      jobDescription: session?.jobDescription,
+      interviewType,
+      difficulty,
+      requiredSkills: parsedResume?.skills,
+      previousQuestions,
+      previousAnswers,
+      currentQuestionText: currentQuestion.questionText,
+      currentAnswer: userTranscript,
+      questionsAskedSoFar,
+      totalQuestions,
+    });
 
     let turnResult = null;
     try {
-      turnResult = await generateLLMJson(systemPrompt, 'You are Alex, a live AI video interviewer.');
+      turnResult = await generateLLMJson(prompt, 'You are Alex, a warm but rigorous live AI voice interviewer. Return only valid JSON.');
     } catch (llmErr) {
       console.error('[LiveInterview Turn LLM Error]', llmErr.message);
     }
 
     if (!turnResult || !turnResult.interviewerLine) {
-      // High quality fallback response logic if LLM offline
+      // High quality fallback response logic if LLM offline / malformed response
       const wordCount = (userTranscript || '').split(/\s+/).filter(Boolean).length;
       let decision = 'next_question';
-      let nextIndex = currentQuestionIndex + 1;
+      let nextQuestionText = '';
       let line = '';
+      const isFinal = questionsAskedSoFar >= totalQuestions;
 
-      if (wordCount < 10) {
+      if (!userTranscript || wordCount === 0) {
         decision = 'followup';
-        nextIndex = currentQuestionIndex;
-        line = `Thanks for starting off! Could you elaborate a bit more on how you handled the core technical trade-offs in ${currentQuestion.category || 'this scenario'}?`;
-      } else if (currentQuestionIndex >= questions.length - 1) {
+        line = `I didn't quite catch that — could you repeat or expand on your answer to: "${currentQuestion.questionText}"?`;
+        nextQuestionText = currentQuestion.questionText;
+      } else if (wordCount < 10) {
+        decision = 'followup';
+        line = `Thanks for starting off! Could you elaborate a bit more on that, especially around ${currentQuestion.category || 'the core technical details'}?`;
+        nextQuestionText = currentQuestion.questionText;
+      } else if (isFinal) {
         decision = 'complete';
-        nextIndex = currentQuestionIndex;
-        line = `Excellent insights! That covers all our primary discussion topics for this session. I'm wrapping up our call now so you can review your complete performance analysis.`;
+        line = `Great, thank you for your thoughtful answers! That wraps up our questions for this session — I'm putting together your performance review now.`;
+        nextQuestionText = '';
       } else {
-        const nextQ = questions[currentQuestionIndex + 1];
-        line = `Great explanation! That addresses the key points clearly. Let's move on to the next question: "${nextQ ? nextQ.questionText : 'What is your approach to system architecture?'}"`;
+        decision = 'next_question';
+        nextQuestionText = `Building on your experience with ${targetRole}, can you walk me through a recent technical challenge you solved and the trade-offs you considered?`;
+        line = `Great explanation! Let's move to the next question: "${nextQuestionText}"`;
       }
 
       turnResult = {
         interviewerLine: line,
-        keyPointsCovered: currentQuestion.expectedKeyPoints ? currentQuestion.expectedKeyPoints.slice(0, 2) : [],
+        nextQuestionText,
+        keyPointsCovered: [],
         decision,
-        nextQuestionIndex: nextIndex,
-        turnScore: wordCount > 20 ? 8 : 6,
+        turnScore: wordCount === 0 ? 2 : wordCount < 10 ? 4 : wordCount > 20 ? 8 : 6,
       };
     }
 
-    // Automatically trigger real-time lip-syncing on HeyGen avatar stream
-    const { heygenSessionId } = req.body;
-    if (heygenSessionId && turnResult?.interviewerLine) {
-      try {
-        await speakHeyGenStream(heygenSessionId, turnResult.interviewerLine, 'repeat', session?.heygenToken);
-        turnResult.heygenSpeaking = true;
-      } catch (heygenErr) {
-        console.warn('[LiveInterview HeyGen Auto-Speak Warning]', heygenErr.message);
-      }
-    }
+    // Normalize/guard fields so the frontend never receives an unusable shape.
+    const decision = ['followup', 'next_question', 'complete'].includes(turnResult.decision)
+      ? turnResult.decision
+      : (questionsAskedSoFar >= totalQuestions ? 'complete' : 'next_question');
 
-    console.log(`[LiveInterview Turn Result] Decision: ${turnResult.decision} | Line: "${turnResult.interviewerLine.substring(0, 60)}..."`);
+    const safeResult = {
+      interviewerLine: turnResult.interviewerLine || 'Thank you for that answer. Let\'s continue.',
+      questionText: currentQuestion.questionText,
+      nextQuestionText: decision === 'complete' ? '' : (turnResult.nextQuestionText || ''),
+      keyPointsCovered: Array.isArray(turnResult.keyPointsCovered) ? turnResult.keyPointsCovered : [],
+      strengths: Array.isArray(turnResult.strengths) ? turnResult.strengths : [],
+      weaknesses: Array.isArray(turnResult.weaknesses) ? turnResult.weaknesses : [],
+      category: turnResult.category || currentQuestion.category || 'General',
+      decision,
+      turnScore: typeof turnResult.turnScore === 'number' ? turnResult.turnScore : 6,
+      totalQuestions,
+      questionsAskedSoFar,
+    };
 
-    res.json(turnResult);
+    console.log(`[LiveInterview Turn Result] Decision: ${safeResult.decision} | Line: "${safeResult.interviewerLine.substring(0, 60)}..."`);
+
+    res.json(safeResult);
   } catch (error) {
     console.error('[LiveInterview Turn Error]', error);
     res.status(500).json({ message: error.message || 'Failed to process live interview turn.' });

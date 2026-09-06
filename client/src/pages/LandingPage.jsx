@@ -21,7 +21,6 @@ import {
   Mail,
   X,
   Volume2,
-  ShieldCheck,
   Users,
   Briefcase
 } from 'lucide-react';
@@ -56,7 +55,7 @@ export default function LandingPage() {
     {
       question: 'Can I practice with real voice recording instead of typing?',
       answer:
-        'Yes! PrepPulse features real-time speech-to-text recording powered by OpenAI Whisper. You speak directly into your microphone, simulating a live video interview. Our AI analyzes speech pacing, tone, and filler words.',
+        'Yes! PrepPulse features real-time speech-to-text recording powered by Google Gemini AI. You speak directly into your microphone, simulating a live video interview. Our AI analyzes speech pacing, tone, and filler words.',
     },
     {
       question: 'What kind of feedback do I receive after a mock interview session?',
@@ -144,7 +143,7 @@ export default function LandingPage() {
             <div className="bg-[#DCFCE7] border-2 border-[#0F1E1B] p-3.5 rounded-2xl editorial-shadow w-48">
               <div className="flex items-center space-x-2 text-xs font-bold text-[#0F1E1B] mb-1">
                 <Mic className="w-4 h-4 text-indigo-700" />
-                <span>Whisper Voice Analysis</span>
+                <span>Gemini Voice STT</span>
               </div>
               <p className="text-[11px] text-[#0F1E1B]/80 font-medium">Real-time speech-to-text transcript & tone feedback.</p>
             </div>
@@ -384,10 +383,10 @@ export default function LandingPage() {
                   Real-Time Speech & Tone Feedback
                 </h3>
                 <p className="text-sm sm:text-base text-[#0F1E1B]/80 font-medium leading-relaxed">
-                  Speak naturally into your microphone. OpenAI Whisper transcribes your voice in real time, detecting filler words, speech velocity, confidence indicators, and overall response clarity.
+                  Speak naturally into your microphone. Google Gemini transcribes your voice in real time, detecting filler words, speech velocity, confidence indicators, and overall response clarity.
                 </p>
                 <div className="pt-2 flex items-center space-x-2 text-xs font-bold text-[#C1440E]">
-                  <span>Whisper STT Engine</span>
+                  <span>Gemini STT Engine</span>
                   <span>•</span>
                   <span>Filler Word Counter</span>
                 </div>
@@ -654,7 +653,7 @@ export default function LandingPage() {
               </div>
               <div>
                 <h3 className="font-serif-headline text-2xl font-bold">Live AI Voice Interview Walkthrough</h3>
-                <p className="text-xs text-[#0F1E1B]/70 font-medium">Interactive preview of OpenAI Whisper & Gemini evaluation engine.</p>
+                <p className="text-xs text-[#0F1E1B]/70 font-medium">Interactive preview of Google Gemini AI & Voice STT evaluation engine.</p>
               </div>
             </div>
 

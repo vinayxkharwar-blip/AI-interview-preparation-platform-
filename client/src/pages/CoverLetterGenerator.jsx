@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import axiosClient from '../api/axiosClient';
 import { 
   FileText, 
   Sparkles, 
@@ -9,8 +10,7 @@ import {
   Check, 
   ArrowLeft, 
   Building2, 
-  Briefcase,
-  Send
+  Briefcase
 } from 'lucide-react';
 
 export default function CoverLetterGenerator() {
@@ -25,8 +25,6 @@ export default function CoverLetterGenerator() {
   const [coverLetterContent, setCoverLetterContent] = useState('');
   const [copied, setCopied] = useState(false);
 
-  const token = localStorage.getItem('token');
-
   const handleGenerate = async (e) => {
     if (e) e.preventDefault();
     if (!company || !role) {
@@ -36,24 +34,15 @@ export default function CoverLetterGenerator() {
 
     setLoading(true);
     try {
-      const res = await fetch('/api/cover-letter', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ company, role, jobDescription }),
-      });
-
-      const data = await res.json();
-      if (res.ok && data.coverLetter) {
-        setCoverLetterContent(data.coverLetter.content);
+      const res = await axiosClient.post('/cover-letter', { company, role, jobDescription });
+      if (res.data?.coverLetter) {
+        setCoverLetterContent(res.data.coverLetter.content);
       } else {
-        alert(data.message || 'Failed to generate cover letter.');
+        alert(res.data?.message || 'Failed to generate cover letter.');
       }
     } catch (err) {
       console.error(err);
-      alert('Error generating cover letter: ' + err.message);
+      alert('Error generating cover letter: ' + (err.userMessage || err.message));
     } finally {
       setLoading(false);
     }

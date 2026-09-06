@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import axiosClient from '../api/axiosClient';
 import { 
   Briefcase, 
   Sparkles, 
@@ -12,7 +13,6 @@ import {
   ArrowRight,
   RefreshCw,
   Target,
-  Calendar,
   BookOpen
 } from 'lucide-react';
 
@@ -25,7 +25,6 @@ import CompanyPrepModal from '../components/CompanyPrepModal';
 export default function CareerHub() {
   const navigate = useNavigate();
   const location = useLocation();
-  const token = localStorage.getItem('token');
 
   // Check URL search query param (e.g. ?tab=applications)
   const queryParams = new URLSearchParams(location.search);
@@ -55,41 +54,22 @@ export default function CareerHub() {
     setLoading(true);
     try {
       // 1. Fetch Job Recommendations
-      const jobsRes = await fetch('/api/jobs/recommendations', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (jobsRes.ok) {
-        const jobsData = await jobsRes.json();
-        setJobs(jobsData);
-      }
+      const jobsRes = await axiosClient.get('/jobs/recommendations');
+      setJobs(jobsRes.data || []);
 
       // 2. Fetch Saved Jobs
-      const savedRes = await fetch('/api/jobs/saved', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (savedRes.ok) {
-        const savedData = await savedRes.json();
-        setSavedJobs(savedData);
-      }
+      const savedRes = await axiosClient.get('/jobs/saved');
+      setSavedJobs(savedRes.data || []);
 
       // 3. Fetch Applications
-      const appsRes = await fetch('/api/applications', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (appsRes.ok) {
-        const appsData = await appsRes.json();
-        setApplications(appsData);
-      }
+      const appsRes = await axiosClient.get('/applications');
+      setApplications(appsRes.data || []);
 
       // 4. Fetch User's Resumes for ATS Score & breakdown
-      const resumeRes = await fetch('/api/resumes', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (resumeRes.ok) {
-        const resumeData = await resumeRes.json();
-        if (Array.isArray(resumeData) && resumeData.length > 0) {
-          setLatestResume(resumeData[0]);
-        }
+      const resumeRes = await axiosClient.get('/resumes');
+      const resumeData = resumeRes.data || [];
+      if (Array.isArray(resumeData) && resumeData.length > 0) {
+        setLatestResume(resumeData[0]);
       }
     } catch (err) {
       console.error('[Career Hub Fetch Error]', err);
@@ -109,47 +89,32 @@ export default function CareerHub() {
       const savedItem = savedJobs.find((sj) => sj.jobId === job.id || sj.jobId === job.jobId);
       if (savedItem) {
         try {
-          const res = await fetch(`/api/jobs/save/${savedItem._id || savedItem.id}`, {
-            method: 'DELETE',
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          if (res.ok) {
-            setSavedJobs(savedJobs.filter((sj) => sj.jobId !== (job.id || job.jobId)));
-          }
+          await axiosClient.delete(`/jobs/save/${savedItem._id || savedItem.id}`);
+          setSavedJobs(savedJobs.filter((sj) => sj.jobId !== (job.id || job.jobId)));
         } catch (e) {
           console.error(e);
         }
       }
     } else {
       try {
-        const res = await fetch('/api/jobs/save', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            jobId: job.id || job.jobId,
-            title: job.title,
-            company: job.company,
-            logo: job.logo,
-            location: job.location,
-            salary: job.salary,
-            jobType: job.jobType,
-            experience: job.experience,
-            description: job.description,
-            skills: job.skills,
-            applyUrl: job.applyUrl,
-            matchedSkills: job.matchedSkills,
-            missingSkills: job.missingSkills,
-            matchPercentage: job.matchPercentage,
-          }),
+        const res = await axiosClient.post('/jobs/save', {
+          jobId: job.id || job.jobId,
+          title: job.title,
+          company: job.company,
+          logo: job.logo,
+          location: job.location,
+          salary: job.salary,
+          jobType: job.jobType,
+          experience: job.experience,
+          description: job.description,
+          skills: job.skills,
+          applyUrl: job.applyUrl,
+          matchedSkills: job.matchedSkills,
+          missingSkills: job.missingSkills,
+          matchPercentage: job.matchPercentage,
         });
 
-        if (res.ok) {
-          const data = await res.json();
-          setSavedJobs([data.savedJob, ...savedJobs]);
-        }
+        setSavedJobs([res.data.savedJob, ...savedJobs]);
       } catch (e) {
         console.error(e);
       }
@@ -159,27 +124,17 @@ export default function CareerHub() {
   // Handle Apply click -> automatically log application
   const handleApplyJob = async (job) => {
     try {
-      const res = await fetch('/api/applications', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          jobId: job.id || job.jobId,
-          title: job.title,
-          company: job.company,
-          logo: job.logo,
-          location: job.location,
-          status: 'applied',
-          applyUrl: job.applyUrl,
-        }),
+      const res = await axiosClient.post('/applications', {
+        jobId: job.id || job.jobId,
+        title: job.title,
+        company: job.company,
+        logo: job.logo,
+        location: job.location,
+        status: 'applied',
+        applyUrl: job.applyUrl,
       });
 
-      if (res.ok) {
-        const data = await res.json();
-        setApplications([data.application, ...applications]);
-      }
+      setApplications([res.data.application, ...applications]);
     } catch (e) {
       console.error(e);
     }
@@ -188,20 +143,10 @@ export default function CareerHub() {
   // Handle Application Status Update
   const handleStatusUpdate = async (appId, newStatus) => {
     try {
-      const res = await fetch(`/api/applications/${appId}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ status: newStatus }),
-      });
-
-      if (res.ok) {
-        setApplications(
-          applications.map((app) => (String(app._id || app.id) === String(appId) ? { ...app, status: newStatus } : app))
-        );
-      }
+      await axiosClient.patch(`/applications/${appId}`, { status: newStatus });
+      setApplications(
+        applications.map((app) => (String(app._id || app.id) === String(appId) ? { ...app, status: newStatus } : app))
+      );
     } catch (e) {
       console.error(e);
     }
@@ -330,7 +275,7 @@ export default function CareerHub() {
           {/* TAB 1: Career Dashboard */}
           {activeTab === 'dashboard' && (
             <CareerDashboard
-              atsScore={latestResume?.parsedData?.atsScore || 88}
+              atsScore={typeof latestResume?.parsedData?.atsScore === 'number' ? latestResume.parsedData.atsScore : 82}
               jobsFoundCount={jobs.length}
               savedJobsCount={savedJobs.length}
               applications={applications}

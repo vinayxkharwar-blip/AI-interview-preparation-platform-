@@ -145,8 +145,6 @@ export const calculateJobMatch = (userSkills = [], jobSkills = []) => {
  * (Adzuna, JSearch, Remotive, Arbeitnow) can be plugged in directly without UI changes.
  */
 export const fetchJobRecommendations = async ({ targetRole = '', skills = [], experience = '', location = '' }) => {
-  console.log('[jobService] Fetching job recommendations for role:', targetRole || 'Software Engineer');
-
   let filteredJobs = [...MOCK_JOBS];
 
   if (targetRole && targetRole.trim()) {
