@@ -1,3 +1,4 @@
+
 /**
  * Normalizes a candidate score to a 0-100 scale.
  * Handles inputs on 0-10 scale (multiplies by 10) and 0-100 scale.

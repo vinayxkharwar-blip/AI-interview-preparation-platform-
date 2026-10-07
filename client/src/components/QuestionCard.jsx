@@ -3,6 +3,7 @@ import { HelpCircle, Lightbulb, CheckSquare, Target, ChevronDown, ChevronUp } fr
 
 export default function QuestionCard({ question, currentNumber, totalQuestions }) {
   const [showHints, setShowHints] = useState(false);
+  const [showExpectedPoints, setShowExpectedPoints] = useState(false);
 
   if (!question) return null;
 
@@ -28,23 +29,36 @@ export default function QuestionCard({ question, currentNumber, totalQuestions }
         </h3>
       </div>
 
-      {/* Expected Key Points */}
+      {/* Expected Key Points Accordion (Collapsed by Default) */}
       {question.expectedKeyPoints && question.expectedKeyPoints.length > 0 && (
-        <div className="bg-[#DCFCE7] p-4 rounded-2xl border-2 border-[#0F1E1B]">
-          <div className="flex items-center space-x-2 text-xs font-bold text-[#0F1E1B] uppercase tracking-wider mb-2">
-            <CheckSquare className="w-4 h-4 text-[#C1440E]" />
-            <span>Expected Key Concepts to Cover</span>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {question.expectedKeyPoints.map((point, idx) => (
-              <span
-                key={idx}
-                className="px-3 py-1 bg-[#FDFBF3] border-2 border-[#0F1E1B] text-[#0F1E1B] text-xs font-bold rounded-xl shadow-xs"
-              >
-                • {point}
-              </span>
-            ))}
-          </div>
+        <div className="border-t-2 border-[#0F1E1B]/15 pt-3">
+          <button
+            type="button"
+            onClick={() => setShowExpectedPoints(!showExpectedPoints)}
+            aria-label={showExpectedPoints ? "Hide expected key concepts" : "View expected key concepts"}
+            className="flex items-center justify-between w-full text-xs font-bold text-[#0F1E1B] hover:text-[#C1440E] transition-colors"
+          >
+            <div className="flex items-center space-x-2">
+              <CheckSquare className="w-4 h-4 text-[#C1440E]" />
+              <span>Expected Key Concepts to Cover ({question.expectedKeyPoints.length})</span>
+            </div>
+            {showExpectedPoints ? <ChevronUp className="w-4 h-4 text-[#0F1E1B]" /> : <ChevronDown className="w-4 h-4 text-[#0F1E1B]" />}
+          </button>
+
+          {showExpectedPoints && (
+            <div className="mt-3 bg-[#DCFCE7] p-4 rounded-2xl border-2 border-[#0F1E1B] animate-fadeIn">
+              <div className="flex flex-wrap gap-2">
+                {question.expectedKeyPoints.map((point, idx) => (
+                  <span
+                    key={idx}
+                    className="px-3 py-1 bg-[#FDFBF3] border-2 border-[#0F1E1B] text-[#0F1E1B] text-xs font-bold rounded-xl shadow-xs"
+                  >
+                    • {point}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 

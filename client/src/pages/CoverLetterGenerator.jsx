@@ -61,13 +61,15 @@ export default function CoverLetterGenerator() {
   };
 
   const handleDownload = () => {
-    const element = document.createElement('a');
     const file = new Blob([coverLetterContent], { type: 'text/plain' });
-    element.href = URL.createObjectURL(file);
+    const fileUrl = URL.createObjectURL(file);
+    const element = document.createElement('a');
+    element.href = fileUrl;
     element.download = `Cover_Letter_${company.replace(/\s+/g, '_')}_${role.replace(/\s+/g, '_')}.txt`;
     document.body.appendChild(element);
     element.click();
     document.body.removeChild(element);
+    URL.revokeObjectURL(fileUrl);
   };
 
   return (
@@ -152,7 +154,7 @@ export default function CoverLetterGenerator() {
               {loading ? (
                 <>
                   <Sparkles className="w-4 h-4 text-[#F5D90A] animate-spin" />
-                  <span>Drafting Cover Letter via Gemini AI...</span>
+                  <span>Drafting Cover Letter via OpenAI...</span>
                 </>
               ) : (
                 <>

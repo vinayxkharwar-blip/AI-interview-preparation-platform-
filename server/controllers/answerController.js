@@ -5,6 +5,7 @@ import { transcribeAudio } from '../services/sttService.js';
 import { generateLLMJson } from '../services/llmService.js';
 import { buildAnswerFeedbackPrompt } from '../prompts/feedbackPrompts.js';
 import { memoryQuestions, memoryAnswers, memoryFeedback } from './sessionController.js';
+import { checkSessionOwnership } from '../utils/authz.js';
 import fs from 'fs';
 
 // @desc Transcribe audio before user confirmation
@@ -37,6 +38,12 @@ export const submitAnswer = async (req, res) => {
       return res.status(400).json({ message: 'Session ID, Question ID, and transcript text are required.' });
     }
 
+    // Verify session ownership
+    const ownership = await checkSessionOwnership(sessionId, req.user);
+    if (!ownership.authorized) {
+      return res.status(ownership.status).json({ message: ownership.message });
+    }
+
     // 1. Fetch Question details
     let question = null;
     try {
@@ -47,6 +54,10 @@ export const submitAnswer = async (req, res) => {
 
     if (!question) {
       question = memoryQuestions.find((q) => String(q._id) === String(questionId) || String(q.id) === String(questionId));
+    }
+
+    if (question && question.session && String(question.session) !== String(sessionId)) {
+      return res.status(400).json({ message: 'Question does not belong to this session.' });
     }
 
     const questionText = question ? question.questionText : 'Interview Question';

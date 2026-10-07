@@ -16,7 +16,7 @@ export const getFeedbackBySession = async (req, res) => {
 
     let feedback = [];
     try {
-      feedback = await Feedback.find({ session: sessionId });
+      feedback = await Feedback.find({ session: sessionId }).lean();
     } catch (e) {
       console.log('[Feedback DB Notice]', e.message);
     }

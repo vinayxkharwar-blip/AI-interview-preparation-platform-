@@ -31,10 +31,11 @@ axiosClient.interceptors.response.use(
     error.userMessage = userMessage;
 
     if (error.response && error.response.status === 401) {
-      // Don't auto-redirect if we're on login page already
+      // Don't trigger unauthorized logout if we're on login or register page already
       if (!window.location.pathname.includes('/login') && !window.location.pathname.includes('/register')) {
         localStorage.removeItem('token');
         localStorage.removeItem('user');
+        window.dispatchEvent(new Event('auth:unauthorized'));
       }
     }
     return Promise.reject(error);

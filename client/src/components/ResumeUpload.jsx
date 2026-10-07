@@ -25,6 +25,11 @@ export default function ResumeUpload({ onUploadSuccess }) {
   const handleFileChange = (e) => {
     const selectedFile = e.target.files[0];
     if (selectedFile) {
+      if (selectedFile.size > 15 * 1024 * 1024) {
+        setError('File size exceeds 15MB limit. Please upload a smaller resume file.');
+        setFile(null);
+        return;
+      }
       const ext = selectedFile.name.split('.').pop().toLowerCase();
       if (!['pdf', 'docx', 'doc'].includes(ext)) {
         setError('Invalid file type. Please upload a PDF or DOCX resume.');

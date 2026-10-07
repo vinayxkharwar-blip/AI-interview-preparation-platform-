@@ -7,11 +7,11 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.join(__dirname, '../.env') });
 
-async function testGemini() {
+async function testOpenAi() {
   const prompt = `Return a JSON object with keys: "status", "message"`;
   const result = await generateLLMJson(prompt, "Return valid JSON.");
-  console.log('Gemini Result Meta:', JSON.stringify(result._meta, null, 2));
+  console.log('OpenAI Result Meta:', JSON.stringify(result._meta, null, 2));
   console.log('Result:', JSON.stringify(result, null, 2));
 }
 
-testGemini();
+testOpenAi();

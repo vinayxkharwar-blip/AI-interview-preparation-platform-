@@ -10,6 +10,7 @@ import { generateLLMJson } from '../services/llmService.js';
 import { buildQuestionGenerationPrompt } from '../prompts/questionPrompts.js';
 import { buildImprovementPlanPrompt } from '../prompts/improvementPrompts.js';
 import { checkOwnership } from '../utils/authz.js';
+import { memoryResumes } from './resumeController.js';
 
 // In-memory fallback stores when MongoDB is offline/reconnecting
 export const memorySessions = [];
@@ -47,6 +48,15 @@ export const startSession = async (req, res) => {
         }
       } catch (e) {
         console.log('[Session DB Notice] Could not fetch resume by ID:', e.message);
+      }
+    }
+
+    if (!parsedResume && resumeId) {
+      const memResume = memoryResumes.find(
+        (r) => String(r._id) === String(resumeId) || String(r.id) === String(resumeId)
+      );
+      if (memResume) {
+        parsedResume = memResume.parsedData;
       }
     }
 
@@ -210,7 +220,7 @@ export const getUserSessions = async (req, res) => {
     let sessions = [];
     if (mongoose.connection.readyState === 1) {
       try {
-        sessions = await Session.find({ user: req.user._id }).sort({ createdAt: -1 });
+        sessions = await Session.find({ user: req.user._id }).sort({ createdAt: -1 }).lean();
       } catch (e) {
         console.log('[Sessions List Fallback]', e.message);
       }
@@ -237,12 +247,12 @@ export const getSessionById = async (req, res) => {
 
     if (mongoose.connection.readyState === 1 && mongoose.Types.ObjectId.isValid(id)) {
       try {
-        session = await Session.findById(id);
+        session = await Session.findById(id).lean();
         if (session) {
-          questions = await Question.find({ session: id }).sort({ questionNumber: 1 });
-          answers = await Answer.find({ session: id });
-          feedback = await Feedback.find({ session: id });
-          improvementPlan = await ImprovementPlan.findOne({ session: id });
+          questions = await Question.find({ session: id }).sort({ questionNumber: 1 }).lean();
+          answers = await Answer.find({ session: id }).lean();
+          feedback = await Feedback.find({ session: id }).lean();
+          improvementPlan = await ImprovementPlan.findOne({ session: id }).lean();
         }
       } catch (e) {
         console.log('[Get Session DB Warning]', e.message);

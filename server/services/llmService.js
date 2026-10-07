@@ -1,4 +1,4 @@
-import { genAIClient, isGeminiConfigured } from '../config/gemini.js';
+import { openaiClient, isOpenAIConfigured } from '../config/openai.js';
 
 const extractResumeFallback = (rawText = '') => {
   const commonSkills = [
@@ -203,33 +203,37 @@ const mockLLMResponse = (prompt) => {
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-const callGeminiWithRetry = async (modelName, fullPrompt, maxRetries = 3) => {
-  const model = genAIClient.getGenerativeModel({
-    model: modelName,
-    generationConfig: { responseMimeType: "application/json" }
-  });
-
+const callOpenAIWithRetry = async (modelName, prompt, systemMessage, maxRetries = 3) => {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      console.log(`[Gemini API] Attempt ${attempt}/${maxRetries} calling model "${modelName}"...`);
-      const result = await model.generateContent(fullPrompt);
-      return result;
+      console.log(`[OpenAI API] Attempt ${attempt}/${maxRetries} calling model "${modelName}"...`);
+      const response = await openaiClient.chat.completions.create({
+        model: modelName,
+        messages: [
+          {
+            role: 'system',
+            content: `${systemMessage}\n\nIMPORTANT: Respond strictly with a valid JSON object matching the requested schema. Do not include markdown code block syntax if possible, just raw JSON.`,
+          },
+          {
+            role: 'user',
+            content: prompt,
+          },
+        ],
+        response_format: { type: 'json_object' },
+        temperature: 0.7,
+      });
+
+      return response.choices[0]?.message?.content || '{}';
     } catch (err) {
-      const status = err.status || err.statusCode || (err.message && err.message.includes('429') ? 429 : err.message && err.message.includes('404') ? 404 : 500);
-      const safeErrMsg = (err.message || '').replace(/key=[^&\s]+/gi, 'key=***REDACTED***');
-      
-      const isRateLimit = status === 429 || /429|quota|rate limit|RESOURCE_EXHAUSTED/i.test(safeErrMsg);
-      const isNotFound = status === 404 || /404|not found/i.test(safeErrMsg);
+      const status = err.status || err.statusCode || (err.message && err.message.includes('429') ? 429 : 500);
+      const safeErrMsg = (err.message || '').replace(/sk-[a-zA-Z0-9_\-]+/gi, 'sk-***REDACTED***');
+      const isRateLimit = status === 429 || /429|quota|rate limit/i.test(safeErrMsg);
 
-      console.error(`[Gemini API Error] Model "${modelName}" Attempt ${attempt} failed [Status Code: ${status}]: ${safeErrMsg}`);
-
-      if (isNotFound) {
-        throw err;
-      }
+      console.error(`[OpenAI API Error] Model "${modelName}" Attempt ${attempt} failed [Status Code: ${status}]: ${safeErrMsg}`);
 
       if (isRateLimit && attempt < maxRetries) {
         const backoffMs = Math.pow(2, attempt) * 1000;
-        console.warn(`[Gemini API 429 Throttled] Rate limit encountered. Retrying model "${modelName}" in ${backoffMs}ms...`);
+        console.warn(`[OpenAI API 429 Throttled] Rate limit encountered. Retrying model "${modelName}" in ${backoffMs}ms...`);
         await sleep(backoffMs);
         continue;
       }
@@ -253,7 +257,7 @@ const extractNumericScore = (obj) => {
 };
 
 /**
- * Calls Gemini LLM and returns parsed JSON.
+ * Calls OpenAI LLM and returns parsed JSON.
  * Every returned object includes a `_meta` field so callers (and the UI) can tell
  * whether the response came from a real model call or the offline mock fallback,
  * and why, if it fell back.
@@ -265,22 +269,19 @@ export const generateLLMJson = async (prompt, systemMessage = "You are a helpful
   console.log(prompt.substring(0, 1000) + (prompt.length > 1000 ? '\n...[truncated prompt log]' : ''));
   console.log('----------------------------------------------------');
 
-  // 1. TRY GEMINI API IF CONFIGURED
-  if (isGeminiConfigured && genAIClient) {
-    const geminiModels = [
-      'gemini-3.5-flash',
-      'gemini-3.6-flash',
-      'gemini-2.5-flash',
-      'gemini-2.5-flash-lite'
+  // 1. TRY OPENAI API IF CONFIGURED
+  if (isOpenAIConfigured && openaiClient) {
+    const openaiModels = [
+      'gpt-4o-mini',
+      'gpt-4o',
+      'gpt-3.5-turbo'
     ];
 
-    for (const modelName of geminiModels) {
+    for (const modelName of openaiModels) {
       try {
-        const fullPrompt = `${systemMessage}\n\nIMPORTANT: Respond strictly with a valid JSON object matching the requested schema.\n\n${prompt}`;
-        const result = await callGeminiWithRetry(modelName, fullPrompt, 3);
-        const rawText = result.response.text() || '{}';
+        const rawText = await callOpenAIWithRetry(modelName, prompt, systemMessage, 3);
 
-        console.log(`[Gemini API Success] Raw Response from "${modelName}":`);
+        console.log(`[OpenAI API Success] Raw Response from "${modelName}":`);
         console.log(rawText);
         console.log('----------------------------------------------------');
 
@@ -295,25 +296,25 @@ export const generateLLMJson = async (prompt, systemMessage = "You are a helpful
         if (extractedScore !== null) {
           parsed.atsScore = Math.min(100, Math.max(0, extractedScore));
         } else if (prompt.toLowerCase().includes('resume')) {
-          console.warn('[Gemini API Warning] Response missing numeric atsScore. Computing dynamic score.');
+          console.warn('[OpenAI API Warning] Response missing numeric atsScore. Computing dynamic score.');
           const fallbackObj = extractResumeFallback(prompt);
           parsed.atsScore = fallbackObj.atsScore;
         }
 
         return {
           ...parsed,
-          _meta: { source: 'gemini', model: modelName }
+          _meta: { source: 'openai', model: modelName }
         };
-      } catch (geminiErr) {
-        const status = geminiErr.status || geminiErr.statusCode || 'UNKNOWN';
-        const safeErrMsg = (geminiErr.message || '').replace(/key=[^&\s]+/gi, 'key=***REDACTED***');
-        console.error(`[Gemini API Final Failure] Skipping model "${modelName}" [Status Code: ${status}]: ${safeErrMsg}`);
+      } catch (openAiErr) {
+        const status = openAiErr.status || openAiErr.statusCode || 'UNKNOWN';
+        const safeErrMsg = (openAiErr.message || '').replace(/sk-[a-zA-Z0-9_\-]+/gi, 'sk-***REDACTED***');
+        console.error(`[OpenAI API Final Failure] Skipping model "${modelName}" [Status Code: ${status}]: ${safeErrMsg}`);
       }
     }
   }
 
   // 2. DYNAMIC MOCK FALLBACK
-  console.error('[LLM Service Notice] Gemini API was unavailable or exhausted. Triggering dynamic mock fallback.');
+  console.error('[LLM Service Notice] OpenAI API was unavailable or exhausted. Triggering dynamic mock fallback.');
   const mock = mockLLMResponse(prompt);
   return {
     ...mock,

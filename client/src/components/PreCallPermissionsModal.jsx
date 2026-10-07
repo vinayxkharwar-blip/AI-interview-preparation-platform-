@@ -69,11 +69,16 @@ export default function PreCallPermissionsModal({ onPermissionsGranted, onCancel
         source.connect(analyser);
 
         const dataArray = new Uint8Array(analyser.frequencyBinCount);
+        let lastMicUpdate = 0;
         const updateMicLevel = () => {
           if (!analyser) return;
-          analyser.getByteFrequencyData(dataArray);
-          const average = dataArray.reduce((acc, val) => acc + val, 0) / dataArray.length;
-          setMicLevel(Math.min(100, Math.round((average / 128) * 100)));
+          const now = Date.now();
+          if (now - lastMicUpdate > 66) {
+            analyser.getByteFrequencyData(dataArray);
+            const average = dataArray.reduce((acc, val) => acc + val, 0) / dataArray.length;
+            setMicLevel(Math.min(100, Math.round((average / 128) * 100)));
+            lastMicUpdate = now;
+          }
           animFrameRef.current = requestAnimationFrame(updateMicLevel);
         };
         updateMicLevel();

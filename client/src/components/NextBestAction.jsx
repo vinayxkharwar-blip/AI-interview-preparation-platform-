@@ -46,7 +46,7 @@ export default function NextBestAction({
     action = {
       step: 'Step 3 of 5',
       title: 'Generate a Tailored AI Cover Letter',
-      description: 'Create a personalized executive cover letter for your #1 matched job opening in seconds using Gemini AI.',
+      description: 'Create a personalized executive cover letter for your #1 matched job opening in seconds using OpenAI.',
       buttonText: 'Generate Cover Letter',
       icon: FileText,
       path: '/cover-letter',
@@ -66,7 +66,7 @@ export default function NextBestAction({
     action = {
       step: 'Step 5 of 5',
       title: 'Practice a 15-Minute AI Mock Interview',
-      description: 'Prepare for upcoming technical loops with real-time AI questions, Gemini voice recognition, and Instant feedback.',
+      description: 'Prepare for upcoming technical loops with real-time AI questions, OpenAI voice recognition, and Instant feedback.',
       buttonText: 'Start Mock Interview',
       icon: PlayCircle,
       path: '/new-session',

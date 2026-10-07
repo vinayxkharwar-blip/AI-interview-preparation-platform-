@@ -1,37 +1,48 @@
 import fs from 'fs';
 import path from 'path';
-import { genAIClient, isGeminiConfigured } from '../config/gemini.js';
-
-const MIME_BY_EXT = {
-  '.webm': 'audio/webm',
-  '.wav': 'audio/wav',
-  '.mp3': 'audio/mp3',
-  '.m4a': 'audio/mp4',
-  '.ogg': 'audio/ogg',
-};
-
-const transcribeWithGemini = async (filePath) => {
-  const ext = path.extname(filePath).toLowerCase();
-  const mimeType = MIME_BY_EXT[ext] || 'audio/webm';
-  const audioBase64 = fs.readFileSync(filePath).toString('base64');
-
-  const model = genAIClient.getGenerativeModel({ model: 'gemini-3.6-flash' });
-  const result = await model.generateContent([
-    { text: 'Transcribe this audio exactly as spoken. Return ONLY the raw transcript text, no commentary, no quotes.' },
-    { inlineData: { mimeType, data: audioBase64 } },
-  ]);
-  return result.response.text().trim();
-};
+import { openaiClient, isOpenAIConfigured } from '../config/openai.js';
 
 export const transcribeAudio = async (filePath) => {
+  let tempFilePath = null;
   try {
-    if (isGeminiConfigured && genAIClient) {
-      return await transcribeWithGemini(filePath);
+    if (!fs.existsSync(filePath)) {
+      throw new Error(`Audio file not found at path: ${filePath}`);
     }
-    throw new Error('Gemini STT is not configured (GEMINI_API_KEY missing).');
+
+    if (!isOpenAIConfigured || !openaiClient) {
+      throw new Error('OpenAI STT is not configured (OPENAI_API_KEY missing).');
+    }
+
+    // OpenAI Whisper expects a recognized audio file extension (.webm, .wav, .mp3, etc.)
+    const ext = path.extname(filePath).toLowerCase();
+    const validAudioExts = ['.webm', '.wav', '.mp3', '.m4a', '.ogg', '.flac', '.mp4'];
+    let targetPath = filePath;
+
+    if (!ext || !validAudioExts.includes(ext)) {
+      tempFilePath = `${filePath}.webm`;
+      fs.copyFileSync(filePath, tempFilePath);
+      targetPath = tempFilePath;
+    }
+
+    console.log(`[OpenAI STT] Transcribing audio file "${targetPath}" via whisper-1...`);
+    const transcription = await openaiClient.audio.transcriptions.create({
+      file: fs.createReadStream(targetPath),
+      model: 'whisper-1',
+    });
+
+    const transcript = (transcription?.text || '').trim();
+    console.log(`[OpenAI STT Success] Transcribed ${transcript.length} characters.`);
+    return transcript;
   } catch (error) {
-    console.error('[STT Service Error]', error.message);
+    console.error('[OpenAI STT Service Error]', error.message);
     return "Sorry, I couldn't transcribe that answer clearly — could you repeat it?";
+  } finally {
+    if (tempFilePath && fs.existsSync(tempFilePath)) {
+      try {
+        fs.unlinkSync(tempFilePath);
+      } catch (cleanupErr) {
+        // silent cleanup
+      }
+    }
   }
 };
-

@@ -16,6 +16,7 @@ import analyticsRoutes from './routes/analyticsRoutes.js';
 import jobRoutes from './routes/jobRoutes.js';
 import applicationRoutes from './routes/applicationRoutes.js';
 import coverLetterRoutes from './routes/coverLetterRoutes.js';
+import { globalApiLimiter } from './middleware/rateLimiter.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 import fs from 'fs';
@@ -25,7 +26,7 @@ dotenv.config({ path: path.join(__dirname, '.env') });
 const validateEnv = () => {
   const jwtSecret = process.env.JWT_SECRET;
   const mongoUri = process.env.MONGO_URI || process.env.MONGODB_URI;
-  const geminiKey = process.env.GEMINI_API_KEY;
+  const openaiKey = process.env.OPENAI_API_KEY;
   const port = process.env.PORT;
 
   // Hard failure checks
@@ -46,8 +47,8 @@ const validateEnv = () => {
     warnings.push('PORT: Missing from environment variables (defaulting to 5000)');
   }
 
-  if (!geminiKey || !geminiKey.trim()) {
-    warnings.push('GEMINI_API_KEY: Missing (AI evaluations, STT, and TTS will fallback gracefully to heuristics)');
+  if (!openaiKey || !openaiKey.trim() || openaiKey === 'your_openai_api_key_here') {
+    warnings.push('OPENAI_API_KEY: Missing (AI evaluations, STT, and TTS will fallback gracefully to heuristics)');
   }
 
   const livekitKey = process.env.LIVEKIT_API_KEY;
@@ -111,6 +112,18 @@ app.use(express.urlencoded({ extended: true }));
 // Serve static uploads (for audio files or preview docs)
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
+// Health Check (Exempt from API rate limits)
+app.get('/api/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    service: 'AI Interview Preparation Platform API',
+    time: new Date().toISOString(),
+  });
+});
+
+// Global API rate limiting (~100 req/min across /api)
+app.use('/api', globalApiLimiter);
+
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/resumes', resumeRoutes);
@@ -122,15 +135,6 @@ app.use('/api/analytics', analyticsRoutes);
 app.use('/api/jobs', jobRoutes);
 app.use('/api/applications', applicationRoutes);
 app.use('/api/cover-letter', coverLetterRoutes);
-
-// Health Check
-app.get('/api/health', (req, res) => {
-  res.json({
-    status: 'ok',
-    service: 'AI Interview Preparation Platform API',
-    time: new Date().toISOString(),
-  });
-});
 
 // Global Error Handler
 app.use((err, req, res, next) => {

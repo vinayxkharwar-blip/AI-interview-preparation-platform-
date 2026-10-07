@@ -5,7 +5,7 @@ import { Mic, Square, RefreshCw, Type, Loader2, Sparkles, AlertCircle, CheckCirc
 const MAX_RECORDING_DURATION = 300; // 5 minutes in seconds
 const WARNING_THRESHOLD = 270; // 30 seconds remaining (4:30)
 
-export default function corder({ onAnswerSubmitted, isSubmitting }) {
+export default function AnswerRecorder({ onAnswerSubmitted, isSubmitting }) {
   const [mode, setMode] = useState('voice'); // 'voice' or 'text'
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
@@ -19,6 +19,7 @@ export default function corder({ onAnswerSubmitted, isSubmitting }) {
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const timerRef = useRef(null);
+  const audioUrlRef = useRef('');
 
   // Check MediaRecorder & audio/webm support
   const checkAudioWebmSupport = () => {
@@ -43,6 +44,10 @@ export default function corder({ onAnswerSubmitted, isSubmitting }) {
   useEffect(() => {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
+      if (audioUrlRef.current) {
+        URL.revokeObjectURL(audioUrlRef.current);
+        audioUrlRef.current = '';
+      }
     };
   }, []);
 
@@ -62,6 +67,10 @@ export default function corder({ onAnswerSubmitted, isSubmitting }) {
     }
 
     try {
+      if (audioUrlRef.current) {
+        URL.revokeObjectURL(audioUrlRef.current);
+        audioUrlRef.current = '';
+      }
       setError('');
       setAudioBlob(null);
       setAudioUrl('');
@@ -79,7 +88,11 @@ export default function corder({ onAnswerSubmitted, isSubmitting }) {
 
       mediaRecorderRef.current.onstop = () => {
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        if (audioUrlRef.current) {
+          URL.revokeObjectURL(audioUrlRef.current);
+        }
         const url = URL.createObjectURL(audioBlob);
+        audioUrlRef.current = url;
         setAudioBlob(audioBlob);
         setAudioUrl(url);
 
@@ -158,7 +171,7 @@ export default function corder({ onAnswerSubmitted, isSubmitting }) {
         audioUrl: mode === 'voice' ? audioUrl : '',
       });
     } catch (err) {
-      console.error('[corder] Error executing onAnswerSubmitted callback:', err);
+      console.error('[AnswerRecorder] Error executing onAnswerSubmitted callback:', err);
       setError(err.message || 'Failed to submit answer.');
     }
   };
@@ -194,7 +207,7 @@ export default function corder({ onAnswerSubmitted, isSubmitting }) {
               }`}
           >
             <Mic className="w-3.5 h-3.5 text-[#F5D90A]" />
-            <span>Voice Record (Gemini STT)</span>
+            <span>Voice Record (OpenAI STT)</span>
           </button>
           <button
             type="button"
@@ -288,7 +301,7 @@ export default function corder({ onAnswerSubmitted, isSubmitting }) {
       {transcribeLoading ? (
         <div className="p-6 bg-[#F3E8FF] rounded-2xl border-2 border-[#0F1E1B] flex flex-col items-center justify-center space-y-2 text-[#0F1E1B]">
           <Loader2 className="w-6 h-6 animate-spin text-[#C1440E]" />
-          <span className="text-sm font-bold">Transcribing audio via Gemini Voice STT...</span>
+          <span className="text-sm font-bold">Transcribing audio via OpenAI Whisper STT...</span>
         </div>
       ) : (
         <form onSubmit={handleSubmit} className="space-y-4">

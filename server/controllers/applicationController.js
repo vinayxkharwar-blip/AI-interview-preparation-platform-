@@ -67,7 +67,7 @@ export const getUserApplications = async (req, res) => {
     let applications = [];
     if (mongoose.connection.readyState === 1) {
       try {
-        applications = await Application.find({ user: req.user._id }).sort({ appliedDate: -1 });
+        applications = await Application.find({ user: req.user._id }).sort({ appliedDate: -1 }).lean();
       } catch (e) {
         console.log('[Get Applications DB Notice]', e.message);
       }

@@ -29,7 +29,6 @@ export default function Dashboard() {
   const [sessions, setSessions] = useState([]);
   const [resumes, setResumes] = useState([]);
   const [jobs, setJobs] = useState([]);
-  const [savedJobs, setSavedJobs] = useState([]);
   const [applications, setApplications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedJobForPrep, setSelectedJobForPrep] = useState(null);
@@ -46,11 +45,10 @@ export default function Dashboard() {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const [sessRes, resRes, jobsRes, savedRes, appsRes] = await Promise.allSettled([
+        const [sessRes, resRes, jobsRes, appsRes] = await Promise.allSettled([
           axiosClient.get('/sessions'),
           axiosClient.get('/resumes'),
           axiosClient.get('/jobs/recommendations'),
-          axiosClient.get('/jobs/saved'),
           axiosClient.get('/applications'),
         ]);
 
@@ -68,9 +66,6 @@ export default function Dashboard() {
           if (jobsData.length > 0) {
             setGoals((prev) => prev.map((g) => (g.id === 2 ? { ...g, completed: true } : g)));
           }
-        }
-        if (savedRes.status === 'fulfilled') {
-          setSavedJobs(savedRes.value.data || []);
         }
         if (appsRes.status === 'fulfilled') {
           setApplications(appsRes.value.data || []);

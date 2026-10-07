@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import SavedJob from '../models/SavedJob.js';
 import Resume from '../models/Resume.js';
+import { memoryResumes } from './resumeController.js';
 import { fetchJobRecommendations } from '../services/jobService.js';
 import { checkOwnership } from '../utils/authz.js';
 
@@ -21,10 +22,14 @@ export const getJobRecommendations = async (req, res) => {
       let latestResume = null;
       if (mongoose.connection.readyState === 1) {
         try {
-          latestResume = await Resume.findOne({ user: req.user._id }).sort({ createdAt: -1 });
+          latestResume = await Resume.findOne({ user: req.user._id }).sort({ createdAt: -1 }).lean();
         } catch (e) {
           console.log('[Job Controller DB Notice]', e.message);
         }
+      }
+
+      if (!latestResume) {
+        latestResume = memoryResumes.find((r) => String(r.user) === String(req.user._id));
       }
 
       if (latestResume?.parsedData) {
@@ -147,7 +152,7 @@ export const getSavedJobs = async (req, res) => {
     let savedJobs = [];
     if (mongoose.connection.readyState === 1) {
       try {
-        savedJobs = await SavedJob.find({ user: req.user._id }).sort({ createdAt: -1 });
+        savedJobs = await SavedJob.find({ user: req.user._id }).sort({ createdAt: -1 }).lean();
       } catch (e) {
         console.log('[Get Saved Jobs DB Notice]', e.message);
       }

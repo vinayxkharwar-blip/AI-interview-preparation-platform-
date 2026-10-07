@@ -1,12 +1,14 @@
 import mongoose from 'mongoose';
 import CoverLetter from '../models/CoverLetter.js';
 import Resume from '../models/Resume.js';
+import { memoryResumes } from './resumeController.js';
 import { generateLLMJson } from '../services/llmService.js';
+import { checkOwnership } from '../utils/authz.js';
 
 // Memory fallback store
 export const memoryCoverLetters = [];
 
-// @desc Generate tailored AI Cover Letter via Gemini LLM
+// @desc Generate tailored AI Cover Letter via OpenAI LLM
 // @route POST /api/cover-letter
 export const generateCoverLetter = async (req, res) => {
   try {
@@ -19,28 +21,52 @@ export const generateCoverLetter = async (req, res) => {
     let resumeText = '';
     let parsedResumeData = null;
 
-    if (resumeId && mongoose.Types.ObjectId.isValid(resumeId)) {
-      try {
-        const resumeDoc = await Resume.findById(resumeId);
-        if (resumeDoc) {
-          resumeText = resumeDoc.rawText || '';
-          parsedResumeData = resumeDoc.parsedData || null;
+    if (resumeId) {
+      let resumeDoc = null;
+      if (mongoose.Types.ObjectId.isValid(resumeId)) {
+        try {
+          resumeDoc = await Resume.findById(resumeId).lean();
+        } catch (e) {
+          console.log('[Cover Letter Resume DB Notice]', e.message);
         }
-      } catch (e) {
-        console.log('[Cover Letter Resume DB Notice]', e.message);
       }
+
+      if (!resumeDoc) {
+        resumeDoc = memoryResumes.find(
+          (r) => String(r._id) === String(resumeId) || String(r.id) === String(resumeId)
+        );
+      }
+
+      if (!resumeDoc) {
+        return res.status(404).json({ message: 'Resume not found.' });
+      }
+
+      if (!checkOwnership(resumeDoc, req.user)) {
+        return res.status(403).json({ message: 'Forbidden: You do not have permission to access this resume.' });
+      }
+
+      resumeText = resumeDoc.rawText || '';
+      parsedResumeData = resumeDoc.parsedData || null;
     }
 
     if (!resumeText) {
       // Fetch user's latest resume if not passed
       try {
-        const latestResume = await Resume.findOne({ user: req.user._id }).sort({ createdAt: -1 });
+        const latestResume = await Resume.findOne({ user: req.user._id }).sort({ createdAt: -1 }).lean();
         if (latestResume) {
           resumeText = latestResume.rawText || '';
           parsedResumeData = latestResume.parsedData || null;
         }
       } catch (e) {
         console.log('[Cover Letter Latest Resume Notice]', e.message);
+      }
+
+      if (!resumeText) {
+        const memResume = memoryResumes.find((r) => String(r.user) === String(req.user._id));
+        if (memResume) {
+          resumeText = memResume.rawText || '';
+          parsedResumeData = memResume.parsedData || null;
+        }
       }
     }
 

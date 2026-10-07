@@ -6,6 +6,9 @@ import { checkOwnership } from '../utils/authz.js';
 import path from 'path';
 import fs from 'fs';
 
+// In-memory fallback store when MongoDB is offline
+export const memoryResumes = [];
+
 // @desc Upload & Parse Resume
 // @route POST /api/resumes/upload
 export const uploadResume = async (req, res) => {
@@ -75,6 +78,8 @@ export const uploadResume = async (req, res) => {
       };
     }
 
+    memoryResumes.unshift(newResume);
+
     res.status(201).json({
       message: 'Resume parsed and saved successfully!',
       resume: newResume,
@@ -94,9 +99,12 @@ export const getUserResumes = async (req, res) => {
   try {
     let resumes = [];
     try {
-      resumes = await Resume.find({ user: req.user._id }).sort({ createdAt: -1 });
+      resumes = await Resume.find({ user: req.user._id }).sort({ createdAt: -1 }).lean();
     } catch (e) {
       console.log('[Resume DB Notice] User resumes fallback:', e.message);
+    }
+    if (resumes.length === 0) {
+      resumes = memoryResumes.filter((r) => String(r.user) === String(req.user._id));
     }
     res.json(resumes);
   } catch (error) {
@@ -110,9 +118,14 @@ export const getResumeById = async (req, res) => {
   try {
     let resume = null;
     try {
-      resume = await Resume.findById(req.params.id);
+      resume = await Resume.findById(req.params.id).lean();
     } catch (e) {
       console.log('[Resume DB Notice] Get single resume fallback:', e.message);
+    }
+    if (!resume) {
+      resume = memoryResumes.find(
+        (r) => String(r._id) === String(req.params.id) || String(r.id) === String(req.params.id)
+      );
     }
     if (!resume) {
       return res.status(404).json({ message: 'Resume not found' });

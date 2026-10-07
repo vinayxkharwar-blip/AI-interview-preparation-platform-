@@ -5,13 +5,14 @@ import Answer from '../models/Answer.js';
 import Feedback from '../models/Feedback.js';
 import ImprovementPlan from '../models/ImprovementPlan.js';
 import Resume from '../models/Resume.js';
+import { memoryResumes } from './resumeController.js';
 import { memorySessions, memoryQuestions, memoryAnswers, memoryFeedback, memoryImprovementPlans } from './sessionController.js';
 import { generateLLMJson } from '../services/llmService.js';
 import { buildImprovementPlanPrompt } from '../prompts/improvementPrompts.js';
 import { buildLiveInterviewTurnPrompt } from '../prompts/liveInterviewPrompts.js';
 import mongoose from 'mongoose';
 import { checkOwnership } from '../utils/authz.js';
-import { synthesizeGeminiSpeech } from '../services/ttsService.js';
+import { synthesizeOpenAISpeech, synthesizeGeminiSpeech } from '../services/ttsService.js';
 
 // @desc Generate LiveKit WebRTC Access Token for live session
 // @route POST /api/sessions/:id/live/token
@@ -65,6 +66,7 @@ export const createLiveKitToken = async (req, res) => {
       });
     }
 
+    const tokenStart = Date.now();
     const roomName = `session_${sessionId}`;
     const participantName = req.user?.name || `user_${req.user?._id || 'candidate'}`;
 
@@ -82,6 +84,8 @@ export const createLiveKitToken = async (req, res) => {
     });
 
     const token = await at.toJwt();
+    const tokenDurationMs = Date.now() - tokenStart;
+    console.log(`[LiveTiming][Server Token] Minted token for room "${roomName}" in ${tokenDurationMs}ms`);
 
     res.json({
       isFallback: false,
@@ -89,6 +93,7 @@ export const createLiveKitToken = async (req, res) => {
       url: livekitUrl,
       roomName,
       participantName,
+      tokenDurationMs,
     });
   } catch (error) {
     console.error('[LiveKit Token Error] Failed to create LiveKit token:', error.stack || error.message);
@@ -153,6 +158,13 @@ export const handleLiveTurn = async (req, res) => {
       } catch (e) {
         console.log('[LiveInterview Turn Resume Notice]', e.message);
       }
+    }
+
+    if (!parsedResume && session?.resume) {
+      const memResume = memoryResumes.find(
+        (r) => String(r._id) === String(session.resume) || String(r.id) === String(session.resume)
+      );
+      if (memResume) parsedResume = memResume.parsedData;
     }
 
     const targetRole = session?.targetRole || 'Software Engineer';
@@ -376,26 +388,52 @@ export const completeLiveSession = async (req, res) => {
     });
 
     let planDoc = null;
-    try {
-      const planLLMResult = await generateLLMJson(planPrompt, 'You generate actionable improvement plans.');
-      planDoc = await ImprovementPlan.create({
-        session: sessionId,
-        user: req.user?._id,
-        focusAreas: planLLMResult.focusAreas || [],
-        overallSummary: planLLMResult.overallSummary || 'Great job completing your live AI video-call interview!',
-      });
-    } catch (e) {
+    if (liveTurns.length === 0) {
       planDoc = {
         _id: 'plan-live-' + Date.now(),
         session: sessionId,
         user: req.user?._id,
         focusAreas: [
-          { area: 'Live Answer Structuring', recommendation: 'Use bulleted main points before elaborating.' },
-          { area: 'Technical Terminology', recommendation: 'Clearly state system architecture trade-offs.' },
+          { topic: 'Live Interview Practice', observation: 'Interview ended before live answers were recorded.', recommendation: 'Practice a full mock interview loop to generate comprehensive AI feedback.' },
         ],
-        overallSummary: 'Strong performance in live conversational video mode!',
+        overallSummary: 'Live interview session was ended early.',
       };
+      if (mongoose.connection.readyState === 1) {
+        try {
+          await ImprovementPlan.create(planDoc);
+        } catch (e) {}
+      }
       memoryImprovementPlans.push(planDoc);
+    } else {
+      try {
+        const planLLMResult = await Promise.race([
+          generateLLMJson(planPrompt, 'You generate actionable improvement plans.'),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('LLM Improvement Plan timeout')), 4000)),
+        ]);
+        planDoc = await ImprovementPlan.create({
+          session: sessionId,
+          user: req.user?._id,
+          focusAreas: planLLMResult.focusAreas || [],
+          overallSummary: planLLMResult.overallSummary || 'Great job completing your live AI video-call interview!',
+        });
+      } catch (e) {
+        planDoc = {
+          _id: 'plan-live-' + Date.now(),
+          session: sessionId,
+          user: req.user?._id,
+          focusAreas: [
+            { topic: 'Live Answer Structuring', observation: 'Fast delivery in live verbal format.', recommendation: 'Use bulleted STAR points before elaborating.' },
+            { topic: 'Technical Terminology', observation: 'Demonstrated solid conversational engagement.', recommendation: 'Clearly state system architecture trade-offs.' },
+          ],
+          overallSummary: 'Strong performance in live conversational video mode!',
+        };
+        if (mongoose.connection.readyState === 1) {
+          try {
+            await ImprovementPlan.create(planDoc);
+          } catch (e) {}
+        }
+        memoryImprovementPlans.push(planDoc);
+      }
     }
 
     res.json({
@@ -410,26 +448,32 @@ export const completeLiveSession = async (req, res) => {
   }
 };
 
-// @desc Synthesize live speech audio using Gemini TTS
+// @desc Synthesize live speech audio using OpenAI TTS
 // @route POST /api/sessions/:id/live/tts
 export const streamLiveTts = async (req, res) => {
+  const reqStart = Date.now();
   try {
-    const { text, voice = 'Puck' } = req.body;
+    const { text, voice = 'alloy' } = req.body;
     if (!text || !text.trim()) {
       return res.status(400).json({ message: 'Text is required for TTS synthesis.' });
     }
 
-    const ttsResult = await synthesizeGeminiSpeech(text, voice);
+    const ttsResult = await synthesizeOpenAISpeech(text, voice);
+    const totalDurationMs = Date.now() - reqStart;
+    console.log(`[LiveTiming][Server TTS Controller] Session: ${req.params.id} | Total TTS dispatch & synthesis: ${totalDurationMs}ms`);
+
     res.json({
       audioUrl: `data:audio/wav;base64,${ttsResult.audioBase64}`,
       mimeType: ttsResult.mimeType,
       voice: ttsResult.voiceName,
+      serverDurationMs: totalDurationMs,
     });
   } catch (error) {
-    console.warn('[LiveInterview TTS Fallback Notice]', error.message);
+    console.warn(`[LiveInterview TTS Fallback Notice] Synthesis failed after ${Date.now() - reqStart}ms:`, error.message);
     res.status(200).json({
       isFallback: true,
-      message: 'Gemini TTS unavailable, fallback to browser speech synthesis.',
+      message: 'OpenAI TTS unavailable, fallback to browser speech synthesis.',
+      serverDurationMs: Date.now() - reqStart,
     });
   }
 };

@@ -1,7 +1,6 @@
 import React, { useContext, useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
-import NotificationCenter from './NotificationCenter';
 import { 
   Sparkles, 
   BarChart3, 
@@ -116,7 +115,6 @@ export default function Navbar() {
           {/* User Profile, Notifications & Actions */}
           {user ? (
             <div className="flex items-center space-x-2 shrink-0">
-              <NotificationCenter />
               <Link
                 to="/"
                 className="hidden lg:flex items-center space-x-1 text-xs font-bold text-[#0F1E1B]/70 hover:text-[#0F1E1B] px-2.5 py-1 rounded-lg hover:bg-[#F5F2E6]"

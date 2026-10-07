@@ -2,7 +2,11 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 
-const uploadDir = path.join(process.cwd(), 'uploads');
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const uploadDir = path.resolve(__dirname, '../uploads');
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
@@ -41,7 +45,7 @@ const resumeFileFilter = (req, file, cb) => {
 
 export const uploadResumeMiddleware = multer({
   storage,
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+  limits: { fileSize: 15 * 1024 * 1024 }, // 15MB limit
   fileFilter: resumeFileFilter,
 }).single('resume');
 
@@ -50,7 +54,7 @@ export const handleResumeUpload = (req, res, next) => {
   uploadResumeMiddleware(req, res, (err) => {
     if (err) {
       if (err.code === 'LIMIT_FILE_SIZE') {
-        return res.status(400).json({ message: 'File size exceeds 5MB limit.' });
+        return res.status(400).json({ message: 'File size exceeds 15MB limit.' });
       }
       return res.status(400).json({ message: err.message || 'Error uploading resume file.' });
     }

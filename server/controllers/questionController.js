@@ -15,7 +15,7 @@ export const getQuestionsBySession = async (req, res) => {
 
     let questions = [];
     try {
-      questions = await Question.find({ session: sessionId }).sort({ questionNumber: 1 });
+      questions = await Question.find({ session: sessionId }).sort({ questionNumber: 1 }).lean();
     } catch (e) {
       console.log('[Question DB Notice]', e.message);
     }

@@ -2,13 +2,13 @@ import express from 'express';
 import mongoose from 'mongoose';
 import { registerUser, loginUser, getMe } from '../controllers/authController.js';
 import { protect } from '../middleware/authMiddleware.js';
-import { authRateLimiter } from '../middleware/authRateLimiter.js';
+import { authLimiter } from '../middleware/rateLimiter.js';
 
 const router = express.Router();
 
-router.post('/register', authRateLimiter, registerUser);
-router.post('/signup', authRateLimiter, registerUser); // Alias
-router.post('/login', authRateLimiter, loginUser);
+router.post('/register', authLimiter, registerUser);
+router.post('/signup', authLimiter, registerUser); // Alias
+router.post('/login', authLimiter, loginUser);
 router.get('/me', protect, getMe);
 
 export default router;
