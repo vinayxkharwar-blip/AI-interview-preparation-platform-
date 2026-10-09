@@ -78,34 +78,115 @@ validateEnv();
 
 const app = express();
 
-// Connect to MongoDB
-connectDB();
+// Connect to MongoDB (skip if running lightweight tests)
+if (!process.env.TEST_MODE) {
+  connectDB();
+}
 
 app.use((req, res, next) => {
   req.dbAvailable = mongoose.connection.readyState === 1;
   next();
 });
 
-// Middleware
-const allowedOrigins = [
-  process.env.CLIENT_URL,
+// ==========================================
+// CORS Configuration & Normalization
+// ==========================================
+const normalizeOrigin = (url) => {
+  if (!url || typeof url !== 'string') return '';
+  return url.trim().replace(/\/+$/, '');
+};
+
+// Known default production and local development origins
+const DEFAULT_ALLOWED_ORIGINS = [
+  'https://ai-interview-preparation-platform-two.vercel.app',
   'http://localhost:5173',
   'http://localhost:3000',
   'http://127.0.0.1:5173',
-].filter(Boolean);
+  'http://127.0.0.1:3000',
+  'http://localhost:4173',
+  'http://127.0.0.1:4173',
+];
 
-app.use(
-  cors({
-    origin: (origin, callback) => {
-      if (!origin || allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        callback(new Error('CORS policy restriction: Request origin not allowed.'));
-      }
-    },
-    credentials: true,
-  })
-);
+// Helper to parse comma-separated or space-separated origins from environment variables
+const parseEnvOrigins = (...envVars) => {
+  const origins = [];
+  for (const envVal of envVars) {
+    if (envVal && typeof envVal === 'string') {
+      envVal
+        .split(',')
+        .map((item) => normalizeOrigin(item))
+        .filter(Boolean)
+        .forEach((origin) => origins.push(origin));
+    }
+  }
+  return origins;
+};
+
+export const getAllowedOrigins = () => {
+  const envOrigins = parseEnvOrigins(
+    process.env.FRONTEND_URL,
+    process.env.CLIENT_URL,
+    process.env.ALLOWED_ORIGINS
+  );
+  return Array.from(new Set([...DEFAULT_ALLOWED_ORIGINS.map(normalizeOrigin), ...envOrigins]));
+};
+
+export const isOriginAllowed = (origin, allowedList) => {
+  if (!origin) return true; // Requests without Origin header (curl, mobile apps, server-to-server)
+  const normalized = normalizeOrigin(origin).toLowerCase();
+
+  // Check against normalized allowed list
+  if (allowedList.some((allowed) => normalizeOrigin(allowed).toLowerCase() === normalized)) {
+    return true;
+  }
+
+  // Safe pattern match for Vercel preview/branch deployments of this platform
+  if (/^https:\/\/ai-interview-preparation-platform[a-z0-9-]*\.vercel\.app$/.test(normalized)) {
+    return true;
+  }
+
+  return false;
+};
+
+const corsOptions = {
+  origin: (origin, callback) => {
+    // Allow requests without Origin header (curl, mobile apps, server-to-server, same-origin)
+    if (!origin) {
+      return callback(null, true);
+    }
+
+    const currentAllowedOrigins = getAllowedOrigins();
+    if (isOriginAllowed(origin, currentAllowedOrigins)) {
+      console.log(`[CORS] Request origin allowed: "${origin}"`);
+      return callback(null, true);
+    }
+
+    // Origin blocked: Log cleanly with exact origin without leaking sensitive data
+    console.warn(
+      `[CORS] Blocked request from unauthorized origin: "${origin}". Configured allowed origins: [${currentAllowedOrigins.join(', ')}]`
+    );
+    // Reject cleanly without triggering unhandled 500 server errors
+    return callback(null, false);
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: [
+    'Content-Type',
+    'Authorization',
+    'X-Requested-With',
+    'Accept',
+    'Origin',
+  ],
+  exposedHeaders: ['Set-Cookie'],
+  optionsSuccessStatus: 200,
+};
+
+// Register CORS middleware and preflight handlers before routes
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
+
+console.log(`🔒 [CORS Initialized] Allowed origins:`, getAllowedOrigins());
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -138,6 +219,14 @@ app.use('/api/cover-letter', coverLetterRoutes);
 
 // Global Error Handler
 app.use((err, req, res, next) => {
+  if (err.message && err.message.includes('CORS')) {
+    console.warn(`[CORS Error Handler] ${err.message}`);
+    return res.status(403).json({
+      error: 'CORS Forbidden',
+      message: err.message,
+    });
+  }
+
   console.error('[Unhandled Error]', err.stack || err.message);
   res.status(err.status || 500).json({
     message: err.message || 'Internal Server Error',
@@ -163,5 +252,13 @@ const startServer = (portToTry) => {
   });
 };
 
-startServer(Number(PORT));
+const isDirectRun = !process.argv[1] || 
+  process.argv[1].endsWith('server.js') || 
+  path.resolve(process.argv[1]).toLowerCase() === path.resolve(__filename).toLowerCase();
 
+if (isDirectRun && !process.env.NO_AUTO_START) {
+  startServer(Number(PORT));
+}
+
+export { app, startServer };
+export default app;
