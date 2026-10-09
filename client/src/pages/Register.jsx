@@ -1,6 +1,7 @@
 import React, { useState, useContext } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
+import { validateEmail } from '../utils/validation';
 import { Sparkles, User, Mail, Lock, Briefcase, UserPlus, AlertCircle, Loader2, ArrowRight } from 'lucide-react';
 
 export default function Register() {
@@ -25,6 +26,12 @@ export default function Register() {
       return;
     }
 
+    const emailCheck = validateEmail(trimmedEmail);
+    if (!emailCheck.isValid) {
+      setError('Please enter a valid email address.');
+      return;
+    }
+
     if (password.length < 6) {
       setError('Password must be at least 6 characters long.');
       return;
@@ -34,7 +41,7 @@ export default function Register() {
     setError('');
 
     try {
-      await register(trimmedName, trimmedEmail, password, trimmedRole || 'Full Stack Engineer');
+      await register(trimmedName, emailCheck.normalizedEmail, password, trimmedRole || 'Full Stack Engineer');
       setLoading(false);
       navigate('/dashboard');
     } catch (err) {
@@ -63,20 +70,22 @@ export default function Register() {
         </div>
 
         {error && (
-          <div className="p-4 bg-rose-50 border-2 border-rose-600 rounded-2xl flex items-center space-x-3 text-rose-800 text-xs font-bold">
+          <div data-testid="error-message" role="alert" className="p-4 bg-rose-50 border-2 border-rose-600 rounded-2xl flex items-center space-x-3 text-rose-800 text-xs font-bold">
             <AlertCircle className="w-4 h-4 shrink-0" />
             <span>{error}</span>
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form noValidate onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-[#0F1E1B] mb-2">Full Name</label>
+            <label htmlFor="name" className="block text-xs font-bold uppercase tracking-wider text-[#0F1E1B] mb-2">Full Name</label>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#0F1E1B]/50">
                 <User className="w-4 h-4" />
               </div>
               <input
+                id="name"
+                name="name"
                 type="text"
                 required
                 value={name}
@@ -88,12 +97,14 @@ export default function Register() {
           </div>
 
           <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-[#0F1E1B] mb-2">Email Address</label>
+            <label htmlFor="email" className="block text-xs font-bold uppercase tracking-wider text-[#0F1E1B] mb-2">Email Address</label>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#0F1E1B]/50">
                 <Mail className="w-4 h-4" />
               </div>
               <input
+                id="email"
+                name="email"
                 type="email"
                 required
                 value={email}
@@ -105,12 +116,14 @@ export default function Register() {
           </div>
 
           <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-[#0F1E1B] mb-2">Password</label>
+            <label htmlFor="password" className="block text-xs font-bold uppercase tracking-wider text-[#0F1E1B] mb-2">Password</label>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#0F1E1B]/50">
                 <Lock className="w-4 h-4" />
               </div>
               <input
+                id="password"
+                name="password"
                 type="password"
                 required
                 value={password}
@@ -122,12 +135,14 @@ export default function Register() {
           </div>
 
           <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-[#0F1E1B] mb-2">Target Job Role</label>
+            <label htmlFor="targetRole" className="block text-xs font-bold uppercase tracking-wider text-[#0F1E1B] mb-2">Target Job Role</label>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#0F1E1B]/50">
                 <Briefcase className="w-4 h-4" />
               </div>
               <input
+                id="targetRole"
+                name="targetRole"
                 type="text"
                 value={targetRole}
                 onChange={(e) => setTargetRole(e.target.value)}
@@ -138,6 +153,7 @@ export default function Register() {
           </div>
 
           <button
+            id="register-submit"
             type="submit"
             disabled={loading}
             className="w-full py-3.5 px-4 rounded-2xl text-sm font-bold text-[#FDFBF3] bg-[#0F1E1B] hover:bg-[#1A332E] disabled:opacity-50 transition-all editorial-shadow flex items-center justify-center space-x-2"

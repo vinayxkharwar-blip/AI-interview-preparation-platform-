@@ -59,7 +59,8 @@ export const AuthProvider = ({ children }) => {
   }, [token]);
 
   const login = async (email, password) => {
-    const res = await axiosClient.post('/auth/login', { email, password });
+    const cleanEmail = typeof email === 'string' ? email.trim().toLowerCase() : email;
+    const res = await axiosClient.post('/auth/login', { email: cleanEmail, password });
     const { token: newToken, user: userData } = res.data;
     const norm = normalizeUser(userData);
     localStorage.setItem('token', newToken);
@@ -70,7 +71,10 @@ export const AuthProvider = ({ children }) => {
   };
 
   const register = async (name, email, password, targetRole) => {
-    const res = await axiosClient.post('/auth/register', { name, email, password, targetRole });
+    const cleanEmail = typeof email === 'string' ? email.trim().toLowerCase() : email;
+    const cleanName = typeof name === 'string' ? name.trim() : name;
+    const cleanRole = typeof targetRole === 'string' ? targetRole.trim() : targetRole;
+    const res = await axiosClient.post('/auth/register', { name: cleanName, email: cleanEmail, password, targetRole: cleanRole });
     const { token: newToken, user: userData } = res.data;
     const norm = normalizeUser(userData);
     localStorage.setItem('token', newToken);
