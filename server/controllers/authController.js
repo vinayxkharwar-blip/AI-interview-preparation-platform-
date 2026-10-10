@@ -5,6 +5,7 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import User from '../models/User.js';
+import validator from 'validator';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -48,15 +49,25 @@ export const registerUser = async (req, res) => {
 
     const { name, email, password, targetRole } = req.body;
 
-    if (!name || !email || !password) {
+    if (
+      !name ||
+      !email ||
+      !password ||
+      (typeof name === 'string' && !name.trim()) ||
+      (typeof email === 'string' && !email.trim())
+    ) {
       return res.status(400).json({ message: 'Please enter all required fields.' });
     }
 
-    if (password.length < 6) {
-      return res.status(400).json({ message: 'Password must be at least 6 characters long.' });
+    const cleanEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
+
+    if (!validator.isEmail(cleanEmail)) {
+      return res.status(400).json({ message: 'Please enter a valid email address.' });
     }
 
-    const cleanEmail = email.toLowerCase().trim();
+    if (typeof password === 'string' && password.length < 6) {
+      return res.status(400).json({ message: 'Password must be at least 6 characters long.' });
+    }
 
     let existingUser = null;
     try {
@@ -73,10 +84,10 @@ export const registerUser = async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, salt);
 
     const user = await User.create({
-      name: name.trim(),
+      name: typeof name === 'string' ? name.trim() : name,
       email: cleanEmail,
       password: hashedPassword,
-      targetRole: targetRole || 'Full Stack Engineer',
+      targetRole: (targetRole && typeof targetRole === 'string' ? targetRole.trim() : null) || 'Full Stack Engineer',
     });
 
     const formattedUser = formatUser(user);
@@ -87,6 +98,12 @@ export const registerUser = async (req, res) => {
       user: formattedUser,
     });
   } catch (error) {
+    if (error.code === 11000) {
+      return res.status(400).json({ message: 'User already exists with this email.' });
+    }
+    if (error.name === 'ValidationError') {
+      return res.status(400).json({ message: error.message || 'Please enter a valid email address.' });
+    }
     console.error('[Register Error]', error);
     return res.status(500).json({ message: error.message || 'Server error during registration' });
   }
@@ -102,11 +119,15 @@ export const loginUser = async (req, res) => {
 
     const { email, password } = req.body;
 
-    if (!email || !password) {
+    if (!email || !password || (typeof email === 'string' && !email.trim()) || (typeof password === 'string' && !password.trim())) {
       return res.status(400).json({ message: 'Please provide email and password.' });
     }
 
-    const cleanEmail = email.toLowerCase().trim();
+    const cleanEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
+
+    if (!validator.isEmail(cleanEmail)) {
+      return res.status(400).json({ message: 'Please enter a valid email address.' });
+    }
 
     let user = null;
     try {
@@ -115,8 +136,9 @@ export const loginUser = async (req, res) => {
       console.log('[DB Auth Warning] Login query error:', e.message);
     }
 
+    // Generic error message for both non-existent account and wrong password
     if (!user) {
-      return res.status(401).json({ message: 'Invalid email or password. Click Try Free to register.' });
+      return res.status(401).json({ message: 'Invalid email or password.' });
     }
 
     // Compare password strictly with bcrypt

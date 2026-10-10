@@ -25,25 +25,19 @@ export const protect = async (req, res, next) => {
         } catch (e) {
           console.log('[Auth Middleware] DB lookup notice:', e.message);
         }
+        if (!req.user) {
+          return res.status(401).json({ message: 'User session not found, please sign in again.' });
+        }
       }
 
       if (!req.user) {
-        // Search in-memory users fallback
+        // Search in-memory users fallback only if DB is completely offline
         const memUser = memoryUsers.find(
           (u) => u._id === decoded.id || u.id === decoded.id || u.email === decoded.email
         );
         if (memUser && mongoose.Types.ObjectId.isValid(memUser._id)) {
           const { password, ...userWithoutPassword } = memUser;
           req.user = userWithoutPassword;
-        } else if (mongoose.Types.ObjectId.isValid(decoded.id)) {
-          // Fallback mock user with token payload information (only if ObjectId is valid)
-          req.user = {
-            _id: decoded.id,
-            id: decoded.id,
-            name: decoded.name || 'User',
-            email: decoded.email || 'user@example.com',
-            targetRole: decoded.targetRole || 'Full Stack Engineer',
-          };
         } else {
           return res.status(401).json({ message: 'User session not found, please sign in again.' });
         }

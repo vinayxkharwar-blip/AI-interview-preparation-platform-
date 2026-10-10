@@ -98,10 +98,23 @@ const MOCK_JOBS = [
 export const calculateJobMatch = (userSkills = [], jobSkills = []) => {
   if (!Array.isArray(jobSkills) || jobSkills.length === 0) {
     return {
-      matchPercentage: 85,
-      matchedSkills: userSkills,
+      matchPercentage: 0,
+      matchedSkills: [],
       missingSkills: [],
       skillRecommendations: [],
+    };
+  }
+
+  if (!Array.isArray(userSkills) || userSkills.length === 0) {
+    return {
+      matchPercentage: 0,
+      matchedSkills: [],
+      missingSkills: [...jobSkills],
+      skillRecommendations: jobSkills.slice(0, 3).map((skill) => ({
+        skill,
+        recommendation: `Gain hands-on proficiency in ${skill} to increase ATS interview eligibility by +15%.`,
+        resources: `Recommended Practice: Complete a 2-hour mini project incorporating ${skill}.`,
+      })),
     };
   }
 
@@ -122,8 +135,7 @@ export const calculateJobMatch = (userSkills = [], jobSkills = []) => {
   });
 
   const rawScore = (matchedSkills.length / jobSkills.length) * 100;
-  // Baseline match score between 55% and 98%
-  const matchPercentage = Math.min(98, Math.max(55, Math.round(rawScore)));
+  const matchPercentage = matchedSkills.length === 0 ? 0 : Math.min(98, Math.max(15, Math.round(rawScore)));
 
   const skillRecommendations = missingSkills.map((skill) => ({
     skill,

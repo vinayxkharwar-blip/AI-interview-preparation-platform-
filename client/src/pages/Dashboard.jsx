@@ -33,15 +33,31 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [selectedJobForPrep, setSelectedJobForPrep] = useState(null);
 
-  // Today's goals interactive state
-  const [goals, setGoals] = useState([
+  const initialGoals = [
     { id: 1, text: 'Upload or optimize your ATS resume', completed: false },
     { id: 2, text: 'Explore top recommended jobs & match scores', completed: false },
     { id: 3, text: 'Generate an AI cover letter for your target role', completed: false },
     { id: 4, text: 'Complete a 15-minute mock interview loop', completed: false },
-  ]);
+  ];
+
+  // Today's goals interactive state
+  const [goals, setGoals] = useState(initialGoals);
+
+  const currentUserId = user?.id || user?._id;
 
   useEffect(() => {
+    // Reset all state when user changes or on fresh mount
+    setSessions([]);
+    setResumes([]);
+    setJobs([]);
+    setApplications([]);
+    setGoals(initialGoals);
+
+    if (!currentUserId) {
+      setLoading(false);
+      return;
+    }
+
     const fetchData = async () => {
       setLoading(true);
       try {
@@ -52,18 +68,20 @@ export default function Dashboard() {
           axiosClient.get('/applications'),
         ]);
 
+        let hasResume = false;
         if (sessRes.status === 'fulfilled') setSessions(sessRes.value.data || []);
         if (resRes.status === 'fulfilled') {
           const resData = resRes.value.data || [];
           setResumes(resData);
           if (resData.length > 0) {
+            hasResume = true;
             setGoals((prev) => prev.map((g) => (g.id === 1 ? { ...g, completed: true } : g)));
           }
         }
         if (jobsRes.status === 'fulfilled') {
           const jobsData = jobsRes.value.data || [];
           setJobs(jobsData);
-          if (jobsData.length > 0) {
+          if (hasResume && jobsData.some((j) => (j.matchPercentage || 0) > 0)) {
             setGoals((prev) => prev.map((g) => (g.id === 2 ? { ...g, completed: true } : g)));
           }
         }
@@ -78,28 +96,29 @@ export default function Dashboard() {
     };
 
     fetchData();
-  }, []);
+  }, [currentUserId]);
 
   const toggleGoal = (id) => {
     setGoals(goals.map((g) => (g.id === id ? { ...g, completed: !g.completed } : g)));
   };
 
   const latestResume = resumes.length > 0 ? resumes[0] : null;
-  const atsScore = typeof latestResume?.parsedData?.atsScore === 'number' ? latestResume.parsedData.atsScore : 82;
+  const atsScore = typeof latestResume?.parsedData?.atsScore === 'number' ? latestResume.parsedData.atsScore : null;
   const featuredJob = jobs.length > 0 ? jobs[0] : null;
+  const matchedJobs = latestResume ? jobs.filter((j) => (j.matchPercentage || 0) > 0) : [];
 
-  // Composite Career Health Score (0-100)
-  const resumeQualityPart = latestResume ? atsScore * 0.3 : 0;
-  const skillMatchPart = featuredJob ? (featuredJob.matchPercentage || 85) * 0.25 : 20;
+  // Composite Career Health Score (0-100): Calculated strictly from candidate's genuine records
+  const resumeQualityPart = latestResume && atsScore !== null ? atsScore * 0.3 : 0;
+  const skillMatchPart = latestResume && featuredJob && (featuredJob.matchPercentage || 0) > 0 ? featuredJob.matchPercentage * 0.25 : 0;
   const applicationPart = applications.length > 0 ? Math.min(20, applications.length * 5) : 0;
-  const interviewPart = sessions.length > 0 ? Math.min(25, sessions.length * 8) : 10;
+  const interviewPart = sessions.length > 0 ? Math.min(25, sessions.length * 8) : 0;
   const careerHealthScore = Math.round(resumeQualityPart + skillMatchPart + applicationPart + interviewPart);
 
   // Timeline progress
   const timelineSteps = [
     { label: 'Resume Uploaded', completed: Boolean(latestResume) },
     { label: 'Resume Optimized', completed: Boolean(latestResume) },
-    { label: 'Jobs Matched', completed: jobs.length > 0 },
+    { label: 'Jobs Matched', completed: Boolean(latestResume) && matchedJobs.length > 0 },
     { label: 'Application Submitted', completed: applications.length > 0 },
     { label: 'Interview Practiced', completed: sessions.length > 0 },
     { label: 'Offer Received', completed: applications.some((a) => a.status === 'offer') },
@@ -144,7 +163,7 @@ export default function Dashboard() {
       {/* 2. NEXT BEST ACTION ENGINE BANNER */}
       <NextBestAction
         hasResume={Boolean(latestResume)}
-        hasJobs={jobs.length > 0}
+        hasJobs={matchedJobs.length > 0}
         hasCoverLetter={false}
         hasApplications={applications.length > 0}
         hasInterviews={sessions.length > 0}
@@ -156,15 +175,17 @@ export default function Dashboard() {
         <div className="bg-[#FDFBF3] border-2 border-[#0F1E1B] rounded-2xl p-4 space-y-1 shadow-xs">
           <span className="text-[10px] font-black uppercase text-[#C1440E]">ATS Score</span>
           <div className="text-2xl sm:text-3xl font-black font-serif-headline text-[#0F1E1B]">
-            {atsScore}<span className="text-xs text-[#0F1E1B]/60">/100</span>
+            {atsScore !== null ? atsScore : '—'}{atsScore !== null && <span className="text-xs text-[#0F1E1B]/60">/100</span>}
           </div>
-          <span className="text-[10px] font-bold text-emerald-800">Resume Quality</span>
+          <span className="text-[10px] font-bold text-emerald-800">
+            {latestResume ? 'Resume Quality' : 'No Resume Yet'}
+          </span>
         </div>
 
         <div className="bg-[#FDFBF3] border-2 border-[#0F1E1B] rounded-2xl p-4 space-y-1 shadow-xs">
           <span className="text-[10px] font-black uppercase text-[#0F1E1B]">Jobs Matched</span>
           <div className="text-2xl sm:text-3xl font-black font-serif-headline text-[#0F1E1B]">
-            {jobs.length}
+            {matchedJobs.length}
           </div>
           <span className="text-[10px] font-bold text-[#0F1E1B]/70">Matched Roles</span>
         </div>

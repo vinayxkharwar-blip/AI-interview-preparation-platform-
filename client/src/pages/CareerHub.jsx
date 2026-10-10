@@ -275,11 +275,11 @@ export default function CareerHub() {
           {/* TAB 1: Career Dashboard */}
           {activeTab === 'dashboard' && (
             <CareerDashboard
-              atsScore={typeof latestResume?.parsedData?.atsScore === 'number' ? latestResume.parsedData.atsScore : 82}
-              jobsFoundCount={jobs.length}
+              atsScore={typeof latestResume?.parsedData?.atsScore === 'number' ? latestResume.parsedData.atsScore : null}
+              jobsFoundCount={latestResume ? jobs.filter((j) => (j.matchPercentage || 0) > 0).length : 0}
               savedJobsCount={savedJobs.length}
               applications={applications}
-              topSkills={latestResume?.parsedData?.skills || ['React', 'Node.js', 'TypeScript', 'MongoDB', 'AWS', 'Docker']}
+              topSkills={latestResume?.parsedData?.skills || []}
             />
           )}
 

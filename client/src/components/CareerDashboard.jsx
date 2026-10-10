@@ -12,17 +12,17 @@ import {
 } from 'lucide-react';
 
 export default function CareerDashboard({ 
-  atsScore = 82, 
-  jobsFoundCount = 6, 
+  atsScore = null, 
+  jobsFoundCount = 0, 
   savedJobsCount = 0, 
   applications = [], 
-  topSkills = ['React', 'Node.js', 'TypeScript', 'MongoDB', 'AWS', 'Docker'] 
+  topSkills = [] 
 }) {
   const interviewCallsCount = applications.filter((a) => a.status === 'interview').length;
   const offersCount = applications.filter((a) => a.status === 'offer').length;
   const totalApps = applications.length;
 
-  const avgMatch = 89;
+  const avgMatch = atsScore ? 89 : 0;
 
   return (
     <div className="space-y-6">
@@ -37,9 +37,11 @@ export default function CareerDashboard({
             <span className="text-[10px] font-black uppercase tracking-wider">ATS Score</span>
           </div>
           <div className="text-2xl sm:text-3xl font-black font-serif-headline text-[#0F1E1B]">
-            {atsScore}<span className="text-sm font-bold text-[#0F1E1B]/60">/100</span>
+            {atsScore !== null ? atsScore : '—'}{atsScore !== null && <span className="text-sm font-bold text-[#0F1E1B]/60">/100</span>}
           </div>
-          <span className="text-[10px] font-bold text-emerald-700">High Match Quality</span>
+          <span className="text-[10px] font-bold text-emerald-700">
+            {atsScore !== null ? 'High Match Quality' : 'Upload Resume to Score'}
+          </span>
         </div>
 
         {/* Jobs Found Card */}
@@ -163,17 +165,23 @@ export default function CareerDashboard({
             </h3>
           </div>
 
-          <div className="flex flex-wrap gap-2 pt-2">
-            {topSkills.map((skill, idx) => (
-              <div
-                key={idx}
-                className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-[#F5F2E6] border-2 border-[#0F1E1B] text-xs font-extrabold text-[#0F1E1B]"
-              >
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700" />
-                <span>{skill}</span>
-              </div>
-            ))}
-          </div>
+          {topSkills && topSkills.length > 0 ? (
+            <div className="flex flex-wrap gap-2 pt-2">
+              {topSkills.map((skill, idx) => (
+                <div
+                  key={idx}
+                  className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-[#F5F2E6] border-2 border-[#0F1E1B] text-xs font-extrabold text-[#0F1E1B]"
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700" />
+                  <span>{skill}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs text-[#0F1E1B]/60 italic pt-2">
+              No skills extracted yet. Upload your resume in Resume Studio to calculate marketable skills.
+            </p>
+          )}
 
           <p className="text-xs text-[#0F1E1B]/70 pt-2 border-t border-[#0F1E1B]/10 leading-relaxed">
             💡 <strong>AI Career Tip:</strong> Adding cloud orchestration (Docker, Kubernetes) to your resume increases high-tier fullstack job matches by up to <strong>+22%</strong>.
