@@ -22,15 +22,15 @@ export default function Analytics() {
   }, []);
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8 animate-fadeIn">
-      <div className="bg-[#FDFBF3] text-[#0F1E1B] p-8 rounded-3xl border-3 border-[#0F1E1B] editorial-shadow-lg">
-        <div className="flex items-center space-x-3 mb-2">
-          <div className="p-2.5 bg-[#F5D90A] border-2 border-[#0F1E1B] rounded-xl text-[#0F1E1B]">
-            <BarChart3 className="w-6 h-6" />
+    <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-8 space-y-5 sm:space-y-8 animate-fadeIn">
+      <div className="bg-[#FDFBF3] text-[#0F1E1B] p-4 sm:p-8 rounded-2xl sm:rounded-3xl border-3 border-[#0F1E1B] editorial-shadow-lg">
+        <div className="flex items-center space-x-2.5 sm:space-x-3 mb-2">
+          <div className="p-2 sm:p-2.5 bg-[#F5D90A] border-2 border-[#0F1E1B] rounded-xl text-[#0F1E1B] shrink-0">
+            <BarChart3 className="w-5 h-5 sm:w-6 sm:h-6" />
           </div>
-          <h1 className="font-serif-headline text-3xl sm:text-4xl font-bold text-[#0F1E1B]">Performance Analytics & Skill Radar</h1>
+          <h1 className="font-serif-headline text-xl sm:text-4xl font-bold text-[#0F1E1B] leading-tight">Performance Analytics & Radar</h1>
         </div>
-        <p className="text-sm text-[#0F1E1B]/80 font-medium">
+        <p className="text-xs sm:text-sm text-[#0F1E1B]/80 font-medium">
           Aggregated score progression, domain proficiency radar, and recurring weakness topic breakdowns calculated across all your practice loops.
         </p>
       </div>

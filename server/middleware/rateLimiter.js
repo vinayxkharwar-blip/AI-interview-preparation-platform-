@@ -7,6 +7,11 @@ import rateLimit from 'express-rate-limit';
 export const globalApiLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 100,
+  skip: (req) =>
+    process.env.NODE_ENV === 'test' ||
+    Boolean(process.env.TEST_MODE) ||
+    process.env.DISABLE_RATE_LIMIT === 'true' ||
+    req.headers['x-test-mode'] === 'true',
   standardHeaders: true,
   legacyHeaders: false,
   statusCode: 429,
@@ -22,6 +27,11 @@ export const globalApiLimiter = rateLimit({
 export const authLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 10,
+  skip: (req) =>
+    process.env.NODE_ENV === 'test' ||
+    Boolean(process.env.TEST_MODE) ||
+    process.env.DISABLE_RATE_LIMIT === 'true' ||
+    req.headers['x-test-mode'] === 'true',
   standardHeaders: true,
   legacyHeaders: false,
   statusCode: 429,

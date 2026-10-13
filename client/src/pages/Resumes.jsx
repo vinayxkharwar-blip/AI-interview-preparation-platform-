@@ -1,618 +1,769 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axiosClient from '../api/axiosClient';
+import { AuthContext } from '../context/AuthContext';
 import ResumeUpload from '../components/ResumeUpload';
-import JobCard from '../components/JobCard';
 import { 
-  Sparkles, 
   FileText, 
+  Sparkles, 
   Target, 
   Briefcase, 
   CheckCircle2, 
-  AlertCircle, 
+  AlertTriangle, 
   ArrowRight, 
-  Send, 
-  Bookmark, 
   PlayCircle, 
-  Award, 
-  TrendingUp, 
-  Lightbulb, 
-  Loader2,
+  Clock, 
+  Trash2, 
+  Check, 
+  ExternalLink,
+  ChevronDown,
+  ChevronUp,
   FileCheck,
-  Building2,
-  Check,
-  ChevronRight
+  ShieldCheck,
+  Zap,
+  Info,
+  Loader2
 } from 'lucide-react';
+
+import TargetRoleSelector from '../components/common/TargetRoleSelector';
 
 export default function Resumes() {
   const navigate = useNavigate();
+  const { user } = useContext(AuthContext);
 
   const [resumes, setResumes] = useState([]);
-  const [recommendedJobs, setRecommendedJobs] = useState([]);
-  const [savedJobs, setSavedJobs] = useState([]);
-  const [applications, setApplications] = useState([]);
+  const [activeResumeId, setActiveResumeId] = useState(() => {
+    return localStorage.getItem('preppilot_active_resume_id') || '';
+  });
   const [loading, setLoading] = useState(true);
+  const [deletingId, setDeletingId] = useState(null);
+  const [showAllHistory, setShowAllHistory] = useState(false);
+  const [showImproveTips, setShowImproveTips] = useState(false);
+  const [isSelectingRole, setIsSelectingRole] = useState(false);
+  const [actionSuccessMessage, setActionSuccessMessage] = useState('');
 
-  const fetchData = async () => {
+  // Selected target role explicitly chosen by user for job matching/interviews
+  const [selectedTargetRole, setSelectedTargetRole] = useState(() => {
+    return localStorage.getItem('preppilot_target_role') || user?.targetRole || '';
+  });
+
+  const fetchResumes = async () => {
     setLoading(true);
     try {
-      // 1. Fetch user resumes
-      const resRes = await axiosClient.get('/resumes');
-      const resumesData = resRes.data || [];
+      const res = await axiosClient.get('/resumes');
+      const resumesData = Array.isArray(res.data) ? res.data : [];
       setResumes(resumesData);
 
-      // 2. Fetch top recommended jobs
-      const jobsRes = await axiosClient.get('/jobs/recommendations');
-      setRecommendedJobs(jobsRes.data || []);
-
-      // 3. Fetch saved jobs
-      const savedRes = await axiosClient.get('/jobs/saved');
-      setSavedJobs(savedRes.data || []);
-
-      // 4. Fetch applications
-      const appsRes = await axiosClient.get('/applications');
-      setApplications(appsRes.data || []);
+      // Set active resume fallback to latest if not set or invalid
+      const storedActiveId = localStorage.getItem('preppilot_active_resume_id');
+      const foundStored = resumesData.find((r) => String(r._id) === String(storedActiveId));
+      if (foundStored) {
+        setActiveResumeId(String(foundStored._id));
+      } else if (resumesData.length > 0) {
+        setActiveResumeId(String(resumesData[0]._id));
+        localStorage.setItem('preppilot_active_resume_id', String(resumesData[0]._id));
+      }
     } catch (err) {
-      console.error('Failed to fetch resume page data:', err);
+      console.error('Failed to fetch resumes:', err);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchData();
+    fetchResumes();
   }, []);
 
   const handleUploadSuccess = (newResume) => {
     setResumes((prev) => [newResume, ...prev]);
-    fetchData();
+    const newId = String(newResume._id);
+    setActiveResumeId(newId);
+    localStorage.setItem('preppilot_active_resume_id', newId);
+
+    // Keep detectedTargetRole strictly from resume analysis;
+    // do NOT silently overwrite user's selected/custom target role.
+    setActionSuccessMessage('Resume analyzed and set as active profile!');
+    setTimeout(() => setActionSuccessMessage(''), 3500);
   };
 
-  // Handle Save / Unsave Job
-  const handleSaveToggle = async (job) => {
-    const isSaved = savedJobs.some((sj) => sj.jobId === job.id || sj.jobId === job.jobId);
-    if (isSaved) {
-      const savedItem = savedJobs.find((sj) => sj.jobId === job.id || sj.jobId === job.jobId);
-      if (savedItem) {
-        try {
-          await axiosClient.delete(`/jobs/save/${savedItem._id || savedItem.id}`);
-          setSavedJobs(savedJobs.filter((sj) => sj.jobId !== (job.id || job.jobId)));
-        } catch (e) {
-          console.error(e);
+  const handleSelectActiveResume = (resumeId) => {
+    const stringId = String(resumeId);
+    setActiveResumeId(stringId);
+    localStorage.setItem('preppilot_active_resume_id', stringId);
+
+    const selected = resumes.find((r) => String(r._id) === stringId);
+    setActionSuccessMessage(`Active profile switched to "${selected?.fileName || 'Resume'}"`);
+    setTimeout(() => setActionSuccessMessage(''), 3000);
+  };
+
+  const handleUpdateSelectedRole = (newRole) => {
+    const cleanRole = (newRole || '').trim();
+    setSelectedTargetRole(cleanRole);
+    try {
+      localStorage.setItem('preppilot_target_role', cleanRole);
+    } catch (e) {}
+    setIsSelectingRole(false);
+    setActionSuccessMessage(`Target role set to "${cleanRole}" for job matching and interview prep.`);
+    setTimeout(() => setActionSuccessMessage(''), 3500);
+  };
+
+  const handleDeleteResume = async (resumeId, fileName) => {
+    const confirmDelete = window.confirm(`Are you sure you want to delete "${fileName}"? This cannot be undone.`);
+    if (!confirmDelete) return;
+
+    setDeletingId(resumeId);
+    try {
+      await axiosClient.delete(`/resumes/${resumeId}`);
+      const updated = resumes.filter((r) => String(r._id) !== String(resumeId));
+      setResumes(updated);
+
+      if (String(activeResumeId) === String(resumeId)) {
+        if (updated.length > 0) {
+          const nextId = String(updated[0]._id);
+          setActiveResumeId(nextId);
+          localStorage.setItem('preppilot_active_resume_id', nextId);
+        } else {
+          setActiveResumeId('');
+          localStorage.removeItem('preppilot_active_resume_id');
         }
       }
-    } else {
-      try {
-        const res = await axiosClient.post('/jobs/save', {
-          jobId: job.id || job.jobId,
-          title: job.title,
-          company: job.company,
-          logo: job.logo,
-          location: job.location,
-          salary: job.salary,
-          jobType: job.jobType,
-          experience: job.experience,
-          description: job.description,
-          skills: job.skills,
-          applyUrl: job.applyUrl,
-          matchedSkills: job.matchedSkills,
-          missingSkills: job.missingSkills,
-          matchPercentage: job.matchPercentage,
-        });
-
-        setSavedJobs([res.data.savedJob, ...savedJobs]);
-      } catch (e) {
-        console.error(e);
-      }
+      setActionSuccessMessage('Resume deleted successfully.');
+      setTimeout(() => setActionSuccessMessage(''), 3000);
+    } catch (err) {
+      console.error('Failed to delete resume:', err);
+      alert(err.response?.data?.message || 'Failed to delete resume.');
+    } finally {
+      setDeletingId(null);
     }
   };
 
-  // Handle Apply Job
-  const handleApplyJob = async (job) => {
-    try {
-      const res = await axiosClient.post('/applications', {
-        jobId: job.id || job.jobId,
-        title: job.title,
-        company: job.company,
-        logo: job.logo,
-        location: job.location,
-        status: 'applied',
-        applyUrl: job.applyUrl,
-      });
-
-      setApplications([res.data.application, ...applications]);
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
-  const latestResume = resumes.length > 0 ? resumes[0] : null;
-  const parsed = latestResume?.parsedData || {};
+  // Determine active resume
+  const activeResume = resumes.find((r) => String(r._id) === String(activeResumeId)) || (resumes.length > 0 ? resumes[0] : null);
+  const parsed = activeResume?.parsedData || {};
   const atsScore = typeof parsed.atsScore === 'number' ? parsed.atsScore : 82;
-  const targetRole = parsed.targetRole || 'Full Stack Engineer';
 
-  // Career Progress Checklist items
-  const progressChecklist = [
-    { label: 'Resume Uploaded', completed: Boolean(latestResume) },
-    { label: 'Resume Score Generated', completed: Boolean(latestResume) },
-    { label: 'Jobs Recommended', completed: recommendedJobs.length > 0 },
-    { label: 'Cover Letter Generated', completed: false },
-    { label: 'Interview Practiced', completed: false },
-    { label: 'Application Submitted', completed: applications.length > 0 },
-    { label: 'Offer Received', completed: applications.some((a) => a.status === 'offer') },
-  ];
+  // 1. Detected Target Role: purely inferred from active resume
+  const rawDetectedRole = parsed.targetRole;
+  const detectedTargetRole =
+    typeof rawDetectedRole === 'string' &&
+    rawDetectedRole.trim() &&
+    !['null', 'none', 'n/a', 'undefined', 'not detected', 'unknown'].includes(rawDetectedRole.trim().toLowerCase())
+      ? rawDetectedRole.trim()
+      : null;
 
-  const workflowSteps = [
-    { step: '1', title: 'Upload Resume', desc: 'PDF / DOCX' },
-    { step: '2', title: 'ATS Analysis', desc: 'Score & Skills' },
-    { step: '3', title: 'Job Match', desc: 'Match % & Gaps' },
-    { step: '4', title: 'Cover Letter', desc: 'AI Generator' },
-    { step: '5', title: 'Apply', desc: 'Track Pipeline' },
-    { step: '6', title: 'AI Interview', desc: 'Mock Loops' },
-  ];
+  // 2. Effective Role for downstream workflows (custom selection takes priority, then detected)
+  const effectiveWorkflowRole = selectedTargetRole || detectedTargetRole || '';
+
+  const skills = parsed.skills || [];
+  const strengths = parsed.strengths || [];
+  const weaknesses = parsed.weaknesses || [];
+  const missingSkills = parsed.missingSkills || [];
+
+  // History list: display latest 5 or all
+  const historyList = showAllHistory ? resumes : resumes.slice(0, 5);
+
+  if (loading && resumes.length === 0) {
+    return (
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-20 flex flex-col items-center justify-center space-y-3">
+        <Loader2 className="w-8 h-8 animate-spin text-[#F47721]" />
+        <p className="text-xs font-bold text-[#10221D]/70">Loading Resume Studio...</p>
+      </div>
+    );
+  }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-10 animate-fadeIn">
-      
-      {/* SECTION 1: Hero Section with Visual Workflow */}
-      <div className="bg-[#0F1E1B] text-[#FDFBF3] rounded-3xl p-6 sm:p-8 space-y-6 editorial-shadow-lg relative overflow-hidden">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center relative z-10">
-          
-          {/* Left Title & Description */}
-          <div className="lg:col-span-6 space-y-4">
-            <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-xl bg-[#F5D90A] text-[#0F1E1B] text-xs font-black">
-              <Sparkles className="w-4 h-4 text-[#0F1E1B]" />
-              <span>🚀 AI Career Hub Gateway</span>
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6 animate-fadeIn">
+      {/* ================= 1. COMPACT HEADER ================= */}
+      <div className="bg-[#FDFBF3] rounded-2xl border-2 border-[#10221D] editorial-shadow-sm p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="space-y-0.5">
+          <div className="flex items-center space-x-2">
+            <div className="w-8 h-8 rounded-xl bg-[#10221D] text-[#FFC400] flex items-center justify-center font-bold shadow-xs">
+              <FileCheck className="w-4 h-4" />
             </div>
-            
-            <h1 className="text-3xl sm:text-4xl font-black font-serif-headline tracking-tight text-[#FDFBF3] leading-tight">
-              Upload your resume once and let AI guide your entire job search journey.
+            <h1 className="font-serif-headline text-2xl sm:text-3xl font-black text-[#10221D]">
+              Resume Studio
             </h1>
-            
-            <p className="text-xs sm:text-sm text-[#FDFBF3]/80 leading-relaxed font-sans-body">
-              Our AI automatically analyzes your document to calculate ATS compatibility, recommend top-tier jobs, generate customized cover letters, and prepare you for technical interviews.
-            </p>
-
-            <div className="grid grid-cols-2 gap-2 pt-2">
-              {[
-                'Analyze Resume',
-                'Calculate ATS Score',
-                'Extract Skills',
-                'Recommend Jobs',
-                'Calculate Job Match %',
-                'Generate Cover Letters',
-                'Track Applications',
-                'Start AI Mock Interviews',
-              ].map((feat, idx) => (
-                <div key={idx} className="flex items-center space-x-1.5 text-xs font-bold text-[#F5D90A]">
-                  <span>✓</span>
-                  <span className="text-[#FDFBF3]">{feat}</span>
-                </div>
-              ))}
-            </div>
           </div>
+          <p className="text-xs sm:text-sm text-[#10221D]/70 font-medium">
+            Upload, analyze and optimize your resume for applicant tracking systems (ATS).
+          </p>
+        </div>
 
-          {/* Right Visual Workflow Diagram */}
-          <div className="lg:col-span-6 bg-[#FDFBF3]/10 border border-[#FDFBF3]/20 rounded-2xl p-5 backdrop-blur-sm space-y-3">
-            <h3 className="text-xs font-extrabold uppercase tracking-wider text-[#F5D90A] text-center">
-              Automated AI Career Workflow Timeline
-            </h3>
-
-            <div className="grid grid-cols-3 gap-3 pt-1">
-              {workflowSteps.map((ws, i) => (
-                <div
-                  key={i}
-                  className="bg-[#FDFBF3] text-[#0F1E1B] rounded-xl p-3 text-center border-2 border-[#F5D90A] shadow-sm flex flex-col justify-between space-y-1 relative"
-                >
-                  <span className="w-5 h-5 rounded-full bg-[#0F1E1B] text-[#F5D90A] font-black text-[10px] flex items-center justify-center mx-auto">
-                    {ws.step}
-                  </span>
-                  <p className="text-xs font-black font-serif-headline text-[#0F1E1B] leading-snug">
-                    {ws.title}
-                  </p>
-                  <span className="text-[9px] font-bold text-[#C1440E] uppercase">{ws.desc}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
+        <div className="flex items-center space-x-2 self-start sm:self-auto shrink-0">
+          <button
+            onClick={() => navigate('/career-hub')}
+            className="px-3 py-1.5 bg-[#FAF8F0] hover:bg-[#F5F2E6] text-[#10221D] rounded-xl text-xs font-bold border border-[#10221D]/30 transition-colors flex items-center space-x-1.5"
+          >
+            <Briefcase className="w-3.5 h-3.5 text-[#F47721]" />
+            <span>Open Career Hub</span>
+          </button>
         </div>
       </div>
 
-      {/* SECTION 2: Redesigned Upload Card */}
-      <ResumeUpload onUploadSuccess={handleUploadSuccess} />
-
-      {/* SECTION 3: Resume Summary Dashboard (If Resume Exists) */}
-      {latestResume && (
-        <div className="bg-[#FDFBF3] text-[#0F1E1B] p-6 sm:p-8 rounded-3xl border-3 border-[#0F1E1B] editorial-shadow-lg space-y-6">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b-2 border-[#0F1E1B]/10 pb-4">
-            <div className="flex items-center space-x-3">
-              <div className="p-3 bg-[#0F1E1B] text-[#F5D90A] rounded-2xl">
-                <FileCheck className="w-6 h-6" />
-              </div>
-              <div>
-                <span className="text-xs font-extrabold uppercase text-[#C1440E]">Analyzed Active Resume</span>
-                <h2 className="font-serif-headline text-2xl font-bold text-[#0F1E1B]">
-                  {latestResume.fileName}
-                </h2>
-              </div>
-            </div>
-
-            <div className="flex items-center space-x-2">
-              <button
-                onClick={() => navigate('/career-hub')}
-                className="px-4 py-2 rounded-xl bg-[#0F1E1B] text-[#FDFBF3] text-xs font-bold hover:bg-[#1A332E] transition-all flex items-center space-x-1.5 shadow-xs"
-              >
-                <Briefcase className="w-3.5 h-3.5 text-[#F5D90A]" />
-                <span>View Career Hub</span>
-              </button>
-
-              <button
-                onClick={() => navigate('/cover-letter')}
-                className="px-4 py-2 rounded-xl bg-[#F5D90A] text-[#0F1E1B] text-xs font-bold border-2 border-[#0F1E1B] hover:bg-[#e0c609] transition-all"
-              >
-                <span>Cover Letter</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Key Metrics Row */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            
-            <div className="bg-[#F5F2E6] border-2 border-[#0F1E1B] rounded-2xl p-4 space-y-1">
-              <span className="text-[10px] font-black uppercase text-[#C1440E]">ATS Score</span>
-              <div className="text-3xl font-black font-serif-headline text-[#0F1E1B]">
-                {atsScore}<span className="text-xs font-bold text-[#0F1E1B]/60">/100</span>
-              </div>
-              <span className="text-[10px] font-bold text-emerald-800">High Keyword Match</span>
-            </div>
-
-            <div className="bg-[#F5F2E6] border-2 border-[#0F1E1B] rounded-2xl p-4 space-y-1">
-              <span className="text-[10px] font-black uppercase text-[#0F1E1B]">Detected Role</span>
-              <div className="text-base font-black font-serif-headline text-[#0F1E1B] truncate">
-                {targetRole}
-              </div>
-              <span className="text-[10px] font-bold text-[#0F1E1B]/70">Primary Career Target</span>
-            </div>
-
-            <div className="bg-[#F5F2E6] border-2 border-[#0F1E1B] rounded-2xl p-4 space-y-1">
-              <span className="text-[10px] font-black uppercase text-[#0F1E1B]">Top Job Match</span>
-              <div className="text-3xl font-black font-serif-headline text-emerald-800">
-                {recommendedJobs.length > 0 ? `${recommendedJobs[0].matchPercentage}%` : '92%'}
-              </div>
-              <span className="text-[10px] font-bold text-[#0F1E1B]/70">{recommendedJobs[0]?.company || 'Stripe'}</span>
-            </div>
-
-            <div className="bg-[#F5F2E6] border-2 border-[#0F1E1B] rounded-2xl p-4 space-y-1">
-              <span className="text-[10px] font-black uppercase text-[#0F1E1B]">Matched Positions</span>
-              <div className="text-3xl font-black font-serif-headline text-[#0F1E1B]">
-                {recommendedJobs.length}
-              </div>
-              <span className="text-[10px] font-bold text-[#0F1E1B]/70">Active Openings</span>
-            </div>
-
-          </div>
-
-          {/* Extracted Skills & Strengths/Weaknesses Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-            
-            {/* Extracted Skills */}
-            <div className="bg-[#F5F2E6] border-2 border-[#0F1E1B] rounded-2xl p-5 space-y-2">
-              <span className="text-xs font-black uppercase tracking-wider text-[#0F1E1B] flex items-center space-x-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-[#C1440E]" />
-                <span>Extracted Skills ({parsed.skills?.length || 8})</span>
-              </span>
-              <div className="flex flex-wrap gap-1.5 pt-1">
-                {(parsed.skills || ['React', 'Node.js', 'TypeScript', 'MongoDB', 'AWS', 'Docker', 'REST API', 'GraphQL']).map((sk, i) => (
-                  <span key={i} className="px-2.5 py-0.5 rounded-lg bg-[#FDFBF3] border border-[#0F1E1B]/20 text-xs font-bold text-[#0F1E1B]">
-                    {sk}
-                  </span>
-                ))}
-              </div>
-            </div>
-
-            {/* Strengths & Improvements */}
-            <div className="bg-[#F5F2E6] border-2 border-[#0F1E1B] rounded-2xl p-5 space-y-2">
-              <span className="text-xs font-black uppercase tracking-wider text-[#C1440E] flex items-center space-x-1.5">
-                <Target className="w-3.5 h-3.5" />
-                <span>ATS Strengths & Skill Recommendations</span>
-              </span>
-              <ul className="space-y-1 text-xs font-bold text-[#0F1E1B]">
-                <li className="flex items-start space-x-1.5">
-                  <span className="text-emerald-700">✓</span>
-                  <span>Strong technical skill density for {targetRole} positions.</span>
-                </li>
-                <li className="flex items-start space-x-1.5">
-                  <span className="text-[#C1440E]">•</span>
-                  <span>Add cloud orchestration (Docker, AWS) to boost ATS match by +15%.</span>
-                </li>
-              </ul>
-            </div>
-
-          </div>
+      {actionSuccessMessage && (
+        <div className="p-3 bg-emerald-50 border border-emerald-400 rounded-xl text-emerald-900 text-xs font-bold flex items-center space-x-2 animate-fadeIn">
+          <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" />
+          <span>{actionSuccessMessage}</span>
         </div>
       )}
 
-      {/* SECTION 4: Recommended Jobs Preview (First 3 Jobs) */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <div className="p-2 bg-[#F5D90A] border-2 border-[#0F1E1B] rounded-xl text-[#0F1E1B]">
-              <Target className="w-5 h-5 text-[#0F1E1B]" />
-            </div>
-            <div>
-              <h2 className="font-serif-headline text-2xl font-bold text-[#0F1E1B]">
-                🎯 Top Recommended Jobs for Your Profile
+      {/* ================= 2. COMPACT RESUME UPLOAD ================= */}
+      <ResumeUpload onUploadSuccess={handleUploadSuccess} />
+
+      {/* ================= 3. ACTIVE RESUME ANALYSIS WORKSPACE ================= */}
+      {activeResume ? (
+        <div className="bg-[#FDFBF3] rounded-2xl border-2 border-[#10221D] editorial-shadow-sm p-5 sm:p-6 space-y-5">
+          {/* Active File Header & Actions Toolbar */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-[#10221D]/10">
+            <div className="space-y-1">
+              <div className="flex items-center space-x-2">
+                <span className="bg-[#FFC400] text-[#10221D] px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider">
+                  Active Profile
+                </span>
+                <span className="text-xs text-[#10221D]/60 font-medium flex items-center space-x-1">
+                  <Clock className="w-3 h-3" />
+                  <span>
+                    Uploaded {activeResume.createdAt ? new Date(activeResume.createdAt).toLocaleDateString() : 'Recently'}
+                  </span>
+                </span>
+              </div>
+              <h2 className="font-serif-headline text-xl sm:text-2xl font-black text-[#10221D]">
+                {activeResume.fileName}
               </h2>
-              <p className="text-xs text-[#0F1E1B]/75 font-medium">
-                AI-matched against your extracted skills, experience, and target role.
+            </div>
+
+            {/* Quick Action Toolbar */}
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={() => setShowImproveTips(!showImproveTips)}
+                className="px-3 py-1.5 bg-[#FAF8F0] hover:bg-[#F5F2E6] text-[#10221D] rounded-xl text-xs font-bold border border-[#10221D]/30 transition-colors flex items-center space-x-1"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-[#F47721]" />
+                <span>Improve Resume</span>
+                {showImproveTips ? <ChevronUp className="w-3 h-3 ml-0.5" /> : <ChevronDown className="w-3 h-3 ml-0.5" />}
+              </button>
+
+              <button
+                onClick={() =>
+                  navigate('/cover-letter', {
+                    state: {
+                      role: effectiveWorkflowRole,
+                      resumeId: activeResume._id,
+                    },
+                  })
+                }
+                className="px-3 py-1.5 bg-[#FAF8F0] hover:bg-[#F5F2E6] text-[#10221D] rounded-xl text-xs font-bold border border-[#10221D]/30 transition-colors flex items-center space-x-1"
+              >
+                <FileText className="w-3.5 h-3.5 text-[#10221D]" />
+                <span>Cover Letter</span>
+              </button>
+
+              <button
+                onClick={() =>
+                  navigate('/new-session', {
+                    state: {
+                      targetRole: effectiveWorkflowRole,
+                      resumeId: activeResume._id,
+                    },
+                  })
+                }
+                className="px-3 py-1.5 bg-[#10221D] hover:bg-[#1A332E] text-[#FAF8F0] rounded-xl text-xs font-bold border border-[#10221D] transition-colors flex items-center space-x-1 shadow-xs"
+              >
+                <PlayCircle className="w-3.5 h-3.5 text-[#FFC400]" />
+                <span>Practise Interview</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Collapsible Improve Tips Drawer */}
+          {showImproveTips && (
+            <div className="bg-[#F5F2E6] p-4 rounded-xl border border-[#10221D]/20 space-y-2.5 animate-fadeIn">
+              <div className="flex items-center space-x-2 text-xs font-black uppercase tracking-wider text-[#F47721]">
+                <Zap className="w-3.5 h-3.5" />
+                <span>Actionable ATS Optimization Tips</span>
+              </div>
+              <ul className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs font-medium text-[#10221D]/80">
+                <li className="flex items-start space-x-1.5">
+                  <span className="text-emerald-700 font-bold">•</span>
+                  <span>Use standard section headers: "Experience", "Skills", "Education", "Projects".</span>
+                </li>
+                <li className="flex items-start space-x-1.5">
+                  <span className="text-emerald-700 font-bold">•</span>
+                  <span>Incorporate metrics in bullet points (e.g., "reduced latency by 35%").</span>
+                </li>
+                <li className="flex items-start space-x-1.5">
+                  <span className="text-emerald-700 font-bold">•</span>
+                  <span>Match keywords directly from target job postings for higher keyword density.</span>
+                </li>
+                <li className="flex items-start space-x-1.5">
+                  <span className="text-emerald-700 font-bold">•</span>
+                  <span>Avoid tables, multi-column layouts, and images that confuse older ATS parsers.</span>
+                </li>
+              </ul>
+            </div>
+          )}
+
+          {/* Key Metrics Row: ATS Score vs Detected Role */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {/* ATS Score Card */}
+            <div className="bg-[#FAF8F0] border-2 border-[#10221D] rounded-xl p-4 space-y-1">
+              <div className="flex items-center justify-between text-[#F47721]">
+                <span className="text-[10px] font-black uppercase tracking-wider">ATS Score</span>
+                <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 px-1.5 py-0.5 rounded border border-emerald-300">
+                  {atsScore >= 80 ? 'Strong' : atsScore >= 60 ? 'Moderate' : 'Needs Work'}
+                </span>
+              </div>
+              <div className="text-3xl font-black font-serif-headline text-[#10221D]">
+                {atsScore}<span className="text-xs font-bold text-[#10221D]/50">/100</span>
+              </div>
+              <p className="text-[10px] text-[#10221D]/60 font-medium">
+                Keyword density & formatting score.
+              </p>
+            </div>
+
+            {/* Detected Role Card */}
+            <div className="bg-[#FAF8F0] border-2 border-[#10221D] rounded-xl p-4 space-y-1">
+              <div className="flex items-center justify-between text-[#10221D]/70">
+                <span className="text-[10px] font-black uppercase tracking-wider">
+                  Detected Target Role
+                </span>
+                {detectedTargetRole ? (
+                  <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 px-1.5 py-0.5 rounded border border-emerald-300">
+                    From Resume
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-bold text-amber-800 bg-amber-100 px-1.5 py-0.5 rounded border border-amber-300">
+                    Not Inferred
+                  </span>
+                )}
+              </div>
+
+              {detectedTargetRole ? (
+                <>
+                  <div className="text-lg font-black font-serif-headline text-[#10221D] truncate pt-1" title={detectedTargetRole}>
+                    {detectedTargetRole}
+                  </div>
+                  <div className="flex items-center justify-between pt-0.5">
+                    <p className="text-[10px] text-[#10221D]/60 font-medium">
+                      Inferred from resume content.
+                    </p>
+                    {selectedTargetRole !== detectedTargetRole && (
+                      <button
+                        onClick={() => handleUpdateSelectedRole(detectedTargetRole)}
+                        className="text-[10px] font-black text-[#F47721] hover:underline"
+                        title="Use detected role as active target goal"
+                      >
+                        Set as Goal →
+                      </button>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="text-base font-black font-serif-headline text-amber-900 pt-1 flex items-center space-x-1.5">
+                    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                    <span>Role not detected</span>
+                  </div>
+                  <div className="flex items-center justify-between pt-0.5">
+                    <p className="text-[10px] text-[#10221D]/60 font-medium">
+                      No explicit role identified in file.
+                    </p>
+                    <button
+                      onClick={() => setIsSelectingRole(true)}
+                      className="text-[10px] font-black text-[#F47721] hover:underline"
+                    >
+                      Select Role Manually →
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Total Extracted Skills Card */}
+            <div className="bg-[#FAF8F0] border-2 border-[#10221D] rounded-xl p-4 space-y-1">
+              <span className="text-[10px] font-black uppercase tracking-wider text-[#10221D]/70">
+                Extracted Skills
+              </span>
+              <div className="text-3xl font-black font-serif-headline text-[#10221D]">
+                {skills.length}
+              </div>
+              <p className="text-[10px] text-[#10221D]/60 font-medium">
+                Indexed for job match algorithms.
               </p>
             </div>
           </div>
 
-          <button
-            onClick={() => navigate('/career-hub')}
-            className="px-4 py-2 rounded-xl bg-[#0F1E1B] text-[#FDFBF3] text-xs font-bold hover:bg-[#1A332E] transition-all flex items-center space-x-1.5 shadow-xs"
-          >
-            <span>View All Jobs ({recommendedJobs.length})</span>
-            <ChevronRight className="w-4 h-4 text-[#F5D90A]" />
-          </button>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-          {recommendedJobs.slice(0, 3).map((job) => {
-            const isSaved = savedJobs.some((sj) => sj.jobId === job.id || sj.jobId === job.jobId);
-            return (
-              <JobCard
-                key={job.id || job.jobId}
-                job={job}
-                isSaved={isSaved}
-                onSaveToggle={handleSaveToggle}
-                onApply={handleApplyJob}
-              />
-            );
-          })}
-        </div>
-      </div>
-
-      {/* SECTION 5: Quick Actions Grid */}
-      <div className="space-y-4">
-        <h2 className="font-serif-headline text-2xl font-bold text-[#0F1E1B] flex items-center space-x-2">
-          <Sparkles className="w-5 h-5 text-[#C1440E]" />
-          <span>Quick Career Actions</span>
-        </h2>
-
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-          
-          <button
-            onClick={() => navigate('/cover-letter')}
-            className="p-4 rounded-2xl bg-[#FDFBF3] border-2 border-[#0F1E1B] text-left hover:bg-[#F5F2E6] transition-all space-y-2 group shadow-xs"
-          >
-            <div className="w-8 h-8 rounded-xl bg-[#0F1E1B] text-[#F5D90A] flex items-center justify-center font-bold">
-              <FileText className="w-4 h-4" />
+          {/* Active Target Goal / Custom Role Selection Status Bar */}
+          <div className="bg-[#FAF8F0] border border-[#10221D]/15 rounded-xl px-4 py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+            <div className="flex flex-wrap items-center gap-2">
+              <Target className="w-4 h-4 text-[#F47721] shrink-0" />
+              <span className="text-[#10221D]/70 font-medium">
+                Active Target Goal for job matches & interviews:
+              </span>
+              <span className="font-black text-[#10221D] bg-[#FFC400]/20 px-2 py-0.5 rounded border border-[#FFC400]/40">
+                {selectedTargetRole || detectedTargetRole || 'Not Selected'}
+              </span>
+              {selectedTargetRole && detectedTargetRole && selectedTargetRole !== detectedTargetRole && (
+                <span className="text-[10px] text-[#10221D]/50 font-normal">
+                  (Custom override of detected role)
+                </span>
+              )}
             </div>
-            <h4 className="text-xs font-black font-serif-headline text-[#0F1E1B] group-hover:text-[#C1440E]">
-              Cover Letter
-            </h4>
-            <span className="text-[10px] text-[#0F1E1B]/70 font-semibold block">AI Studio</span>
-          </button>
-
-          <button
-            onClick={() => navigate('/new-session')}
-            className="p-4 rounded-2xl bg-[#FDFBF3] border-2 border-[#0F1E1B] text-left hover:bg-[#F5F2E6] transition-all space-y-2 group shadow-xs"
-          >
-            <div className="w-8 h-8 rounded-xl bg-[#0F1E1B] text-[#F5D90A] flex items-center justify-center font-bold">
-              <PlayCircle className="w-4 h-4" />
-            </div>
-            <h4 className="text-xs font-black font-serif-headline text-[#0F1E1B] group-hover:text-[#C1440E]">
-              Practice Interview
-            </h4>
-            <span className="text-[10px] text-[#0F1E1B]/70 font-semibold block">Mock Loops</span>
-          </button>
-
-          <button
-            onClick={() => navigate('/career-hub')}
-            className="p-4 rounded-2xl bg-[#FDFBF3] border-2 border-[#0F1E1B] text-left hover:bg-[#F5F2E6] transition-all space-y-2 group shadow-xs"
-          >
-            <div className="w-8 h-8 rounded-xl bg-[#0F1E1B] text-[#F5D90A] flex items-center justify-center font-bold">
-              <Briefcase className="w-4 h-4" />
-            </div>
-            <h4 className="text-xs font-black font-serif-headline text-[#0F1E1B] group-hover:text-[#C1440E]">
-              Find More Jobs
-            </h4>
-            <span className="text-[10px] text-[#0F1E1B]/70 font-semibold block">Job Matching</span>
-          </button>
-
-          <button
-            onClick={() => navigate('/career-hub')}
-            className="p-4 rounded-2xl bg-[#FDFBF3] border-2 border-[#0F1E1B] text-left hover:bg-[#F5F2E6] transition-all space-y-2 group shadow-xs"
-          >
-            <div className="w-8 h-8 rounded-xl bg-[#0F1E1B] text-[#F5D90A] flex items-center justify-center font-bold">
-              <Send className="w-4 h-4" />
-            </div>
-            <h4 className="text-xs font-black font-serif-headline text-[#0F1E1B] group-hover:text-[#C1440E]">
-              Application Tracker
-            </h4>
-            <span className="text-[10px] text-[#0F1E1B]/70 font-semibold block">Pipeline</span>
-          </button>
-
-          <button
-            onClick={() => navigate('/career-hub')}
-            className="p-4 rounded-2xl bg-[#FDFBF3] border-2 border-[#0F1E1B] text-left hover:bg-[#F5F2E6] transition-all space-y-2 group shadow-xs"
-          >
-            <div className="w-8 h-8 rounded-xl bg-[#0F1E1B] text-[#F5D90A] flex items-center justify-center font-bold">
-              <Bookmark className="w-4 h-4 fill-current" />
-            </div>
-            <h4 className="text-xs font-black font-serif-headline text-[#0F1E1B] group-hover:text-[#C1440E]">
-              Saved Jobs
-            </h4>
-            <span className="text-[10px] text-[#0F1E1B]/70 font-semibold block">Bookmarked</span>
-          </button>
-
-          <button
-            onClick={() => window.scrollTo({ top: 300, behavior: 'smooth' })}
-            className="p-4 rounded-2xl bg-[#FDFBF3] border-2 border-[#0F1E1B] text-left hover:bg-[#F5F2E6] transition-all space-y-2 group shadow-xs"
-          >
-            <div className="w-8 h-8 rounded-xl bg-[#0F1E1B] text-[#F5D90A] flex items-center justify-center font-bold">
-              <FileCheck className="w-4 h-4" />
-            </div>
-            <h4 className="text-xs font-black font-serif-headline text-[#0F1E1B] group-hover:text-[#C1440E]">
-              Improve Resume
-            </h4>
-            <span className="text-[10px] text-[#0F1E1B]/70 font-semibold block">Re-upload</span>
-          </button>
-
-        </div>
-      </div>
-
-      {/* SECTION 6: Career Progress Tracker Widget */}
-      <div className="bg-[#FDFBF3] text-[#0F1E1B] p-6 rounded-3xl border-3 border-[#0F1E1B] space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="font-serif-headline text-lg font-bold text-[#0F1E1B] flex items-center space-x-2">
-            <TrendingUp className="w-5 h-5 text-emerald-700" />
-            <span>AI Career Progress Journey</span>
-          </h3>
-          <span className="text-xs font-black text-[#C1440E]">
-            {progressChecklist.filter((c) => c.completed).length} / {progressChecklist.length} Completed
-          </span>
-        </div>
-
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
-          {progressChecklist.map((item, idx) => (
-            <div
-              key={idx}
-              className={`p-3 rounded-2xl border text-center space-y-1.5 flex flex-col justify-between ${
-                item.completed
-                  ? 'bg-emerald-500/10 border-emerald-600 text-emerald-900'
-                  : 'bg-[#F5F2E6] border-[#0F1E1B]/20 text-[#0F1E1B]/60'
-              }`}
+            <button
+              onClick={() => setIsSelectingRole(!isSelectingRole)}
+              className="text-[#10221D] hover:text-[#F47721] font-bold text-xs underline decoration-[#F47721] self-start sm:self-auto"
             >
-              <div className="w-5 h-5 rounded-full mx-auto flex items-center justify-center text-xs font-bold">
-                {item.completed ? '✅' : '⏳'}
-              </div>
-              <span className="text-[11px] font-bold leading-tight block">{item.label}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* SECTION 7: AI Career Suggestions */}
-      <div className="bg-[#F5F2E6] border-2 border-[#0F1E1B] rounded-2xl p-5 space-y-3">
-        <div className="flex items-center space-x-2 text-[#0F1E1B]">
-          <Lightbulb className="w-5 h-5 text-[#F5D90A]" />
-          <h3 className="text-base font-bold font-serif-headline">AI Career Actionable Suggestions</h3>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs font-bold text-[#0F1E1B]">
-          <div className="p-3 bg-[#FDFBF3] rounded-xl border border-[#0F1E1B]/20 space-y-1">
-            <span className="text-[#C1440E] font-black">1. ATS Optimization</span>
-            <p className="text-[#0F1E1B]/80 font-normal">Add Docker & AWS keywords to raise resume match by +15%.</p>
+              {isSelectingRole ? 'Close Role Selector' : 'Change / Customize Goal'}
+            </button>
           </div>
-          <div className="p-3 bg-[#FDFBF3] rounded-xl border border-[#0F1E1B]/20 space-y-1">
-            <span className="text-[#C1440E] font-black">2. Application Momentum</span>
-            <p className="text-[#0F1E1B]/80 font-normal">Apply to 5 high-match jobs today to build your interview funnel.</p>
-          </div>
-          <div className="p-3 bg-[#FDFBF3] rounded-xl border border-[#0F1E1B]/20 space-y-1">
-            <span className="text-[#C1440E] font-black">3. Practice Technical Loop</span>
-            <p className="text-[#0F1E1B]/80 font-normal">Complete a 15-minute AI mock interview for {targetRole}.</p>
-          </div>
-        </div>
-      </div>
 
-      {/* SECTION 8: Navigation CTA Banner */}
-      <div className="bg-[#0F1E1B] text-[#FDFBF3] rounded-3xl p-8 text-center space-y-4 editorial-shadow-lg">
-        <div className="w-12 h-12 rounded-2xl bg-[#F5D90A] text-[#0F1E1B] flex items-center justify-center font-bold mx-auto">
-          <Sparkles className="w-6 h-6" />
-        </div>
-        <h2 className="text-2xl sm:text-3xl font-black font-serif-headline text-[#FDFBF3]">
-          Ready to Explore Your Matched Opportunities?
-        </h2>
-        <p className="text-xs sm:text-sm text-[#FDFBF3]/80 max-w-xl mx-auto font-sans-body">
-          Continue to the full AI Career Hub dashboard to manage saved jobs, generate custom cover letters, and track your application pipeline.
-        </p>
-
-        <button
-          onClick={() => navigate('/career-hub')}
-          className="px-8 py-4 rounded-2xl bg-[#F5D90A] text-[#0F1E1B] font-black text-sm hover:bg-[#e0c609] transition-all inline-flex items-center space-x-2 editorial-shadow"
-        >
-          <span>Continue to AI Career Hub</span>
-          <ArrowRight className="w-5 h-5 text-[#0F1E1B]" />
-        </button>
-      </div>
-
-      {/* Existing Uploaded Resumes List Section */}
-      <div className="bg-[#FDFBF3] text-[#0F1E1B] p-6 sm:p-8 rounded-3xl border-3 border-[#0F1E1B] editorial-shadow-lg space-y-6">
-        <h2 className="font-serif-headline text-2xl font-bold text-[#0F1E1B] flex items-center space-x-2">
-          <FileText className="w-6 h-6 text-[#C1440E]" />
-          <span>All Uploaded Resume Versions ({resumes.length})</span>
-        </h2>
-
-        {loading ? (
-          <div className="p-8 text-center text-[#0F1E1B]/70 font-medium">
-            <Loader2 className="w-6 h-6 animate-spin text-[#C1440E] mx-auto mb-2" />
-            <span>Loading uploaded documents...</span>
-          </div>
-        ) : resumes.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {resumes.map((res) => (
-              <div
-                key={res._id || res.id}
-                className="p-6 bg-[#F5F2E6] rounded-2xl border-2 border-[#0F1E1B] space-y-4 shadow-xs"
-              >
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center space-x-3">
-                    <div className="p-3 bg-[#0F1E1B] text-[#F5D90A] rounded-2xl">
-                      <FileText className="w-6 h-6" />
-                    </div>
-                    <div>
-                      <h3 className="font-bold text-[#0F1E1B] text-base">{res.fileName}</h3>
-                      <span className="text-xs text-[#0F1E1B]/60 font-medium flex items-center space-x-1 mt-0.5">
-                        <span>Uploaded: {new Date(res.createdAt).toLocaleDateString()}</span>
-                      </span>
-                    </div>
-                  </div>
-                  <span className="px-2.5 py-1 bg-[#FEF9C3] border border-[#0F1E1B] text-[#0F1E1B] text-xs font-bold rounded-xl uppercase">
-                    {res.fileType}
-                  </span>
+          {/* Interactive Target Role Selector Drawer */}
+          {isSelectingRole && (
+            <div className="bg-[#F5F2E6] p-4 rounded-xl border-2 border-[#10221D]/20 space-y-3 animate-fadeIn">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="font-serif-headline text-sm font-black text-[#10221D]">
+                    Customize Target Engineering Role
+                  </h4>
+                  <p className="text-[11px] text-[#10221D]/70">
+                    Select a predefined engineering path or enter a custom role (e.g. QA Engineer, Cybersecurity Analyst). Does not alter the original resume-detected role.
+                  </p>
                 </div>
+                <button
+                  onClick={() => setIsSelectingRole(false)}
+                  className="text-xs font-bold text-[#10221D]/60 hover:text-[#10221D]"
+                >
+                  Cancel
+                </button>
+              </div>
 
-                {res.parsedData?.targetRole && (
-                  <div className="flex items-center space-x-2 text-xs font-bold text-[#C1440E]">
-                    <Briefcase className="w-4 h-4" />
-                    <span>Target Role: {res.parsedData.targetRole}</span>
-                  </div>
-                )}
+              <TargetRoleSelector
+                value={selectedTargetRole || detectedTargetRole || ''}
+                onChange={handleUpdateSelectedRole}
+                onApply={handleUpdateSelectedRole}
+              />
+            </div>
+          )}
 
-                {/* Skills tags */}
-                {res.parsedData?.skills && res.parsedData.skills.length > 0 && (
-                  <div className="space-y-1.5">
-                    <span className="text-[11px] font-bold uppercase tracking-wider text-[#0F1E1B]/70">
-                      Extracted Technical Skills:
-                    </span>
-                    <div className="flex flex-wrap gap-1.5">
-                      {res.parsedData.skills.slice(0, 8).map((skill, idx) => (
-                        <span
-                          key={idx}
-                          className="px-2.5 py-0.5 bg-[#FDFBF3] border border-[#0F1E1B] text-[#0F1E1B] text-[11px] font-bold rounded-lg"
-                        >
-                          {skill}
+          {/* Extracted Skills Badges */}
+          <div className="space-y-2 pt-1">
+            <span className="text-xs font-black uppercase tracking-wider text-[#10221D]/70">
+              Extracted Skills & Keywords ({skills.length})
+            </span>
+            <div className="flex flex-wrap gap-1.5">
+              {skills.length > 0 ? (
+                skills.map((skill, idx) => (
+                  <span
+                    key={idx}
+                    className="px-2.5 py-1 rounded-lg bg-[#FAF8F0] border border-[#10221D]/20 text-xs font-bold text-[#10221D]"
+                  >
+                    {skill}
+                  </span>
+                ))
+              ) : (
+                <span className="text-xs text-[#10221D]/60 italic">No skills extracted yet.</span>
+              )}
+            </div>
+          </div>
+
+          {/* Missing Skills relative to Target Role */}
+          {missingSkills && missingSkills.length > 0 && (
+            <div className="p-3.5 bg-amber-50/70 border-2 border-amber-300/80 rounded-xl space-y-1.5">
+              <span className="text-xs font-black uppercase tracking-wider text-amber-900 flex items-center space-x-1.5">
+                <AlertTriangle className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+                <span>Recommended Skills to Add for {effectiveWorkflowRole || 'Target Role'} ({missingSkills.length})</span>
+              </span>
+              <div className="flex flex-wrap gap-1.5">
+                {missingSkills.map((sk, idx) => (
+                  <span
+                    key={idx}
+                    className="px-2.5 py-1 rounded-lg bg-white border border-amber-400 text-xs font-bold text-amber-900"
+                  >
+                    + {sk}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Strengths & Weaknesses 2-Column Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+            {/* Strengths */}
+            <div className="bg-[#FAF8F0] border border-[#10221D]/20 rounded-xl p-4 space-y-2">
+              <div className="flex items-center space-x-1.5 text-emerald-800 text-xs font-black uppercase tracking-wider">
+                <CheckCircle2 className="w-4 h-4 text-emerald-700" />
+                <span>Resume Strengths</span>
+              </div>
+              <ul className="space-y-1.5 text-xs text-[#10221D] font-medium">
+                {(strengths.length > 0
+                  ? strengths
+                  : [
+                      `Solid technical keyword density matching ${effectiveWorkflowRole || 'target'} positions.`,
+                      'Clear chronological employment progression with identifiable responsibilities.',
+                      'Readable section formatting recognized by applicant tracking software.',
+                    ]
+                ).map((str, idx) => (
+                  <li key={idx} className="flex items-start space-x-1.5">
+                    <span className="text-emerald-700 font-bold">✓</span>
+                    <span>{str}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {/* Improvement Suggestions */}
+            <div className="bg-[#FAF8F0] border border-[#10221D]/20 rounded-xl p-4 space-y-2">
+              <div className="flex items-center space-x-1.5 text-[#F47721] text-xs font-black uppercase tracking-wider">
+                <AlertTriangle className="w-4 h-4 text-[#F47721]" />
+                <span>Areas for ATS Improvement</span>
+              </div>
+              <ul className="space-y-1.5 text-xs text-[#10221D] font-medium">
+                {(weaknesses.length > 0
+                  ? weaknesses
+                  : [
+                      'Incorporate more quantitative impact metrics in project descriptions.',
+                      'Add cloud infrastructure and automated testing keywords to improve match scores.',
+                      'Ensure all skill abbreviations (e.g. AWS, CI/CD) are paired with full technology names.',
+                    ]
+                ).map((weak, idx) => (
+                  <li key={idx} className="flex items-start space-x-1.5">
+                    <span className="text-[#F47721] font-bold">•</span>
+                    <span>{weak}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+
+          {/* Note distinguishing ATS Score from Job Match % */}
+          <div className="p-3 bg-[#F5F2E6] rounded-xl border border-[#10221D]/10 text-[11px] text-[#10221D]/75 font-medium flex items-center space-x-2">
+            <Info className="w-4 h-4 text-[#10221D]/50 shrink-0" />
+            <span>
+              <strong>Note on ATS Score vs. Job Match:</strong> The ATS Score evaluates overall document format and general role keyword density. Specific job match percentages are calculated dynamically inside Career Hub for each job opening based on employer requirements.
+            </span>
+          </div>
+        </div>
+      ) : (
+        <div className="p-8 text-center bg-[#FDFBF3] rounded-2xl border-2 border-[#10221D] space-y-2">
+          <FileText className="w-8 h-8 text-[#10221D]/40 mx-auto" />
+          <h3 className="font-serif-headline text-lg font-bold text-[#10221D]">No Resumes Uploaded Yet</h3>
+          <p className="text-xs text-[#10221D]/60 max-w-sm mx-auto">
+            Upload your resume above to generate ATS evaluation metrics, skill breakdowns, and interview prep hooks.
+          </p>
+        </div>
+      )}
+
+      {/* ================= 4. COMPACT RESUME HISTORY TABLE ================= */}
+      <div className="bg-[#FDFBF3] rounded-2xl border-2 border-[#10221D] editorial-shadow-sm p-4 sm:p-5 space-y-3">
+        <div className="flex items-center justify-between pb-2 border-b border-[#10221D]/10">
+          <div>
+            <h3 className="font-serif-headline text-lg font-black text-[#10221D]">
+              Resume History ({resumes.length})
+            </h3>
+            <p className="text-xs text-[#10221D]/70 font-medium">
+              Manage your uploaded resume documents and select which profile to use across the platform.
+            </p>
+          </div>
+
+          {resumes.length > 5 && (
+            <button
+              onClick={() => setShowAllHistory(!showAllHistory)}
+              className="text-xs font-bold text-[#F47721] hover:underline"
+            >
+              {showAllHistory ? 'Show Less' : `View All (${resumes.length})`}
+            </button>
+          )}
+        </div>
+
+        {resumes.length === 0 ? (
+          <p className="text-xs text-[#10221D]/60 italic py-4 text-center">
+            No previous resumes uploaded.
+          </p>
+        ) : (
+          <div className="space-y-4">
+            {/* Mobile Card List (sm:hidden) */}
+            <div className="sm:hidden space-y-3">
+              {historyList.map((res) => {
+                const isCurrentActive = String(res._id) === String(activeResumeId);
+                const resScore = res.parsedData?.atsScore || '—';
+                const resRole = res.parsedData?.targetRole || 'Role not detected';
+                const resDate = res.createdAt ? new Date(res.createdAt).toLocaleDateString() : 'Recent';
+
+                return (
+                  <div
+                    key={res._id}
+                    className={`p-4 rounded-xl border-2 space-y-3 transition-colors ${
+                      isCurrentActive
+                        ? 'bg-[#FFC400]/15 border-[#10221D]'
+                        : 'bg-[#FAF8F0] border-[#10221D]/20'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center space-x-2 min-w-0">
+                        <FileText className="w-4 h-4 text-[#10221D]/70 shrink-0" />
+                        <span className="font-bold text-xs text-[#10221D] truncate" title={res.fileName}>
+                          {res.fileName}
                         </span>
-                      ))}
-                      {res.parsedData.skills.length > 8 && (
-                        <span className="text-[11px] text-[#0F1E1B]/60 font-bold self-center">
-                          +{res.parsedData.skills.length - 8} more
+                      </div>
+                      {isCurrentActive && (
+                        <span className="bg-[#10221D] text-[#FAF8F0] text-[9px] font-black px-1.5 py-0.5 rounded uppercase shrink-0">
+                          Active
                         </span>
                       )}
                     </div>
+
+                    <div className="grid grid-cols-2 gap-2 text-[11px] pt-1 border-t border-[#10221D]/10">
+                      <div>
+                        <span className="text-[#10221D]/60 block text-[10px] uppercase font-bold">Inferred Role</span>
+                        <span className="font-bold text-[#10221D] truncate block">{resRole}</span>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-[#10221D]/60 block text-[10px] uppercase font-bold">ATS Score</span>
+                        <span className="font-black text-[#10221D]">
+                          {resScore}
+                          {typeof resScore === 'number' && <span className="text-[9px] text-[#10221D]/50 font-normal">/100</span>}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-2 border-t border-[#10221D]/10 text-xs">
+                      <span className="text-[10px] text-[#10221D]/60 font-medium">Uploaded {resDate}</span>
+                      <div className="flex items-center space-x-3">
+                        {!isCurrentActive && (
+                          <button
+                            onClick={() => handleSelectActiveResume(res._id)}
+                            className="text-xs font-bold text-[#10221D] hover:underline cursor-pointer"
+                          >
+                            Set Active
+                          </button>
+                        )}
+                        <button
+                          onClick={() =>
+                            navigate('/new-session', {
+                              state: {
+                                targetRole: resRole,
+                                resumeId: res._id,
+                              },
+                            })
+                          }
+                          className="text-xs font-bold text-[#F47721] hover:underline cursor-pointer"
+                        >
+                          Interview →
+                        </button>
+                        <button
+                          onClick={() => handleDeleteResume(res._id, res.fileName)}
+                          disabled={deletingId === res._id}
+                          className="text-rose-700 hover:text-rose-900 disabled:opacity-50 cursor-pointer"
+                          title="Delete resume"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
                   </div>
-                )}
-              </div>
-            ))}
+                );
+              })}
+            </div>
+
+            {/* Desktop Table (Hidden on small mobile) */}
+            <div className="hidden sm:block overflow-x-auto">
+              <table className="w-full text-left text-xs min-w-[550px]">
+                <thead>
+                  <tr className="border-b border-[#10221D]/10 text-[#10221D]/60 font-black uppercase text-[10px]">
+                    <th className="py-2 pr-3">Document</th>
+                    <th className="py-2 px-3">Uploaded</th>
+                    <th className="py-2 px-3">Target Role</th>
+                    <th className="py-2 px-3">ATS Score</th>
+                    <th className="py-2 pl-3 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#10221D]/10">
+                  {historyList.map((res) => {
+                    const isCurrentActive = String(res._id) === String(activeResumeId);
+                    const resScore = res.parsedData?.atsScore || '—';
+                    const resRole = res.parsedData?.targetRole || 'Role not detected';
+                    const resDate = res.createdAt ? new Date(res.createdAt).toLocaleDateString() : 'Recent';
+
+                    return (
+                      <tr
+                        key={res._id}
+                        className={`hover:bg-[#F5F2E6]/60 transition-colors ${
+                          isCurrentActive ? 'bg-[#FFC400]/10 font-bold' : ''
+                        }`}
+                      >
+                        <td className="py-2.5 pr-3">
+                          <div className="flex items-center space-x-2">
+                            <FileText className="w-4 h-4 text-[#10221D]/60 shrink-0" />
+                            <span className="font-bold text-[#10221D] truncate max-w-[200px] sm:max-w-xs">
+                              {res.fileName}
+                            </span>
+                            {isCurrentActive && (
+                              <span className="bg-[#10221D] text-[#FAF8F0] text-[9px] font-black px-1.5 py-0.5 rounded uppercase">
+                                Active
+                              </span>
+                            )}
+                          </div>
+                        </td>
+
+                        <td className="py-2.5 px-3 text-[#10221D]/70 whitespace-nowrap">
+                          {resDate}
+                        </td>
+
+                        <td className="py-2.5 px-3 text-[#10221D] font-medium truncate max-w-[150px]">
+                          {resRole}
+                        </td>
+
+                        <td className="py-2.5 px-3 whitespace-nowrap">
+                          <span className="font-black text-[#10221D]">
+                            {resScore}
+                          </span>
+                          {typeof resScore === 'number' && <span className="text-[10px] text-[#10221D]/50 font-normal">/100</span>}
+                        </td>
+
+                        <td className="py-2.5 pl-3 text-right whitespace-nowrap space-x-2">
+                          {!isCurrentActive && (
+                            <button
+                              onClick={() => handleSelectActiveResume(res._id)}
+                              className="text-[11px] font-bold text-[#10221D] hover:underline"
+                              title="Set as active analyzed resume"
+                            >
+                              Set Active
+                            </button>
+                          )}
+
+                          <button
+                            onClick={() =>
+                              navigate('/new-session', {
+                                state: {
+                                  targetRole: resRole,
+                                  resumeId: res._id,
+                                },
+                              })
+                            }
+                            className="text-[11px] font-bold text-[#F47721] hover:underline"
+                            title="Practice interview with this resume"
+                          >
+                            Interview
+                          </button>
+
+                          <button
+                            onClick={() => handleDeleteResume(res._id, res.fileName)}
+                            disabled={deletingId === res._id}
+                            className="text-[11px] font-bold text-rose-700 hover:text-rose-900 disabled:opacity-50"
+                            title="Delete resume"
+                          >
+                            <Trash2 className="w-3.5 h-3.5 inline-block -mt-0.5" />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
-        ) : (
-          <p className="text-xs text-[#0F1E1B]/60 italic font-medium">No resumes uploaded yet. Upload a PDF or DOCX file above.</p>
         )}
       </div>
-
     </div>
   );
 }

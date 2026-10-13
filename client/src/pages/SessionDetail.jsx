@@ -49,7 +49,7 @@ export default function SessionDetail() {
   const { session, questions = [], answers = [], feedback = [], improvementPlan } = data;
 
   return (
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8 space-y-8 animate-fadeIn">
+    <div className="max-w-5xl mx-auto px-3 sm:px-6 py-4 sm:py-8 space-y-4 sm:space-y-8 animate-fadeIn">
       {/* Back Button */}
       <Link
         to="/dashboard"
@@ -73,25 +73,25 @@ export default function SessionDetail() {
       />
 
       {/* Detailed Q&A Breakdown */}
-      <div className="bg-[#FDFBF3] text-[#0F1E1B] p-6 sm:p-8 rounded-3xl border-3 border-[#0F1E1B] editorial-shadow-lg space-y-6">
-        <h3 className="font-serif-headline text-2xl font-bold text-[#0F1E1B]">Evaluated Questions & Responses ({questions.length})</h3>
+      <div className="bg-[#FDFBF3] text-[#0F1E1B] p-4 sm:p-8 rounded-2xl sm:rounded-3xl border-3 border-[#0F1E1B] editorial-shadow-lg space-y-4 sm:space-y-6">
+        <h3 className="font-serif-headline text-xl sm:text-2xl font-bold text-[#0F1E1B]">Evaluated Questions & Responses ({questions.length})</h3>
 
-        <div className="space-y-8">
+        <div className="space-y-4 sm:space-y-8">
           {questions.map((q, idx) => {
             const ans = answers.find((a) => String(a.question) === String(q._id));
             const fb = feedback.find((f) => String(f.answer) === String(ans?._id));
 
             return (
-              <div key={q._id} className="p-6 bg-[#F5F2E6] rounded-2xl border-2 border-[#0F1E1B] space-y-4 shadow-xs">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <span className="text-xs font-bold text-[#C1440E] uppercase tracking-wider">
+              <div key={q._id} className="p-4 sm:p-6 bg-[#F5F2E6] rounded-xl sm:rounded-2xl border-2 border-[#0F1E1B] space-y-3 sm:space-y-4 shadow-xs">
+                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2 sm:gap-4">
+                  <div className="min-w-0">
+                    <span className="text-[10px] sm:text-xs font-bold text-[#C1440E] uppercase tracking-wider block">
                       Question {idx + 1} • {q.category}
                     </span>
-                    <h4 className="font-serif-headline text-lg font-bold text-[#0F1E1B] mt-1">"{q.questionText}"</h4>
+                    <h4 className="font-serif-headline text-base sm:text-lg font-bold text-[#0F1E1B] mt-0.5">"{q.questionText}"</h4>
                   </div>
                   {fb && (
-                    <span className="px-3 py-1 bg-[#F5D90A] border-2 border-[#0F1E1B] text-[#0F1E1B] font-bold text-sm rounded-xl shrink-0 shadow-xs">
+                    <span className="px-2.5 py-0.5 sm:px-3 sm:py-1 bg-[#F5D90A] border-2 border-[#0F1E1B] text-[#0F1E1B] font-bold text-xs sm:text-sm rounded-xl shrink-0 shadow-xs self-start">
                       {toHundredScale(fb.score)} / 100
                     </span>
                   )}

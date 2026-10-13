@@ -74,17 +74,17 @@ export default function AICareerCoach() {
   };
 
   return (
-    <div className="fixed bottom-5 right-5 z-50">
+    <div className="fixed bottom-3 right-3 sm:bottom-5 sm:right-5 z-50 max-w-[calc(100vw-24px)]">
       
       {/* Closed Floating Trigger Button */}
       {!isOpen && (
         <button
           onClick={() => setIsOpen(true)}
-          className="px-4 py-3 rounded-full bg-[#0F1E1B] text-[#FDFBF3] border-3 border-[#F5D90A] shadow-xl hover:scale-105 transition-all flex items-center space-x-2 group"
+          className="px-3.5 sm:px-4 py-2.5 sm:py-3 rounded-full bg-[#0F1E1B] text-[#FDFBF3] border-3 border-[#F5D90A] shadow-xl hover:scale-105 transition-all flex items-center space-x-2 group"
           title="Open AI Career Coach Assistant"
         >
-          <div className="w-8 h-8 rounded-full bg-[#F5D90A] text-[#0F1E1B] flex items-center justify-center font-black animate-pulse">
-            <Sparkles className="w-4 h-4" />
+          <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-[#F5D90A] text-[#0F1E1B] flex items-center justify-center font-black animate-pulse">
+            <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
           </div>
           <span className="text-xs font-black font-serif-headline pr-1">
             AI Career Coach
@@ -95,7 +95,7 @@ export default function AICareerCoach() {
 
       {/* Expanded Interactive Chat Panel */}
       {isOpen && (
-        <div className="w-[340px] sm:w-[380px] h-[480px] bg-[#FDFBF3] border-3 border-[#0F1E1B] rounded-3xl shadow-2xl flex flex-col justify-between overflow-hidden animate-fadeIn font-sans-body">
+        <div className="w-[calc(100vw-24px)] sm:w-[380px] max-w-[380px] h-[480px] max-h-[82vh] bg-[#FDFBF3] border-3 border-[#0F1E1B] rounded-3xl shadow-2xl flex flex-col justify-between overflow-hidden animate-fadeIn font-sans-body">
           
           {/* Header */}
           <div className="bg-[#0F1E1B] text-[#FDFBF3] p-4 flex items-center justify-between border-b border-[#FDFBF3]/10">

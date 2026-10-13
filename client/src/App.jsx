@@ -19,6 +19,8 @@ const SessionDetail = lazy(() => import('./pages/SessionDetail'));
 const Analytics = lazy(() => import('./pages/Analytics'));
 const CareerHub = lazy(() => import('./pages/CareerHub'));
 const CoverLetterGenerator = lazy(() => import('./pages/CoverLetterGenerator'));
+const PlacementDrive = lazy(() => import('./pages/PlacementDrive'));
+const Profile = lazy(() => import('./pages/Profile'));
 
 function RouteFallback() {
   return (
@@ -118,6 +120,28 @@ function MainLayout() {
               </ProtectedRoute>
             }
           />
+          <Route
+            path="/placement-drive"
+            element={
+              <ProtectedRoute>
+                <PlacementDrive />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/profile"
+            element={
+              <ProtectedRoute>
+                <Profile />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Legacy Applications Route Redirect to Career Hub */}
+          <Route
+            path="/applications"
+            element={<Navigate to="/career-hub?tab=applications" replace />}
+          />
 
           {/* Catch-all */}
           <Route path="*" element={<Navigate to="/" replace />} />
@@ -128,7 +152,7 @@ function MainLayout() {
       {!isLandingPage && (
         <footer className="py-8 text-center text-xs text-[#0F1E1B]/70 bg-[#E6E4DC] border-t border-[#0F1E1B]/10">
           <div className="max-w-7xl mx-auto px-4 font-semibold">
-            <p>PrepPulse.ai • AI-Powered Interview Preparation Platform • MERN Stack + OpenAI GPT-4o & Whisper STT</p>
+            <p>PrepPilot AI • AI-Powered Interview Preparation Platform • MERN Stack + OpenAI GPT-4o & Whisper STT</p>
           </div>
         </footer>
       )}

@@ -25,6 +25,16 @@ export const transcribeAnswerAudio = async (req, res) => {
   } catch (error) {
     console.error('[Transcribe Error]', error);
     res.status(500).json({ message: error.message || 'Failed to transcribe audio file.' });
+  } finally {
+    if (req.file?.path && fs.existsSync(req.file.path)) {
+      try {
+        fs.unlinkSync(req.file.path);
+      } catch (cleanupErr) {
+        if (cleanupErr.code !== 'ENOENT') {
+          console.warn('[Audio Cleanup Warning]', cleanupErr.message);
+        }
+      }
+    }
   }
 };
 

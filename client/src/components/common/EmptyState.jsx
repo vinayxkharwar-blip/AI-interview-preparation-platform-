@@ -3,7 +3,7 @@ import { AlertCircle } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 /**
- * Shared Empty / Error State Component styled with PrepPulse editorial design system.
+ * Shared Empty / Error State Component styled with PrepPilot AI editorial design system.
  *
  * @param {Object} props
  * @param {string} props.title - Main headline

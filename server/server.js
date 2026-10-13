@@ -16,6 +16,9 @@ import analyticsRoutes from './routes/analyticsRoutes.js';
 import jobRoutes from './routes/jobRoutes.js';
 import applicationRoutes from './routes/applicationRoutes.js';
 import coverLetterRoutes from './routes/coverLetterRoutes.js';
+import placementRoutes from './routes/placementRoutes.js';
+import aptitudePYQRoutes from './routes/aptitudePYQRoutes.js';
+import adminAptitudeRoutes from './routes/adminAptitudeRoutes.js';
 import { globalApiLimiter } from './middleware/rateLimiter.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -202,6 +205,14 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+// Prevent caching of authenticated user data across accounts
+app.use('/api', (req, res, next) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
+  next();
+});
+
 // Global API rate limiting (~100 req/min across /api)
 app.use('/api', globalApiLimiter);
 
@@ -216,6 +227,9 @@ app.use('/api/analytics', analyticsRoutes);
 app.use('/api/jobs', jobRoutes);
 app.use('/api/applications', applicationRoutes);
 app.use('/api/cover-letter', coverLetterRoutes);
+app.use('/api/placement', placementRoutes);
+app.use('/api/aptitude', aptitudePYQRoutes);
+app.use('/api/admin/aptitude', adminAptitudeRoutes);
 
 // Global Error Handler
 app.use((err, req, res, next) => {

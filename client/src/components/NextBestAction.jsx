@@ -4,119 +4,133 @@ import {
   Sparkles, 
   ArrowRight, 
   UploadCloud, 
-  FileText, 
   Briefcase, 
   Send, 
   PlayCircle, 
-  CheckCircle2,
-  Zap
+  Trophy,
+  Zap,
+  Target
 } from 'lucide-react';
 
 export default function NextBestAction({ 
   hasResume = false, 
   hasJobs = false, 
-  hasCoverLetter = false, 
+  placementDrive = null,
   hasApplications = false, 
-  hasInterviews = false 
+  completedInterviewsCount = 0,
+  targetRole = 'Full Stack Engineer'
 }) {
   const navigate = useNavigate();
 
-  // Dynamic Next Best Action Logic based on candidate user flow state
-  let action = {
-    step: 'Step 1 of 5',
-    title: 'Upload Your Resume to Start Your Career Journey',
-    description: 'Our AI will parse your document, calculate your ATS Resume Score, and extract marketable technical skills.',
-    buttonText: 'Upload Resume Now',
-    icon: UploadCloud,
-    path: '/resumes',
-    bgBadge: 'bg-[#F5D90A] text-[#0F1E1B]',
-  };
+  // Dynamic Next Best Action Logic based on actual persisted candidate state
+  let action;
 
-  if (hasResume && !hasJobs) {
+  if (!hasResume) {
     action = {
-      step: 'Step 2 of 5',
-      title: 'Explore Your Top AI Job Recommendations',
-      description: 'Your resume has been analyzed! View tailored job openings matched to your target role and skill set.',
-      buttonText: 'View Recommended Jobs',
+      step: 'Priority: Profile Foundation',
+      title: 'Upload & Analyze Your Resume',
+      description: 'Upload your resume in PDF/DOCX format to calculate your ATS compatibility score and extract verified skills for matching.',
+      buttonText: 'Analyze Resume',
+      icon: UploadCloud,
+      path: '/resumes',
+      bgBadge: 'bg-[#FFC400] text-[#10221D]',
+    };
+  } else if (hasResume && !hasApplications) {
+    action = {
+      step: 'Opportunity Discovery',
+      title: `Explore AI Matched Jobs for ${targetRole}`,
+      description: 'Your resume is analyzed! Discover curated job openings matched to your technical skills and submit applications to start your pipeline.',
+      buttonText: 'Explore Career Hub',
       icon: Briefcase,
       path: '/career-hub?tab=jobs',
-      bgBadge: 'bg-emerald-500 text-white',
+      bgBadge: 'bg-emerald-700 text-white',
     };
-  } else if (hasResume && hasJobs && !hasCoverLetter) {
-    action = {
-      step: 'Step 3 of 5',
-      title: 'Generate a Tailored AI Cover Letter',
-      description: 'Create a personalized executive cover letter for your #1 matched job opening in seconds using OpenAI.',
-      buttonText: 'Generate Cover Letter',
-      icon: FileText,
-      path: '/cover-letter',
-      bgBadge: 'bg-[#C1440E] text-white',
+  } else if (!placementDrive || (placementDrive.status === 'in_progress' && (placementDrive.currentRound || 1) <= 4)) {
+    const isStarted = placementDrive && placementDrive.status === 'in_progress';
+    const roundNumber = placementDrive?.currentRound || 1;
+    const roundNames = {
+      1: 'Aptitude PYQs',
+      2: 'Technical Interview',
+      3: 'Group Discussion',
+      4: 'Resume Deep-Dive',
     };
-  } else if (hasResume && hasJobs && hasCoverLetter && !hasApplications) {
+    const roundName = roundNames[roundNumber] || `Round ${roundNumber}`;
     action = {
-      step: 'Step 4 of 5',
-      title: 'Submit Your First Job Application',
-      description: 'Apply to high-match target positions and track your application pipeline status.',
-      buttonText: 'Apply & Track Job',
-      icon: Send,
-      path: '/career-hub?tab=jobs',
-      bgBadge: 'bg-blue-600 text-white',
+      step: `Placement Drive • Round ${roundNumber} of 4`,
+      title: isStarted ? `Continue Placement Arena: ${roundName}` : 'Start Your 4-Round AI Placement Drive',
+      description: isStarted
+        ? `Advance through your campus hiring gauntlet. Complete ${roundName} to build your placement readiness report.`
+        : 'Take the 4-round hiring simulation: Aptitude PYQs, Technical Live Interview, AI Group Discussion, and Resume Evaluation.',
+      buttonText: isStarted ? 'Continue Placement Arena' : 'Start Placement Drive',
+      icon: Trophy,
+      path: '/placement-drive',
+      bgBadge: 'bg-[#F47721] text-white',
     };
-  } else if (hasApplications && !hasInterviews) {
+  } else if (completedInterviewsCount === 0) {
     action = {
-      step: 'Step 5 of 5',
-      title: 'Practice a 15-Minute AI Mock Interview',
-      description: 'Prepare for upcoming technical loops with real-time AI questions, OpenAI voice recognition, and Instant feedback.',
-      buttonText: 'Start Mock Interview',
+      step: 'Interview Loop Practice',
+      title: `Practice Your First AI Mock Interview for ${targetRole}`,
+      description: 'Simulate a live engineering loop with real-time feedback, STAR framework evaluation, and instant scoring before actual company screens.',
+      buttonText: 'Practise Interview',
       icon: PlayCircle,
       path: '/new-session',
-      bgBadge: 'bg-purple-600 text-white',
+      bgBadge: 'bg-[#10221D] text-[#FFC400]',
     };
-  } else if (hasInterviews) {
+  } else if (hasApplications) {
     action = {
-      step: 'Career Accelerator Active',
-      title: 'Review Your AI Feedback & Practice Next Round',
-      description: 'Analyze your technical scores, refine weak areas, and keep applying to reach your job offer goal.',
-      buttonText: 'Continue Career Acceleration',
+      step: 'Application Pipeline',
+      title: 'Review Applications & Track Next Steps',
+      description: 'Monitor your active job applications, scheduled interview rounds, and offer updates in your centralized Career Hub.',
+      buttonText: 'Review Application Tracker',
+      icon: Send,
+      path: '/career-hub?tab=applications',
+      bgBadge: 'bg-[#10221D] text-[#FAF8F0]',
+    };
+  } else {
+    action = {
+      step: 'Career Momentum',
+      title: 'Sharpen Technical Skills & Interview Readiness',
+      description: 'Review ATS recommendations, explore new matched opportunities, and run follow-up mock interview drills.',
+      buttonText: 'Explore Career Hub',
       icon: Zap,
       path: '/career-hub',
-      bgBadge: 'bg-emerald-600 text-white',
+      bgBadge: 'bg-[#FFC400] text-[#10221D]',
     };
   }
 
   const Icon = action.icon;
 
   return (
-    <div className="bg-[#FDFBF3] text-[#0F1E1B] border-3 border-[#0F1E1B] rounded-3xl p-6 sm:p-7 editorial-shadow-lg relative overflow-hidden space-y-4">
+    <div className="bg-[#FDFBF3] text-[#10221D] border-2 border-[#10221D] rounded-2xl p-5 sm:p-6 editorial-shadow-sm relative overflow-hidden space-y-4">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         
-        <div className="space-y-2">
+        <div className="space-y-1.5 max-w-2xl">
           <div className="flex items-center space-x-2">
             <span className={`px-2.5 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider ${action.bgBadge}`}>
               {action.step}
             </span>
-            <span className="text-xs font-bold text-[#C1440E] flex items-center space-x-1">
-              <Sparkles className="w-3.5 h-3.5 text-[#F5D90A]" />
-              <span>Next Recommended Action</span>
+            <span className="text-xs font-bold text-[#F47721] flex items-center space-x-1">
+              <Sparkles className="w-3.5 h-3.5 text-[#FFC400]" />
+              <span>Next Best Action</span>
             </span>
           </div>
 
-          <h3 className="text-xl sm:text-2xl font-black font-serif-headline text-[#0F1E1B]">
+          <h3 className="text-lg sm:text-xl font-black font-serif-headline text-[#10221D]">
             {action.title}
           </h3>
 
-          <p className="text-xs sm:text-sm text-[#0F1E1B]/80 max-w-xl font-sans-body leading-relaxed">
+          <p className="text-xs sm:text-sm text-[#10221D]/75 font-sans-body leading-relaxed">
             {action.description}
           </p>
         </div>
 
         <button
           onClick={() => navigate(action.path)}
-          className="px-6 py-3.5 rounded-2xl bg-[#0F1E1B] text-[#FDFBF3] font-black text-xs hover:bg-[#1A332E] transition-all flex items-center justify-center space-x-2 shrink-0 shadow-sm"
+          className="w-full sm:w-auto px-5 py-3 rounded-xl bg-[#FFC400] text-[#10221D] hover:bg-[#E5B000] border-2 border-[#10221D] font-black text-xs transition-all flex items-center justify-center space-x-2 shrink-0 editorial-shadow-sm cursor-pointer"
         >
-          <Icon className="w-4 h-4 text-[#F5D90A]" />
+          <Icon className="w-4 h-4 text-[#10221D]" />
           <span>{action.buttonText}</span>
-          <ArrowRight className="w-4 h-4 text-[#F5D90A]" />
+          <ArrowRight className="w-4 h-4 text-[#10221D]" />
         </button>
 
       </div>

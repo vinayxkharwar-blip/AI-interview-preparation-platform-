@@ -37,34 +37,34 @@ export default function CompanyPrepModal({ job, onClose }) {
   ];
 
   return (
-    <div className="fixed inset-0 z-50 bg-[#0F1E1B]/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto animate-fadeIn font-sans-body">
-      <div className="bg-[#FDFBF3] text-[#0F1E1B] border-3 border-[#0F1E1B] rounded-3xl max-w-2xl w-full p-6 sm:p-8 space-y-6 relative editorial-shadow-lg">
+    <div className="fixed inset-0 z-50 bg-[#0F1E1B]/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto animate-fadeIn font-sans-body">
+      <div className="bg-[#FDFBF3] text-[#0F1E1B] border-3 border-[#0F1E1B] rounded-2xl sm:rounded-3xl max-w-2xl w-full max-h-[92vh] overflow-y-auto p-4 sm:p-8 space-y-4 sm:space-y-6 relative editorial-shadow-lg">
         
         {/* Close Button */}
         <button
           onClick={onClose}
-          className="absolute top-5 right-5 p-2 rounded-xl bg-[#F5F2E6] border border-[#0F1E1B]/20 text-[#0F1E1B] hover:bg-[#E6E4DC] transition-all"
+          className="absolute top-4 right-4 p-2 rounded-xl bg-[#F5F2E6] border border-[#0F1E1B]/20 text-[#0F1E1B] hover:bg-[#E6E4DC] transition-all cursor-pointer z-10"
         >
           <X className="w-4 h-4" />
         </button>
 
         {/* Company Header */}
-        <div className="flex items-center space-x-4">
-          <div className="w-14 h-14 rounded-2xl bg-[#0F1E1B]/5 border border-[#0F1E1B]/15 overflow-hidden flex items-center justify-center shrink-0">
+        <div className="flex items-start sm:items-center space-x-3 sm:space-x-4 pr-8">
+          <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-[#0F1E1B]/5 border border-[#0F1E1B]/15 overflow-hidden flex items-center justify-center shrink-0">
             {job.logo ? (
               <img src={job.logo} alt={job.company} className="w-full h-full object-cover" />
             ) : (
-              <Building2 className="w-7 h-7 text-[#0F1E1B]/70" />
+              <Building2 className="w-6 h-6 sm:w-7 sm:h-7 text-[#0F1E1B]/70" />
             )}
           </div>
-          <div>
-            <span className="text-xs font-black uppercase text-[#C1440E] tracking-wider">
+          <div className="min-w-0">
+            <span className="text-[10px] sm:text-xs font-black uppercase text-[#C1440E] tracking-wider block">
               Company Interview Preparation Studio
             </span>
-            <h2 className="text-xl sm:text-2xl font-black font-serif-headline text-[#0F1E1B]">
+            <h2 className="text-lg sm:text-2xl font-black font-serif-headline text-[#0F1E1B] leading-tight truncate">
               {job.company} • {job.title}
             </h2>
-            <div className="flex items-center space-x-3 text-xs font-bold text-[#0F1E1B]/70 mt-1">
+            <div className="flex flex-wrap items-center gap-2 text-xs font-bold text-[#0F1E1B]/70 mt-1">
               <span>📍 {job.location || 'Remote'}</span>
               <span>💵 {job.salary || '$120k - $160k'}</span>
               <span className="text-emerald-800 font-extrabold">⚡ {job.matchPercentage || 92}% Match</span>
@@ -73,48 +73,48 @@ export default function CompanyPrepModal({ job, onClose }) {
         </div>
 
         {/* Interview Loop Overview Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-          <div className="p-3.5 bg-[#F5F2E6] border-2 border-[#0F1E1B] rounded-2xl space-y-1">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3 text-xs">
+          <div className="p-3 sm:p-3.5 bg-[#F5F2E6] border-2 border-[#0F1E1B] rounded-2xl space-y-1">
             <span className="text-[10px] font-black uppercase text-[#C1440E]">Interview Process</span>
             <p className="font-bold text-[#0F1E1B]">4 Rounds (Recruiter, Tech Screening, System Design, Culture)</p>
           </div>
-          <div className="p-3.5 bg-[#F5F2E6] border-2 border-[#0F1E1B] rounded-2xl space-y-1">
+          <div className="p-3 sm:p-3.5 bg-[#F5F2E6] border-2 border-[#0F1E1B] rounded-2xl space-y-1">
             <span className="text-[10px] font-black uppercase text-[#C1440E]">Hiring Velocity</span>
             <p className="font-bold text-emerald-800">Fast Track (10-14 Days)</p>
           </div>
-          <div className="p-3.5 bg-[#F5F2E6] border-2 border-[#0F1E1B] rounded-2xl space-y-1">
+          <div className="p-3 sm:p-3.5 bg-[#F5F2E6] border-2 border-[#0F1E1B] rounded-2xl space-y-1">
             <span className="text-[10px] font-black uppercase text-[#C1440E]">Target Skills</span>
             <p className="font-bold text-[#0F1E1B]">{(job.skills || ['React', 'Node']).slice(0, 3).join(', ')}</p>
           </div>
         </div>
 
         {/* Expected Interview Questions */}
-        <div className="space-y-3">
+        <div className="space-y-2.5 sm:space-y-3">
           <h3 className="text-sm font-bold font-serif-headline text-[#0F1E1B] flex items-center space-x-2">
-            <HelpCircle className="w-4 h-4 text-[#C1440E]" />
+            <HelpCircle className="w-4 h-4 text-[#C1440E] shrink-0" />
             <span>Top Predicted Interview Questions for {job.company}</span>
           </h3>
           <div className="space-y-2">
             {sampleQuestions.map((q, idx) => (
-              <div key={idx} className="p-3 rounded-xl bg-[#F5F2E6] border border-[#0F1E1B]/20 text-xs font-bold text-[#0F1E1B] flex items-start space-x-2">
-                <span className="text-[#C1440E] font-black">{idx + 1}.</span>
-                <span>{q}</span>
+              <div key={idx} className="p-2.5 sm:p-3 rounded-xl bg-[#F5F2E6] border border-[#0F1E1B]/20 text-xs font-bold text-[#0F1E1B] flex items-start space-x-2">
+                <span className="text-[#C1440E] font-black shrink-0">{idx + 1}.</span>
+                <span className="leading-snug">{q}</span>
               </div>
             ))}
           </div>
         </div>
 
         {/* Action Buttons */}
-        <div className="pt-4 border-t border-[#0F1E1B]/15 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div className="text-xs text-[#0F1E1B]/70 font-semibold">
+        <div className="pt-3 sm:pt-4 border-t border-[#0F1E1B]/15 flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div className="text-xs text-[#0F1E1B]/70 font-semibold text-center sm:text-left">
             💡 AI will automatically load {job.company}'s tech stack for your mock session.
           </div>
 
           <button
             onClick={handleStartInterview}
-            className="w-full sm:w-auto px-6 py-3 rounded-2xl bg-[#0F1E1B] text-[#FDFBF3] font-bold text-xs hover:bg-[#1A332E] transition-all flex items-center justify-center space-x-2 editorial-shadow"
+            className="w-full sm:w-auto px-5 sm:px-6 py-2.5 sm:py-3 rounded-2xl bg-[#0F1E1B] text-[#FDFBF3] font-bold text-xs hover:bg-[#1A332E] transition-all flex items-center justify-center space-x-2 editorial-shadow min-h-[44px] cursor-pointer"
           >
-            <PlayCircle className="w-4 h-4 text-[#F5D90A]" />
+            <PlayCircle className="w-4 h-4 text-[#F5D90A] shrink-0" />
             <span>Start Practice Interview Loop</span>
           </button>
         </div>

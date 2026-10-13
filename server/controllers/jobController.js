@@ -12,30 +12,35 @@ export const memorySavedJobs = [];
 // @route GET /api/jobs/recommendations
 export const getJobRecommendations = async (req, res) => {
   try {
-    const { targetRole, skills, experience, location } = req.query;
+    const { targetRole, skills, experience, location, resumeId } = req.query;
 
     let userTargetRole = targetRole || req.user?.targetRole || 'Full Stack Engineer';
     let userSkills = Array.isArray(skills) ? skills : skills ? skills.split(',') : [];
 
-    // Auto-extract skills and targetRole from user's latest uploaded resume if not passed explicitly
+    // Auto-extract skills and targetRole from specific resume or latest uploaded resume
     if (userSkills.length === 0) {
-      let latestResume = null;
-      if (mongoose.connection.readyState === 1) {
+      let activeResume = null;
+      if (resumeId && mongoose.Types.ObjectId.isValid(resumeId)) {
         try {
-          latestResume = await Resume.findOne({ user: req.user._id }).sort({ createdAt: -1 }).lean();
+          activeResume = await Resume.findOne({ _id: resumeId, user: req.user._id }).lean();
+        } catch (e) {}
+      }
+      if (!activeResume && mongoose.connection.readyState === 1) {
+        try {
+          activeResume = await Resume.findOne({ user: req.user._id }).sort({ createdAt: -1 }).lean();
         } catch (e) {
           console.log('[Job Controller DB Notice]', e.message);
         }
       }
 
-      if (!latestResume) {
-        latestResume = memoryResumes.find((r) => String(r.user) === String(req.user._id));
+      if (!activeResume) {
+        activeResume = memoryResumes.find((r) => String(r.user) === String(req.user._id));
       }
 
-      if (latestResume?.parsedData) {
-        userSkills = latestResume.parsedData.skills || [];
-        if (!targetRole && latestResume.parsedData.targetRole) {
-          userTargetRole = latestResume.parsedData.targetRole;
+      if (activeResume?.parsedData) {
+        userSkills = activeResume.parsedData.skills || [];
+        if (!targetRole && activeResume.parsedData.targetRole) {
+          userTargetRole = activeResume.parsedData.targetRole;
         }
       }
     }

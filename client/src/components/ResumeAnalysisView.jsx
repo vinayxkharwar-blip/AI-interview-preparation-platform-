@@ -26,7 +26,7 @@ export default function ResumeAnalysisView({ resume }) {
 
   const {
     atsScore = 85,
-    targetRole = 'Full Stack Engineer',
+    targetRole = null,
     skills = [],
     experience = [],
     education = [],
@@ -37,18 +37,20 @@ export default function ResumeAnalysisView({ resume }) {
     summary = '',
   } = resume.parsedData;
 
+  const displayRole = targetRole && targetRole.trim() ? targetRole.trim() : 'Role not detected';
+
   return (
     <div className="space-y-6">
       
       {/* ATS Score & Overview Banner */}
-      <div className="bg-[#FDFBF3] border-2 border-[#0F1E1B] rounded-2xl p-6 shadow-sm flex flex-col md:flex-row items-center justify-between gap-6">
+      <div className="bg-[#FDFBF3] border-2 border-[#0F1E1B] rounded-2xl p-4 sm:p-6 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4 sm:gap-6">
         
-        <div className="space-y-2 text-center md:text-left">
-          <div className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-xl bg-[#F5D90A] text-[#0F1E1B] border border-[#0F1E1B] text-xs font-black">
-            <Target className="w-3.5 h-3.5" />
-            <span>Target Role: {targetRole}</span>
+        <div className="space-y-2 text-center md:text-left w-full md:w-auto">
+          <div className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-xl bg-[#F5D90A] text-[#0F1E1B] border border-[#0F1E1B] text-xs font-black max-w-full truncate">
+            <Target className="w-3.5 h-3.5 shrink-0" />
+            <span className="truncate">Target Role: {displayRole}</span>
           </div>
-          <h2 className="text-xl sm:text-2xl font-black font-serif-headline text-[#0F1E1B]">
+          <h2 className="text-lg sm:text-2xl font-black font-serif-headline text-[#0F1E1B] leading-snug">
             ATS Resume Optimization Analysis
           </h2>
           <p className="text-xs text-[#0F1E1B]/80 max-w-xl leading-relaxed">
@@ -57,14 +59,14 @@ export default function ResumeAnalysisView({ resume }) {
         </div>
 
         {/* ATS Score Gauge Badge */}
-        <div className="bg-[#F5F2E6] border-2 border-[#0F1E1B] rounded-2xl p-5 text-center min-w-[160px] shadow-xs shrink-0">
-          <span className="text-[11px] font-black uppercase tracking-wider text-[#C1440E]">
+        <div className="bg-[#F5F2E6] border-2 border-[#0F1E1B] rounded-2xl p-4 sm:p-5 text-center w-full md:w-auto min-w-[150px] shadow-xs shrink-0">
+          <span className="text-[10px] sm:text-[11px] font-black uppercase tracking-wider text-[#C1440E]">
             ATS Score
           </span>
-          <div className="text-4xl font-black font-serif-headline text-[#0F1E1B] my-1">
+          <div className="text-3xl sm:text-4xl font-black font-serif-headline text-[#0F1E1B] my-1">
             {atsScore}<span className="text-base text-[#0F1E1B]/60 font-bold">/100</span>
           </div>
-          <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-800 border border-emerald-500/30">
+          <span className="text-[9px] sm:text-[10px] font-extrabold uppercase px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-800 border border-emerald-500/30 inline-block">
             {atsScore >= 80 ? 'Excellent Match' : atsScore >= 65 ? 'Good Quality' : 'Needs Optimization'}
           </span>
         </div>

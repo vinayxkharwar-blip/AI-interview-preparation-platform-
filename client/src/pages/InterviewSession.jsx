@@ -189,15 +189,15 @@ export default function InterviewSession() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8 space-y-6 animate-fadeIn">
+    <div className="max-w-4xl mx-auto px-3 sm:px-6 py-4 sm:py-8 space-y-4 sm:space-y-6 animate-fadeIn">
       
       {/* Progress Top Bar */}
-      <div className="flex flex-col sm:flex-row items-center justify-between bg-[#FDFBF3] text-neutral-900 p-4 sm:p-5 rounded-2xl border border-neutral-200 gap-4">
-        <div className="flex items-center space-x-3">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between bg-[#FDFBF3] text-neutral-900 p-3.5 sm:p-5 rounded-2xl border border-neutral-200 gap-3 sm:gap-4">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           <span className="text-xs font-semibold text-neutral-600">
             Target Role: <strong className="text-neutral-900">{session?.targetRole}</strong>
           </span>
-          <span className="text-neutral-300">•</span>
+          <span className="text-neutral-300 hidden xs:inline">•</span>
           {session?.focusTopic ? (
             <span className="px-2.5 py-0.5 bg-neutral-100 text-neutral-800 text-xs font-semibold rounded-full">
               Focused Practice: {session.focusTopic}
@@ -210,21 +210,21 @@ export default function InterviewSession() {
         </div>
 
         {/* Progress Bar */}
-        <div className="flex items-center space-x-3">
-          <div className="w-36 bg-neutral-100 h-2.5 rounded-full border border-neutral-200 overflow-hidden">
+        <div className="flex items-center justify-between sm:justify-end space-x-3 w-full sm:w-auto pt-2 sm:pt-0 border-t sm:border-t-0 border-neutral-200">
+          <div className="flex-1 sm:w-36 bg-neutral-100 h-2.5 rounded-full border border-neutral-200 overflow-hidden">
             <div
               className="bg-[#E7B92E] h-full transition-all duration-300 rounded-full"
               style={{ width: `${((currentIndex + 1) / questions.length) * 100}%` }}
             ></div>
           </div>
-          <span className="text-xs font-semibold font-mono text-neutral-600">
+          <span className="text-xs font-semibold font-mono text-neutral-600 shrink-0">
             {currentIndex + 1} / {questions.length}
           </span>
         </div>
       </div>
 
       {error && (
-        <div className="p-4 bg-rose-50 border border-rose-200 rounded-2xl flex items-center space-x-3 text-rose-800 text-xs font-semibold">
+        <div className="p-3.5 sm:p-4 bg-rose-50 border border-rose-200 rounded-2xl flex items-center space-x-3 text-rose-800 text-xs font-semibold">
           <AlertCircle className="w-4 h-4 shrink-0" />
           <span>{error}</span>
         </div>
@@ -232,7 +232,7 @@ export default function InterviewSession() {
 
       {/* Focused Practice Badge */}
       {session?.focusTopic && (
-        <div className="inline-flex items-center space-x-2 px-3.5 py-1 rounded-full bg-neutral-100 border border-neutral-200 text-neutral-800 text-xs font-semibold mb-1">
+        <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-neutral-100 border border-neutral-200 text-neutral-800 text-xs font-semibold mb-1">
           <Sparkles className="w-3.5 h-3.5 text-[#E7B92E]" />
           <span>Focused Practice: {session.focusTopic}</span>
         </div>
@@ -240,11 +240,11 @@ export default function InterviewSession() {
 
       {/* PRIMARY ANSWER MODE: FULL-WIDTH HERO VIDEO CALL CARD */}
       {!currentFeedback && (
-        <div className="bg-[#18181B] text-white rounded-3xl border border-white/10 p-6 sm:p-7 space-y-5">
+        <div className="bg-[#18181B] text-white rounded-2xl sm:rounded-3xl border border-white/10 p-4 sm:p-7 space-y-4 sm:space-y-5">
           {/* Header Row: Avatar with live dot + Name & single muted metadata line */}
-          <div className="flex items-center space-x-3.5">
+          <div className="flex items-center space-x-3 sm:space-x-3.5">
             <div className="relative shrink-0">
-              <div className="w-11 h-11 rounded-full bg-neutral-800 border border-white/10 flex items-center justify-center">
+              <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-neutral-800 border border-white/10 flex items-center justify-center">
                 <Volume2 className="w-5 h-5 text-[#E7B92E]" />
               </div>
               <span className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-emerald-500 border-2 border-[#18181B]"></span>

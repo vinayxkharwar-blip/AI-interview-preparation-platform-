@@ -17,6 +17,8 @@ dist/
 **/dist/
 build/
 **/build/
+test-results/
+playwright-report/
 
 # Uploads / media / temp files
 server/uploads/*

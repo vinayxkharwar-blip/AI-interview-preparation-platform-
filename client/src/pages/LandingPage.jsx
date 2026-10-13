@@ -24,6 +24,7 @@ import {
   Users,
   Briefcase
 } from 'lucide-react';
+import PrepPilotLogo from '../components/brand/PrepPilotLogo';
 
 export default function LandingPage() {
   const navigate = useNavigate();
@@ -55,7 +56,7 @@ export default function LandingPage() {
     {
       question: 'Can I practice with real voice recording instead of typing?',
       answer:
-        'Yes! PrepPulse features real-time speech-to-text recording powered by OpenAI Whisper AI. You speak directly into your microphone, simulating a live video interview. Our AI analyzes speech pacing, tone, and filler words.',
+        'Yes! PrepPilot AI features real-time speech-to-text recording powered by OpenAI Whisper AI. You speak directly into your microphone, simulating a live video interview. Our AI analyzes speech pacing, tone, and filler words.',
     },
     {
       question: 'What kind of feedback do I receive after a mock interview session?',
@@ -82,13 +83,8 @@ export default function LandingPage() {
         {/* ================= 1. NAVBAR ================= */}
         <header className="px-3 sm:px-6 lg:px-10 py-3 sm:py-5 border-b border-[#0F1E1B]/10 flex items-center justify-between relative z-20 bg-[#FDFBF3]/90 backdrop-blur-md sticky top-0 gap-2">
           {/* Logo Left */}
-          <Link to="/" className="flex items-center space-x-2 sm:space-x-3 group shrink-0">
-            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-[#0F1E1B] text-[#FDFBF3] flex items-center justify-center font-bold text-lg sm:text-xl group-hover:scale-105 transition-transform shadow-md shrink-0">
-              <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-[#F5D90A]" />
-            </div>
-            <span className="font-serif-headline text-lg sm:text-2xl font-black tracking-tight text-[#0F1E1B] whitespace-nowrap">
-              PrepPulse<span className="text-[#C1440E]">.ai</span>
-            </span>
+          <Link to="/" className="flex items-center group shrink-0" aria-label="PrepPilot AI Home">
+            <PrepPilotLogo variant="light" size="sm" />
           </Link>
 
           {/* Centered Nav Links */}
@@ -234,14 +230,14 @@ export default function LandingPage() {
               {/* Showcase Screen Container */}
               <div className="bg-[#090D16] rounded-2xl sm:rounded-3xl p-4 sm:p-8 text-slate-100 relative overflow-hidden border border-slate-800">
                 {/* Header Row */}
-                <div className="flex items-center justify-between border-b border-slate-800 pb-4 mb-6">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-3 h-3 rounded-full bg-rose-500"></div>
-                    <div className="w-3 h-3 rounded-full bg-amber-500"></div>
-                    <div className="w-3 h-3 rounded-full bg-emerald-500"></div>
-                    <span className="text-xs font-mono text-slate-400 ml-2">PrepPulse Session #482 • Full Stack Engineer</span>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-800 pb-4 mb-6 gap-2">
+                  <div className="flex items-center space-x-2 sm:space-x-3 min-w-0">
+                    <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full bg-rose-500 shrink-0"></div>
+                    <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full bg-amber-500 shrink-0"></div>
+                    <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full bg-emerald-500 shrink-0"></div>
+                    <span className="text-[11px] sm:text-xs font-mono text-slate-400 ml-1 sm:ml-2 truncate max-w-[200px] sm:max-w-none">PrepPilot Session #482 • Full Stack Engineer</span>
                   </div>
-                  <div className="flex items-center space-x-2 bg-emerald-500/10 border border-emerald-500/30 px-3 py-1 rounded-full text-xs font-bold text-emerald-400">
+                  <div className="flex items-center space-x-2 bg-emerald-500/10 border border-emerald-500/30 px-2.5 sm:px-3 py-1 rounded-full text-[11px] sm:text-xs font-bold text-emerald-400 self-start sm:self-auto shrink-0">
                     <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
                     <span>AI Evaluator Active</span>
                   </div>
@@ -497,7 +493,7 @@ export default function LandingPage() {
                 Ready to land your dream job offer with confidence?
               </h2>
               <p className="text-base sm:text-lg text-[#0F1E1B]/85 font-medium leading-relaxed">
-                Join over 15,000 engineers, product managers, and professionals who practice mock interviews with PrepPulse AI.
+                Join over 15,000 engineers, product managers, and professionals who practice mock interviews with PrepPilot AI.
               </p>
               
               <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4 pt-2">
@@ -538,13 +534,8 @@ export default function LandingPage() {
               
               {/* Col 1: Logo & Newsletter */}
               <div className="md:col-span-2 space-y-6">
-                <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 rounded-xl bg-[#F5D90A] text-[#0F1E1B] flex items-center justify-center font-bold text-xl shadow-md">
-                    <Sparkles className="w-5 h-5 text-[#0F1E1B]" />
-                  </div>
-                  <span className="font-serif-headline text-3xl font-black tracking-tight text-[#FDFBF3]">
-                    PrepPulse<span className="text-[#F5D90A]">.ai</span>
-                  </span>
+                <div className="flex items-center">
+                  <PrepPilotLogo variant="dark" size="md" showTagline={true} />
                 </div>
                 <p className="text-sm text-[#FDFBF3]/75 font-medium max-w-md leading-relaxed">
                   The warm, editorial AI interview preparation platform designed to turn interview anxiety into confident, offer-winning performances.
@@ -617,7 +608,7 @@ export default function LandingPage() {
 
             {/* Copyright Row */}
             <div className="border-t border-white/10 py-6 flex flex-col sm:flex-row items-center justify-between text-xs text-[#FDFBF3]/60">
-              <p>© 2026 PrepPulse AI Inc. All rights reserved.</p>
+              <p>© 2026 PrepPilot AI Inc. All rights reserved.</p>
               <div className="flex space-x-6 mt-4 sm:mt-0">
                 <a href="#privacy" className="hover:text-[#F5D90A]">Privacy Policy</a>
                 <a href="#terms" className="hover:text-[#F5D90A]">Terms of Service</a>
@@ -629,7 +620,7 @@ export default function LandingPage() {
           {/* Huge Oversized Brand Wordmark Cut off at bottom for dramatic visual impact */}
           <div className="overflow-hidden leading-none pt-4 select-none pointer-events-none opacity-90">
             <h1 className="font-serif-headline font-black text-[13.5vw] text-[#FDFBF3]/20 tracking-tighter text-center whitespace-nowrap uppercase transform translate-y-1/3">
-              PREPPULSE AI
+              PREPPILOT AI
             </h1>
           </div>
         </footer>
@@ -638,8 +629,8 @@ export default function LandingPage() {
 
       {/* ================= VIDEO / INTERACTIVE PREVIEW MODAL ================= */}
       {showVideoModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0F1E1B]/80 backdrop-blur-md p-4 animate-fadeIn">
-          <div className="bg-[#FDFBF3] text-[#0F1E1B] border-4 border-[#0F1E1B] rounded-3xl p-6 sm:p-8 max-w-2xl w-full editorial-shadow-lg relative">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0F1E1B]/80 backdrop-blur-md p-3 sm:p-4 animate-fadeIn overflow-y-auto">
+          <div className="bg-[#FDFBF3] text-[#0F1E1B] border-4 border-[#0F1E1B] rounded-3xl p-5 sm:p-8 max-w-2xl w-full editorial-shadow-lg relative max-h-[92vh] overflow-y-auto">
             <button
               onClick={() => setShowVideoModal(false)}
               className="absolute top-4 right-4 p-2 rounded-full border-2 border-[#0F1E1B] bg-[#F5F2E6] hover:bg-[#0F1E1B] hover:text-[#FDFBF3] transition-colors"
@@ -647,36 +638,36 @@ export default function LandingPage() {
               <X className="w-5 h-5" />
             </button>
 
-            <div className="flex items-center space-x-3 mb-4">
-              <div className="p-2.5 bg-[#F5D90A] border-2 border-[#0F1E1B] rounded-xl text-[#0F1E1B]">
+            <div className="flex items-center space-x-3 mb-4 pr-10">
+              <div className="p-2.5 bg-[#F5D90A] border-2 border-[#0F1E1B] rounded-xl text-[#0F1E1B] shrink-0">
                 <Play className="w-5 h-5 fill-[#0F1E1B]" />
               </div>
               <div>
-                <h3 className="font-serif-headline text-2xl font-bold">Live AI Voice Interview Walkthrough</h3>
+                <h3 className="font-serif-headline text-xl sm:text-2xl font-bold">Live AI Voice Interview Walkthrough</h3>
                 <p className="text-xs text-[#0F1E1B]/70 font-medium">Interactive preview of OpenAI GPT-4o & Whisper STT evaluation engine.</p>
               </div>
             </div>
 
             {/* Simulated Interactive Video Screen */}
-            <div className="bg-[#090D16] rounded-2xl p-6 border-2 border-[#0F1E1B] text-slate-100 space-y-5 my-4">
-              <div className="flex items-center justify-between text-xs text-indigo-400">
+            <div className="bg-[#090D16] rounded-2xl p-4 sm:p-6 border-2 border-[#0F1E1B] text-slate-100 space-y-4 sm:space-y-5 my-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between text-xs text-indigo-400 gap-1">
                 <span>Demo Session: System Design & STAR Feedback</span>
-                <span className="bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full font-bold">Audio Sample Active</span>
+                <span className="bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full font-bold self-start sm:self-auto">Audio Sample Active</span>
               </div>
 
-              <div className="p-4 bg-slate-900 rounded-xl border border-slate-800 space-y-3">
-                <p className="text-sm font-semibold text-white">
+              <div className="p-3 sm:p-4 bg-slate-900 rounded-xl border border-slate-800 space-y-3">
+                <p className="text-xs sm:text-sm font-semibold text-white">
                   Q: "Tell me about a time you resolved a major production database bottleneck under high traffic."
                 </p>
-                <div className="flex items-center space-x-3 bg-slate-950 p-3 rounded-lg">
+                <div className="flex items-center space-x-3 bg-slate-950 p-2.5 sm:p-3 rounded-lg">
                   <button
                     onClick={() => setIsPlayingAudio(!isPlayingAudio)}
-                    className="p-2.5 rounded-full bg-[#F5D90A] text-[#0F1E1B] font-bold hover:scale-105 transition-transform"
+                    className="p-2.5 rounded-full bg-[#F5D90A] text-[#0F1E1B] font-bold hover:scale-105 transition-transform shrink-0"
                   >
                     <Volume2 className="w-5 h-5" />
                   </button>
-                  <div className="flex-1">
-                    <div className="text-xs text-slate-300 font-mono mb-1">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs text-slate-300 font-mono mb-1 truncate">
                       {isPlayingAudio ? '▶ Playing Audio Sample...' : 'Click to Play AI Audio Analysis'}
                     </div>
                     <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
@@ -690,26 +681,26 @@ export default function LandingPage() {
                 </div>
               </div>
 
-              <div className="bg-emerald-950/40 border border-emerald-500/30 p-3.5 rounded-xl text-xs text-emerald-200 space-y-1">
+              <div className="bg-emerald-950/40 border border-emerald-500/30 p-3 sm:p-3.5 rounded-xl text-xs text-emerald-200 space-y-1">
                 <div className="font-bold text-emerald-400 flex items-center space-x-1">
-                  <CheckCircle2 className="w-4 h-4" />
+                  <CheckCircle2 className="w-4 h-4 shrink-0" />
                   <span>STAR Coverage Passed (96%)</span>
                 </div>
-                <p>Action: Implemented Redis caching layer & query indexing, dropping P99 latency by 72%.</p>
+                <p className="text-[11px] sm:text-xs">Action: Implemented Redis caching layer & query indexing, dropping P99 latency by 72%.</p>
               </div>
             </div>
 
-            <div className="flex justify-end space-x-3">
+            <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 sm:space-x-3 pt-2">
               <button
                 onClick={() => setShowVideoModal(false)}
-                className="px-5 py-2.5 rounded-xl text-xs font-bold border-2 border-[#0F1E1B]"
+                className="w-full sm:w-auto px-5 py-2.5 rounded-xl text-xs font-bold border-2 border-[#0F1E1B] text-center"
               >
                 Close Demo
               </button>
               <Link
                 to="/register"
                 onClick={() => setShowVideoModal(false)}
-                className="px-6 py-2.5 rounded-xl text-xs font-bold bg-[#0F1E1B] text-[#FDFBF3] hover:bg-[#1A332E] editorial-shadow"
+                className="w-full sm:w-auto px-6 py-2.5 rounded-xl text-xs font-bold bg-[#0F1E1B] text-[#FDFBF3] hover:bg-[#1A332E] editorial-shadow text-center"
               >
                 Start Practice Free
               </Link>

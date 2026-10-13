@@ -73,20 +73,20 @@ export default function CoverLetterGenerator() {
   };
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-8 space-y-6">
+    <div className="max-w-5xl mx-auto px-3 sm:px-4 py-4 sm:py-8 space-y-4 sm:space-y-6">
       
       {/* Top Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col-reverse sm:flex-row items-start sm:items-center justify-between gap-3">
         <button
           onClick={() => navigate('/career-hub')}
-          className="px-3.5 py-1.5 rounded-xl border-2 border-[#0F1E1B] bg-[#FDFBF3] text-xs font-bold text-[#0F1E1B] hover:bg-[#F5F2E6] transition-all flex items-center space-x-1.5"
+          className="px-3.5 py-2 rounded-xl border-2 border-[#0F1E1B] bg-[#FDFBF3] text-xs font-bold text-[#0F1E1B] hover:bg-[#F5F2E6] transition-all flex items-center space-x-1.5 cursor-pointer min-h-[40px]"
         >
-          <ArrowLeft className="w-4 h-4" />
+          <ArrowLeft className="w-4 h-4 shrink-0" />
           <span>Back to Career Hub</span>
         </button>
 
         <div className="flex items-center space-x-2">
-          <div className="w-8 h-8 rounded-xl bg-[#0F1E1B] text-[#F5D90A] flex items-center justify-center font-bold">
+          <div className="w-8 h-8 rounded-xl bg-[#0F1E1B] text-[#F5D90A] flex items-center justify-center font-bold shrink-0">
             <Sparkles className="w-4 h-4" />
           </div>
           <h1 className="text-xl sm:text-2xl font-black font-serif-headline text-[#0F1E1B]">

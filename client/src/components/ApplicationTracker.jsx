@@ -96,93 +96,155 @@ export default function ApplicationTracker({ applications = [], onStatusUpdate }
           </p>
         </div>
       ) : (
-        <div className="bg-[#FDFBF3] border-2 border-[#0F1E1B] rounded-2xl overflow-hidden shadow-xs">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-[#F5F2E6] border-b-2 border-[#0F1E1B] text-xs font-extrabold text-[#0F1E1B] uppercase tracking-wider">
-                  <th className="py-3 px-4">Company</th>
-                  <th className="py-3 px-4">Role</th>
-                  <th className="py-3 px-4">Applied Date</th>
-                  <th className="py-3 px-4">Status</th>
-                  <th className="py-3 px-4 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y border-[#0F1E1B]/10 text-xs font-bold text-[#0F1E1B]">
-                {filteredApps.map((app) => {
-                  const cfg = STATUS_CONFIG[app.status] || STATUS_CONFIG.applied;
-                  const Icon = cfg.icon;
-
-                  return (
-                    <tr key={app._id || app.id} className="hover:bg-[#F5F2E6]/50 transition-colors">
-                      
-                      {/* Company Column */}
-                      <td className="py-3.5 px-4 font-bold flex items-center space-x-2.5">
-                        <div className="w-8 h-8 rounded-lg bg-[#0F1E1B]/5 border border-[#0F1E1B]/15 overflow-hidden flex items-center justify-center shrink-0">
-                          {app.logo ? (
-                            <img src={app.logo} alt={app.company} className="w-full h-full object-cover" />
-                          ) : (
-                            <Building2 className="w-4 h-4 text-[#0F1E1B]/60" />
-                          )}
-                        </div>
-                        <span className="text-[#0F1E1B] font-serif-headline text-sm font-bold">
+        <div className="space-y-4">
+          {/* Mobile Card List (Visible on sm:hidden) */}
+          <div className="sm:hidden space-y-3">
+            {filteredApps.map((app) => {
+              const cfg = STATUS_CONFIG[app.status] || STATUS_CONFIG.applied;
+              return (
+                <div key={app._id || app.id} className="p-4 bg-[#FDFBF3] border-2 border-[#0F1E1B] rounded-2xl space-y-3 shadow-xs">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center space-x-2.5 min-w-0">
+                      <div className="w-9 h-9 rounded-xl bg-[#0F1E1B]/5 border border-[#0F1E1B]/15 overflow-hidden flex items-center justify-center shrink-0">
+                        {app.logo ? (
+                          <img src={app.logo} alt={app.company} className="w-full h-full object-cover" />
+                        ) : (
+                          <Building2 className="w-4 h-4 text-[#0F1E1B]/60" />
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <span className="text-[#0F1E1B] font-serif-headline text-sm font-bold block truncate">
                           {app.company}
                         </span>
-                      </td>
+                        <span className="text-xs font-bold text-[#0F1E1B]/80 block truncate">
+                          {app.title}
+                        </span>
+                      </div>
+                    </div>
+                    {app.applyUrl && (
+                      <a
+                        href={app.applyUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-1.5 rounded-lg bg-[#FAF8F0] border border-[#0F1E1B]/20 text-[#C1440E] hover:text-[#0F1E1B] shrink-0"
+                        title="Open employer portal"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                      </a>
+                    )}
+                  </div>
 
-                      {/* Role Column */}
-                      <td className="py-3.5 px-4">
-                        <span className="font-bold text-[#0F1E1B]">{app.title}</span>
-                        {app.location && (
-                          <span className="block text-[10px] text-[#0F1E1B]/60 font-semibold">
-                            {app.location}
+                  <div className="flex items-center justify-between gap-2 pt-2 border-t border-[#0F1E1B]/10 text-xs">
+                    <div className="flex items-center space-x-1 text-[#0F1E1B]/70 font-medium text-[11px]">
+                      <Calendar className="w-3 h-3 text-[#C1440E]" />
+                      <span>{new Date(app.appliedDate || app.createdAt).toLocaleDateString()}</span>
+                    </div>
+                    <select
+                      value={app.status}
+                      onChange={(e) => onStatusUpdate && onStatusUpdate(app._id || app.id, e.target.value)}
+                      className={`px-2.5 py-1 rounded-xl text-xs font-black border cursor-pointer focus:outline-none ${cfg.badgeClass}`}
+                    >
+                      <option value="applied">Applied</option>
+                      <option value="pending">Pending</option>
+                      <option value="interview">Interviewing</option>
+                      <option value="offer">Offer Received</option>
+                      <option value="rejected">Rejected</option>
+                    </select>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Desktop Table (Hidden on small mobile) */}
+          <div className="hidden sm:block bg-[#FDFBF3] border-2 border-[#0F1E1B] rounded-2xl overflow-hidden shadow-xs">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse min-w-[500px]">
+                <thead>
+                  <tr className="bg-[#F5F2E6] border-b-2 border-[#0F1E1B] text-xs font-extrabold text-[#0F1E1B] uppercase tracking-wider">
+                    <th className="py-3 px-4">Company</th>
+                    <th className="py-3 px-4">Role</th>
+                    <th className="py-3 px-4">Applied Date</th>
+                    <th className="py-3 px-4">Status</th>
+                    <th className="py-3 px-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y border-[#0F1E1B]/10 text-xs font-bold text-[#0F1E1B]">
+                  {filteredApps.map((app) => {
+                    const cfg = STATUS_CONFIG[app.status] || STATUS_CONFIG.applied;
+                    const Icon = cfg.icon;
+
+                    return (
+                      <tr key={app._id || app.id} className="hover:bg-[#F5F2E6]/50 transition-colors">
+                        
+                        {/* Company Column */}
+                        <td className="py-3.5 px-4 font-bold flex items-center space-x-2.5">
+                          <div className="w-8 h-8 rounded-lg bg-[#0F1E1B]/5 border border-[#0F1E1B]/15 overflow-hidden flex items-center justify-center shrink-0">
+                            {app.logo ? (
+                              <img src={app.logo} alt={app.company} className="w-full h-full object-cover" />
+                            ) : (
+                              <Building2 className="w-4 h-4 text-[#0F1E1B]/60" />
+                            )}
+                          </div>
+                          <span className="text-[#0F1E1B] font-serif-headline text-sm font-bold">
+                            {app.company}
                           </span>
-                        )}
-                      </td>
+                        </td>
 
-                      {/* Applied Date Column */}
-                      <td className="py-3.5 px-4 text-[#0F1E1B]/80 font-medium">
-                        <div className="flex items-center space-x-1">
-                          <Calendar className="w-3.5 h-3.5 text-[#C1440E]" />
-                          <span>{new Date(app.appliedDate || app.createdAt).toLocaleDateString()}</span>
-                        </div>
-                      </td>
+                        {/* Role Column */}
+                        <td className="py-3.5 px-4">
+                          <span className="font-bold text-[#0F1E1B]">{app.title}</span>
+                          {app.location && (
+                            <span className="block text-[10px] text-[#0F1E1B]/60 font-semibold">
+                              {app.location}
+                            </span>
+                          )}
+                        </td>
 
-                      {/* Status Column */}
-                      <td className="py-3.5 px-4">
-                        <select
-                          value={app.status}
-                          onChange={(e) => onStatusUpdate && onStatusUpdate(app._id || app.id, e.target.value)}
-                          className={`px-2.5 py-1 rounded-xl text-xs font-black border cursor-pointer focus:outline-none ${cfg.badgeClass}`}
-                        >
-                          <option value="applied">Applied</option>
-                          <option value="pending">Pending</option>
-                          <option value="interview">Interviewing</option>
-                          <option value="offer">Offer Received</option>
-                          <option value="rejected">Rejected</option>
-                        </select>
-                      </td>
+                        {/* Applied Date Column */}
+                        <td className="py-3.5 px-4 text-[#0F1E1B]/80 font-medium">
+                          <div className="flex items-center space-x-1">
+                            <Calendar className="w-3.5 h-3.5 text-[#C1440E]" />
+                            <span>{new Date(app.appliedDate || app.createdAt).toLocaleDateString()}</span>
+                          </div>
+                        </td>
 
-                      {/* Action Column */}
-                      <td className="py-3.5 px-4 text-right">
-                        {app.applyUrl && (
-                          <a
-                            href={app.applyUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center space-x-1 text-xs font-bold text-[#C1440E] hover:underline"
+                        {/* Status Column */}
+                        <td className="py-3.5 px-4">
+                          <select
+                            value={app.status}
+                            onChange={(e) => onStatusUpdate && onStatusUpdate(app._id || app.id, e.target.value)}
+                            className={`px-2.5 py-1 rounded-xl text-xs font-black border cursor-pointer focus:outline-none ${cfg.badgeClass}`}
                           >
-                            <span>Link</span>
-                            <ExternalLink className="w-3 h-3" />
-                          </a>
-                        )}
-                      </td>
+                            <option value="applied">Applied</option>
+                            <option value="pending">Pending</option>
+                            <option value="interview">Interviewing</option>
+                            <option value="offer">Offer Received</option>
+                            <option value="rejected">Rejected</option>
+                          </select>
+                        </td>
 
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                        {/* Action Column */}
+                        <td className="py-3.5 px-4 text-right">
+                          {app.applyUrl && (
+                            <a
+                              href={app.applyUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center space-x-1 text-xs font-bold text-[#C1440E] hover:underline"
+                            >
+                              <span>Link</span>
+                              <ExternalLink className="w-3 h-3" />
+                            </a>
+                          )}
+                        </td>
+
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}

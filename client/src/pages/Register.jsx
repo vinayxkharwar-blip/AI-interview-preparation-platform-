@@ -1,7 +1,9 @@
 import React, { useState, useContext } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
+import { validateEmail } from '../utils/validation';
 import { Sparkles, User, Mail, Lock, Briefcase, UserPlus, AlertCircle, Loader2, ArrowRight } from 'lucide-react';
+import PrepPilotIcon from '../components/brand/PrepPilotIcon';
 
 export default function Register() {
   const [name, setName] = useState('');
@@ -25,6 +27,12 @@ export default function Register() {
       return;
     }
 
+    const emailCheck = validateEmail(trimmedEmail);
+    if (!emailCheck.isValid) {
+      setError('Please enter a valid email address.');
+      return;
+    }
+
     if (password.length < 6) {
       setError('Password must be at least 6 characters long.');
       return;
@@ -34,7 +42,7 @@ export default function Register() {
     setError('');
 
     try {
-      await register(trimmedName, trimmedEmail, password, trimmedRole || 'Full Stack Engineer');
+      await register(trimmedName, emailCheck.normalizedEmail, password, trimmedRole || 'Full Stack Engineer');
       setLoading(false);
       navigate('/dashboard');
     } catch (err) {
@@ -48,35 +56,37 @@ export default function Register() {
   };
 
   return (
-    <div className="min-h-[85vh] flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full bg-[#FDFBF3] text-[#0F1E1B] p-8 sm:p-10 rounded-3xl border-3 border-[#0F1E1B] editorial-shadow-lg space-y-8 animate-fadeIn relative">
+    <div className="min-h-[85vh] flex items-center justify-center py-8 sm:py-12 px-3.5 sm:px-6 lg:px-8">
+      <div className="max-w-md w-full bg-[#FDFBF3] text-[#0F1E1B] p-5 sm:p-8 sm:p-10 rounded-2xl sm:rounded-3xl border-3 border-[#0F1E1B] editorial-shadow-lg space-y-6 sm:space-y-8 animate-fadeIn relative">
         
         {/* Title */}
         <div className="text-center space-y-2">
-          <div className="inline-flex w-14 h-14 rounded-2xl bg-[#0F1E1B] text-[#FDFBF3] items-center justify-center shadow-lg mb-2">
-            <Sparkles className="w-7 h-7 text-[#F5D90A]" />
+          <div className="inline-flex justify-center mb-2">
+            <PrepPilotIcon size={52} variant="badge" starPulse={true} className="editorial-shadow-sm" />
           </div>
-          <h2 className="font-serif-headline text-3xl font-bold text-[#0F1E1B]">Create Your Account</h2>
-          <p className="text-xs sm:text-sm text-[#0F1E1B]/70 font-medium">
+          <h2 className="font-serif-headline text-2xl sm:text-3xl font-bold text-[#10221D]">Create Your Account</h2>
+          <p className="text-xs sm:text-sm text-[#10221D]/70 font-medium">
             Start personalized AI mock interviews tailored to your exact target job role.
           </p>
         </div>
 
         {error && (
-          <div className="p-4 bg-rose-50 border-2 border-rose-600 rounded-2xl flex items-center space-x-3 text-rose-800 text-xs font-bold">
+          <div data-testid="error-message" role="alert" className="p-3.5 sm:p-4 bg-rose-50 border-2 border-rose-600 rounded-2xl flex items-center space-x-3 text-rose-800 text-xs font-bold">
             <AlertCircle className="w-4 h-4 shrink-0" />
             <span>{error}</span>
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form noValidate onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-[#0F1E1B] mb-2">Full Name</label>
+            <label htmlFor="name" className="block text-xs font-bold uppercase tracking-wider text-[#0F1E1B] mb-2">Full Name</label>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#0F1E1B]/50">
                 <User className="w-4 h-4" />
               </div>
               <input
+                id="name"
+                name="name"
                 type="text"
                 required
                 value={name}
@@ -88,12 +98,14 @@ export default function Register() {
           </div>
 
           <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-[#0F1E1B] mb-2">Email Address</label>
+            <label htmlFor="email" className="block text-xs font-bold uppercase tracking-wider text-[#0F1E1B] mb-2">Email Address</label>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#0F1E1B]/50">
                 <Mail className="w-4 h-4" />
               </div>
               <input
+                id="email"
+                name="email"
                 type="email"
                 required
                 value={email}
@@ -105,12 +117,14 @@ export default function Register() {
           </div>
 
           <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-[#0F1E1B] mb-2">Password</label>
+            <label htmlFor="password" className="block text-xs font-bold uppercase tracking-wider text-[#0F1E1B] mb-2">Password</label>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#0F1E1B]/50">
                 <Lock className="w-4 h-4" />
               </div>
               <input
+                id="password"
+                name="password"
                 type="password"
                 required
                 value={password}
@@ -122,12 +136,14 @@ export default function Register() {
           </div>
 
           <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-[#0F1E1B] mb-2">Target Job Role</label>
+            <label htmlFor="targetRole" className="block text-xs font-bold uppercase tracking-wider text-[#0F1E1B] mb-2">Target Job Role</label>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#0F1E1B]/50">
                 <Briefcase className="w-4 h-4" />
               </div>
               <input
+                id="targetRole"
+                name="targetRole"
                 type="text"
                 value={targetRole}
                 onChange={(e) => setTargetRole(e.target.value)}
@@ -138,6 +154,7 @@ export default function Register() {
           </div>
 
           <button
+            id="register-submit"
             type="submit"
             disabled={loading}
             className="w-full py-3.5 px-4 rounded-2xl text-sm font-bold text-[#FDFBF3] bg-[#0F1E1B] hover:bg-[#1A332E] disabled:opacity-50 transition-all editorial-shadow flex items-center justify-center space-x-2"

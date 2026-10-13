@@ -25,25 +25,19 @@ export const protect = async (req, res, next) => {
         } catch (e) {
           console.log('[Auth Middleware] DB lookup notice:', e.message);
         }
+        if (!req.user) {
+          return res.status(401).json({ message: 'User session not found, please sign in again.' });
+        }
       }
 
       if (!req.user) {
-        // Search in-memory users fallback
+        // Search in-memory users fallback only if DB is completely offline
         const memUser = memoryUsers.find(
           (u) => u._id === decoded.id || u.id === decoded.id || u.email === decoded.email
         );
         if (memUser && mongoose.Types.ObjectId.isValid(memUser._id)) {
           const { password, ...userWithoutPassword } = memUser;
           req.user = userWithoutPassword;
-        } else if (mongoose.Types.ObjectId.isValid(decoded.id)) {
-          // Fallback mock user with token payload information (only if ObjectId is valid)
-          req.user = {
-            _id: decoded.id,
-            id: decoded.id,
-            name: decoded.name || 'User',
-            email: decoded.email || 'user@example.com',
-            targetRole: decoded.targetRole || 'Full Stack Engineer',
-          };
         } else {
           return res.status(401).json({ message: 'User session not found, please sign in again.' });
         }
@@ -61,5 +55,29 @@ export const protect = async (req, res, next) => {
   if (!token) {
     return res.status(401).json({ message: 'Not authorized, no token provided' });
   }
+};
+
+export const requireAdmin = (req, res, next) => {
+  if (!req.user) {
+    return res.status(401).json({ message: 'Not authorized, please authenticate.' });
+  }
+
+  const adminEmails = (process.env.ADMIN_EMAIL || '')
+    .split(',')
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
+
+  const userEmail = (req.user.email || '').toLowerCase().trim();
+
+  const isAdmin =
+    req.user.role === 'admin' ||
+    (userEmail && adminEmails.includes(userEmail)) ||
+    (process.env.NODE_ENV === 'test' && req.headers['x-test-admin'] === 'true');
+
+  if (!isAdmin) {
+    return res.status(403).json({ message: 'Forbidden: Admin access required for this operation.' });
+  }
+
+  next();
 };
 

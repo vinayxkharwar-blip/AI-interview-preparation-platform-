@@ -59,7 +59,8 @@ export const AuthProvider = ({ children }) => {
   }, [token]);
 
   const login = async (email, password) => {
-    const res = await axiosClient.post('/auth/login', { email, password });
+    const cleanEmail = typeof email === 'string' ? email.trim().toLowerCase() : email;
+    const res = await axiosClient.post('/auth/login', { email: cleanEmail, password });
     const { token: newToken, user: userData } = res.data;
     const norm = normalizeUser(userData);
     localStorage.setItem('token', newToken);
@@ -70,7 +71,10 @@ export const AuthProvider = ({ children }) => {
   };
 
   const register = async (name, email, password, targetRole) => {
-    const res = await axiosClient.post('/auth/register', { name, email, password, targetRole });
+    const cleanEmail = typeof email === 'string' ? email.trim().toLowerCase() : email;
+    const cleanName = typeof name === 'string' ? name.trim() : name;
+    const cleanRole = typeof targetRole === 'string' ? targetRole.trim() : targetRole;
+    const res = await axiosClient.post('/auth/register', { name: cleanName, email: cleanEmail, password, targetRole: cleanRole });
     const { token: newToken, user: userData } = res.data;
     const norm = normalizeUser(userData);
     localStorage.setItem('token', newToken);
@@ -83,6 +87,14 @@ export const AuthProvider = ({ children }) => {
   const logout = useCallback(() => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+    try {
+      Object.keys(localStorage).forEach((key) => {
+        if (key.startsWith('preppilot_')) {
+          localStorage.removeItem(key);
+        }
+      });
+      sessionStorage.clear();
+    } catch (e) {}
     setToken(null);
     setUser(null);
   }, []);
@@ -98,10 +110,22 @@ export const AuthProvider = ({ children }) => {
     };
   }, [logout]);
 
+  const updateUser = useCallback((updatedData) => {
+    setUser((prev) => {
+      const nextUser = normalizeUser({ ...prev, ...updatedData });
+      if (nextUser) {
+        localStorage.setItem('user', JSON.stringify(nextUser));
+      }
+      return nextUser;
+    });
+  }, []);
+
   return (
-    <AuthContext.Provider value={{ user, token, loading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, token, loading, login, register, logout, updateUser }}>
       {children}
     </AuthContext.Provider>
   );
 };
+
+export default AuthContext;
 

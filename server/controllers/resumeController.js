@@ -49,6 +49,18 @@ export const uploadResume = async (req, res) => {
     const prompt = buildResumeParsePrompt(rawText);
     const parsedData = await generateLLMJson(prompt, 'You parse raw resume text into JSON format.');
 
+    // Ensure targetRole is strictly a valid string or null (never invent or silently default)
+    if (parsedData.targetRole && typeof parsedData.targetRole === 'string') {
+      const cleanRole = parsedData.targetRole.trim();
+      if (['null', 'none', 'n/a', 'undefined', 'not detected', 'unknown'].includes(cleanRole.toLowerCase()) || cleanRole.length === 0) {
+        parsedData.targetRole = null;
+      } else {
+        parsedData.targetRole = cleanRole;
+      }
+    } else {
+      parsedData.targetRole = null;
+    }
+
     console.log('[Resume Upload] Resulting Parsed Data:', {
       atsScore: parsedData.atsScore,
       targetRole: parsedData.targetRole,
@@ -136,5 +148,45 @@ export const getResumeById = async (req, res) => {
     res.json(resume);
   } catch (error) {
     res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc Delete a resume by ID with ownership verification
+// @route DELETE /api/resumes/:id
+export const deleteResume = async (req, res) => {
+  try {
+    let resume = null;
+    try {
+      resume = await Resume.findById(req.params.id);
+    } catch (e) {
+      console.log('[Resume DB Notice] Delete resume fallback:', e.message);
+    }
+
+    if (!resume) {
+      const idx = memoryResumes.findIndex(
+        (r) => String(r._id) === String(req.params.id) || String(r.id) === String(req.params.id)
+      );
+      if (idx !== -1) {
+        if (!checkOwnership(memoryResumes[idx], req.user)) {
+          return res.status(403).json({ message: 'Forbidden: You do not have access to delete this resume' });
+        }
+        memoryResumes.splice(idx, 1);
+        return res.json({ message: 'Resume deleted successfully' });
+      }
+      return res.status(404).json({ message: 'Resume not found' });
+    }
+
+    if (!checkOwnership(resume, req.user)) {
+      return res.status(403).json({ message: 'Forbidden: You do not have access to delete this resume' });
+    }
+
+    await resume.deleteOne();
+    const memIdx = memoryResumes.findIndex((r) => String(r._id) === String(req.params.id));
+    if (memIdx !== -1) memoryResumes.splice(memIdx, 1);
+
+    res.json({ message: 'Resume deleted successfully' });
+  } catch (error) {
+    console.error('[Resume Delete Error]', error);
+    res.status(500).json({ message: error.message || 'Failed to delete resume' });
   }
 };

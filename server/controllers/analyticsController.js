@@ -173,39 +173,26 @@ export const getDashboardAnalytics = async (req, res) => {
       }
     }
 
-    // Fallback populated demo data if no user sessions exist in DB or memory stores
+    // If candidate has completed 0 sessions, return genuine empty metrics instead of fabricating data
     if (scoreTrend.length === 0) {
-      scoreTrend = [
-        { date: 'Session 1', score: 6.2, role: 'Software Developer', type: 'technical' },
-        { date: 'Session 2', score: 7.0, role: 'Frontend Engineer', type: 'technical' },
-        { date: 'Session 3', score: 7.8, role: 'Full Stack Engineer', type: 'behavioral' },
-        { date: 'Session 4', score: 8.5, role: 'Senior React Developer', type: 'technical' },
-      ];
-    }
-
-    if (skillScores.length === 0) {
-      skillScores = [
-        { skill: 'Core JavaScript', score: 8.5, fullMark: 10 },
-        { skill: 'Database & MongoDB', score: 7.2, fullMark: 10 },
-        { skill: 'System Architecture', score: 6.8, fullMark: 10 },
-        { skill: 'Behavioral & STAR', score: 8.0, fullMark: 10 },
-        { skill: 'Security & Auth', score: 7.5, fullMark: 10 },
-      ];
-    }
-
-    if (weakTopics.length === 0) {
-      weakTopics = [
-        { topic: 'MongoDB Explain Plan & Index Strategy', frequency: 3, avgScore: 6.0 },
-        { topic: 'Microtask vs Macrotask Event Loop Timing', frequency: 2, avgScore: 6.5 },
-        { topic: 'Quantifying Impact Metrics in Behavioral STAR Stories', frequency: 2, avgScore: 7.0 },
-      ];
+      return res.json({
+        summary: {
+          totalSessions: 0,
+          avgScore: 0,
+          totalAnswers: 0,
+          readinessLevel: 'Not Started',
+        },
+        scoreTrend: [],
+        skillScores: [],
+        weakTopics: [],
+      });
     }
 
     res.json({
       summary: {
-        totalSessions: totalSessions || 4,
-        avgScore: avgScore || 7.4,
-        totalAnswers: totalAnswers || 15,
+        totalSessions,
+        avgScore,
+        totalAnswers,
         readinessLevel: avgScore >= 8 ? 'Interview Ready' : avgScore >= 6.5 ? 'Proficient' : 'Needs Practice',
       },
       scoreTrend,

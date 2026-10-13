@@ -45,6 +45,13 @@ axiosClient.interceptors.response.use(
       if (!window.location.pathname.includes('/login') && !window.location.pathname.includes('/register')) {
         localStorage.removeItem('token');
         localStorage.removeItem('user');
+        try {
+          Object.keys(localStorage).forEach((key) => {
+            if (key.startsWith('preppilot_')) {
+              localStorage.removeItem(key);
+            }
+          });
+        } catch (e) {}
         window.dispatchEvent(new Event('auth:unauthorized'));
       }
     }

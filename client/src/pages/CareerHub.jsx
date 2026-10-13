@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import axiosClient from '../api/axiosClient';
+import { AuthContext } from '../context/AuthContext';
 import { 
   Briefcase, 
   Sparkles, 
@@ -9,29 +10,40 @@ import {
   FileText, 
   LayoutDashboard, 
   Search, 
-  Plus, 
   ArrowRight,
   RefreshCw,
   Target,
-  BookOpen
+  ExternalLink,
+  ChevronRight,
+  FileCheck
 } from 'lucide-react';
 
 import JobCard from '../components/JobCard';
 import ApplicationTracker from '../components/ApplicationTracker';
 import CareerDashboard from '../components/CareerDashboard';
 import ResumeAnalysisView from '../components/ResumeAnalysisView';
-import CompanyPrepModal from '../components/CompanyPrepModal';
 
 export default function CareerHub() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { user } = useContext(AuthContext);
 
   // Check URL search query param (e.g. ?tab=applications)
   const queryParams = new URLSearchParams(location.search);
   const initialTab = queryParams.get('tab') || 'dashboard';
 
   const [activeTab, setActiveTab] = useState(initialTab);
-  const [selectedJobForPrep, setSelectedJobForPrep] = useState(null);
+  const [resumes, setResumes] = useState([]);
+  const [activeResumeId, setActiveResumeId] = useState(() => {
+    return localStorage.getItem('preppilot_active_resume_id') || '';
+  });
+
+  const [jobs, setJobs] = useState([]);
+  const [savedJobs, setSavedJobs] = useState([]);
+  const [applications, setApplications] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
     const tabParam = new URLSearchParams(location.search).get('tab');
@@ -40,37 +52,47 @@ export default function CareerHub() {
     }
   }, [location.search]);
 
-  const [jobs, setJobs] = useState([]);
-  const [savedJobs, setSavedJobs] = useState([]);
-  const [applications, setApplications] = useState([]);
-  const [latestResume, setLatestResume] = useState(null);
-
-  const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [targetRoleFilter, setTargetRoleFilter] = useState('');
-
-  // Fetch initial Career Hub data
+  // Fetch all initial data
   const fetchData = async () => {
     setLoading(true);
     try {
-      // 1. Fetch Job Recommendations
-      const jobsRes = await axiosClient.get('/jobs/recommendations');
-      setJobs(jobsRes.data || []);
-
-      // 2. Fetch Saved Jobs
-      const savedRes = await axiosClient.get('/jobs/saved');
-      setSavedJobs(savedRes.data || []);
-
-      // 3. Fetch Applications
-      const appsRes = await axiosClient.get('/applications');
-      setApplications(appsRes.data || []);
-
-      // 4. Fetch User's Resumes for ATS Score & breakdown
+      // 1. Fetch User's Resumes
       const resumeRes = await axiosClient.get('/resumes');
-      const resumeData = resumeRes.data || [];
-      if (Array.isArray(resumeData) && resumeData.length > 0) {
-        setLatestResume(resumeData[0]);
+      const resumeData = Array.isArray(resumeRes.data) ? resumeRes.data : [];
+      setResumes(resumeData);
+
+      // Determine active resume
+      let currentActiveId = activeResumeId;
+      const foundStored = resumeData.find((r) => String(r._id) === String(currentActiveId));
+      if (!foundStored && resumeData.length > 0) {
+        currentActiveId = String(resumeData[0]._id);
+        setActiveResumeId(currentActiveId);
+        localStorage.setItem('preppilot_active_resume_id', currentActiveId);
       }
+
+      const activeResumeDoc = resumeData.find((r) => String(r._id) === String(currentActiveId)) || resumeData[0];
+      const manualRole = localStorage.getItem('preppilot_target_role') || user?.targetRole || '';
+      const targetRoleToUse =
+        manualRole ||
+        activeResumeDoc?.parsedData?.targetRole ||
+        '';
+
+      // 2. Fetch Job Recommendations
+      const jobsRes = await axiosClient.get('/jobs/recommendations', {
+        params: {
+          ...(targetRoleToUse ? { targetRole: targetRoleToUse } : {}),
+          ...(currentActiveId ? { resumeId: currentActiveId } : {}),
+        },
+      });
+      setJobs(Array.isArray(jobsRes.data) ? jobsRes.data : []);
+
+      // 3. Fetch Saved Jobs
+      const savedRes = await axiosClient.get('/jobs/saved');
+      setSavedJobs(Array.isArray(savedRes.data) ? savedRes.data : []);
+
+      // 4. Fetch Applications
+      const appsRes = await axiosClient.get('/applications');
+      setApplications(Array.isArray(appsRes.data) ? appsRes.data : []);
     } catch (err) {
       console.error('[Career Hub Fetch Error]', err);
     } finally {
@@ -80,7 +102,22 @@ export default function CareerHub() {
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [activeResumeId]);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await fetchData();
+    setRefreshing(false);
+  };
+
+  const handleResumeSwitch = (newResumeId) => {
+    setActiveResumeId(String(newResumeId));
+    localStorage.setItem('preppilot_active_resume_id', String(newResumeId));
+    const selected = resumes.find((r) => String(r._id) === String(newResumeId));
+    if (selected?.parsedData?.targetRole) {
+      localStorage.setItem('preppilot_target_role', selected.parsedData.targetRole);
+    }
+  };
 
   // Handle Save / Unsave Job
   const handleSaveToggle = async (job) => {
@@ -114,7 +151,9 @@ export default function CareerHub() {
           matchPercentage: job.matchPercentage,
         });
 
-        setSavedJobs([res.data.savedJob, ...savedJobs]);
+        if (res.data?.savedJob) {
+          setSavedJobs([res.data.savedJob, ...savedJobs]);
+        }
       } catch (e) {
         console.error(e);
       }
@@ -134,7 +173,9 @@ export default function CareerHub() {
         applyUrl: job.applyUrl,
       });
 
-      setApplications([res.data.application, ...applications]);
+      if (res.data?.application) {
+        setApplications([res.data.application, ...applications]);
+      }
     } catch (e) {
       console.error(e);
     }
@@ -152,174 +193,253 @@ export default function CareerHub() {
     }
   };
 
+  const activeResume =
+    resumes.find((r) => String(r._id) === String(activeResumeId)) || (resumes.length > 0 ? resumes[0] : null);
+
+  const activeTargetRole =
+    activeResume?.parsedData?.targetRole ||
+    localStorage.getItem('preppilot_target_role') ||
+    user?.targetRole ||
+    'Full Stack Engineer';
+
   // Filtered Job Recommendations
   const filteredJobs = jobs.filter((j) => {
     const matchesSearch =
       j.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
       j.company.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      j.skills.some((s) => s.toLowerCase().includes(searchTerm.toLowerCase()));
+      (j.skills && j.skills.some((s) => s.toLowerCase().includes(searchTerm.toLowerCase())));
     return matchesSearch;
   });
 
+  const topThreeJobs = jobs.slice(0, 3);
+
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-      
-      {/* Top Banner Header */}
-      <div className="bg-[#0F1E1B] text-[#FDFBF3] rounded-3xl p-6 sm:p-8 space-y-4 editorial-shadow-sm relative overflow-hidden">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 relative z-10">
-          <div className="space-y-2">
-            <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-xl bg-[#F5D90A] text-[#0F1E1B] text-xs font-black">
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>AI Career Hub Module</span>
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6 animate-fadeIn">
+      {/* ================= 1. COMPACT HEADER ================= */}
+      <div className="bg-[#FDFBF3] rounded-2xl border-2 border-[#10221D] editorial-shadow-sm p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="space-y-0.5">
+          <div className="flex items-center space-x-2">
+            <div className="w-8 h-8 rounded-xl bg-[#10221D] text-[#FFC400] flex items-center justify-center font-bold shadow-xs">
+              <Briefcase className="w-4 h-4" />
             </div>
-            <h1 className="text-2xl sm:text-4xl font-black font-serif-headline text-[#FDFBF3] tracking-tight">
-              Job Match & Career Accelerator
+            <h1 className="font-serif-headline text-2xl sm:text-3xl font-black text-[#10221D]">
+              Your AI Career Hub
             </h1>
-            <p className="text-xs sm:text-sm text-[#FDFBF3]/80 max-w-2xl font-sans-body">
-              Automated ATS Resume Scoring, AI Job Matching Engine, Custom Cover Letter Generation, Application Tracking, and Direct Mock Interview Practice.
-            </p>
           </div>
+          <p className="text-xs sm:text-sm text-[#10221D]/70 font-medium">
+            Discover opportunities and manage your career journey.
+          </p>
+        </div>
 
-          <div className="flex items-center space-x-3 shrink-0">
-            <button
-              onClick={() => navigate('/cover-letter')}
-              className="px-4 py-2.5 rounded-xl bg-[#F5D90A] text-[#0F1E1B] font-bold text-xs hover:bg-[#e0c609] transition-all flex items-center space-x-1.5 shadow-xs"
-            >
-              <FileText className="w-4 h-4" />
-              <span>Write Cover Letter</span>
-            </button>
+        {/* Primary and Secondary Action Buttons */}
+        <div className="flex items-center space-x-2.5 self-start md:self-auto shrink-0">
+          <button
+            type="button"
+            onClick={() => setActiveTab('jobs')}
+            className="px-3.5 py-2 rounded-xl bg-[#10221D] hover:bg-[#1A332E] text-[#FAF8F0] font-bold text-xs border border-[#10221D] transition-colors flex items-center space-x-1.5 shadow-xs"
+          >
+            <Target className="w-3.5 h-3.5 text-[#FFC400]" />
+            <span>Explore Matched Jobs</span>
+          </button>
 
-            <button
-              onClick={fetchData}
-              className="p-2.5 rounded-xl bg-[#FDFBF3]/10 text-[#FDFBF3] hover:bg-[#FDFBF3]/20 transition-all border border-[#FDFBF3]/20"
-              title="Refresh Career Hub"
-            >
-              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => navigate('/cover-letter')}
+            className="px-3.5 py-2 rounded-xl bg-[#FAF8F0] hover:bg-[#F5F2E6] text-[#10221D] font-bold text-xs border border-[#10221D]/30 transition-colors flex items-center space-x-1.5"
+          >
+            <FileText className="w-3.5 h-3.5 text-[#F47721]" />
+            <span>Generate Cover Letter</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleRefresh}
+            className="p-2 rounded-xl bg-[#FAF8F0] hover:bg-[#F5F2E6] text-[#10221D] border border-[#10221D]/30 transition-colors"
+            title="Refresh Career Hub data"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+          </button>
         </div>
       </div>
 
-      {/* Primary Navigation Tabs */}
-      <div className="flex items-center space-x-2 border-b-2 border-[#0F1E1B]/10 pb-3 overflow-x-auto">
+      {/* ================= 2. ACTIVE RESUME SELECTOR BAR ================= */}
+      <div className="bg-[#FAF8F0] rounded-xl border border-[#10221D]/20 px-4 py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+        <div className="flex items-center space-x-2">
+          <FileCheck className="w-4 h-4 text-[#F47721] shrink-0" />
+          <span className="font-bold text-[#10221D]">Active Baseline Resume:</span>
+          {activeResume ? (
+            <span className="font-medium text-[#10221D]/80 truncate max-w-[200px] sm:max-w-xs">
+              <strong>{activeResume.fileName}</strong> (Role: {activeTargetRole})
+            </span>
+          ) : (
+            <span className="text-[#10221D]/60 italic">No resume uploaded.</span>
+          )}
+        </div>
+
+        <div className="flex items-center space-x-2 shrink-0">
+          {resumes.length > 1 && (
+            <select
+              value={activeResumeId}
+              onChange={(e) => handleResumeSwitch(e.target.value)}
+              className="px-2.5 py-1 bg-white border border-[#10221D]/30 rounded-lg text-xs font-bold text-[#10221D] focus:outline-hidden cursor-pointer"
+            >
+              {resumes.map((r) => (
+                <option key={r._id} value={r._id}>
+                  {r.fileName}
+                </option>
+              ))}
+            </select>
+          )}
+
+          <button
+            type="button"
+            onClick={() => navigate('/resumes')}
+            className="text-xs font-bold text-[#F47721] hover:underline"
+          >
+            Manage Resumes →
+          </button>
+        </div>
+      </div>
+
+      {/* ================= 3. INTERNAL CAREER HUB NAVIGATION ================= */}
+      <div className="flex items-center space-x-2 border-b-2 border-[#10221D]/10 pb-2 overflow-x-auto">
         <button
+          type="button"
           onClick={() => setActiveTab('dashboard')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-2 border-2 shrink-0 ${
+          className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 border shrink-0 ${
             activeTab === 'dashboard'
-              ? 'bg-[#0F1E1B] text-[#FDFBF3] border-[#0F1E1B]'
-              : 'border-transparent text-[#0F1E1B]/80 hover:bg-[#F5F2E6]'
+              ? 'bg-[#10221D] text-[#FAF8F0] border-[#10221D] shadow-xs'
+              : 'border-transparent text-[#10221D]/75 hover:bg-[#FAF8F0]'
           }`}
         >
-          <LayoutDashboard className="w-4 h-4" />
+          <LayoutDashboard className="w-3.5 h-3.5" />
           <span>Dashboard</span>
         </button>
 
         <button
+          type="button"
           onClick={() => setActiveTab('jobs')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-2 border-2 shrink-0 ${
+          className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 border shrink-0 ${
             activeTab === 'jobs'
-              ? 'bg-[#0F1E1B] text-[#FDFBF3] border-[#0F1E1B]'
-              : 'border-transparent text-[#0F1E1B]/80 hover:bg-[#F5F2E6]'
+              ? 'bg-[#10221D] text-[#FAF8F0] border-[#10221D] shadow-xs'
+              : 'border-transparent text-[#10221D]/75 hover:bg-[#FAF8F0]'
           }`}
         >
-          <Briefcase className="w-4 h-4 text-[#F5D90A]" />
+          <Briefcase className="w-3.5 h-3.5 text-[#FFC400]" />
           <span>Recommended Jobs ({jobs.length})</span>
         </button>
 
         <button
+          type="button"
           onClick={() => setActiveTab('applications')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-2 border-2 shrink-0 ${
+          className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 border shrink-0 ${
             activeTab === 'applications'
-              ? 'bg-[#0F1E1B] text-[#FDFBF3] border-[#0F1E1B]'
-              : 'border-transparent text-[#0F1E1B]/80 hover:bg-[#F5F2E6]'
+              ? 'bg-[#10221D] text-[#FAF8F0] border-[#10221D] shadow-xs'
+              : 'border-transparent text-[#10221D]/75 hover:bg-[#FAF8F0]'
           }`}
         >
-          <Send className="w-4 h-4 text-blue-400" />
+          <Send className="w-3.5 h-3.5 text-blue-500" />
           <span>Application Tracker ({applications.length})</span>
         </button>
 
         <button
+          type="button"
           onClick={() => setActiveTab('saved')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-2 border-2 shrink-0 ${
+          className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 border shrink-0 ${
             activeTab === 'saved'
-              ? 'bg-[#0F1E1B] text-[#FDFBF3] border-[#0F1E1B]'
-              : 'border-transparent text-[#0F1E1B]/80 hover:bg-[#F5F2E6]'
+              ? 'bg-[#10221D] text-[#FAF8F0] border-[#10221D] shadow-xs'
+              : 'border-transparent text-[#10221D]/75 hover:bg-[#FAF8F0]'
           }`}
         >
-          <Bookmark className="w-4 h-4 text-amber-500 fill-current" />
+          <Bookmark className="w-3.5 h-3.5 text-amber-600 fill-current" />
           <span>Saved Jobs ({savedJobs.length})</span>
         </button>
 
         <button
+          type="button"
           onClick={() => setActiveTab('resume')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-2 border-2 shrink-0 ${
+          className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 border shrink-0 ${
             activeTab === 'resume'
-              ? 'bg-[#0F1E1B] text-[#FDFBF3] border-[#0F1E1B]'
-              : 'border-transparent text-[#0F1E1B]/80 hover:bg-[#F5F2E6]'
+              ? 'bg-[#10221D] text-[#FAF8F0] border-[#10221D] shadow-xs'
+              : 'border-transparent text-[#10221D]/75 hover:bg-[#FAF8F0]'
           }`}
         >
-          <FileText className="w-4 h-4 text-[#C1440E]" />
+          <FileText className="w-3.5 h-3.5 text-[#F47721]" />
           <span>ATS Resume Breakdown</span>
         </button>
       </div>
 
-      {/* Tab Content Display */}
+      {/* ================= 4. TAB CONTENT ================= */}
       {loading ? (
-        <div className="py-24 text-center space-y-3">
-          <Sparkles className="w-10 h-10 text-[#F5D90A] animate-spin mx-auto" />
-          <p className="text-xs font-bold text-[#0F1E1B]">Loading AI Career Hub intelligence...</p>
+        <div className="py-20 text-center space-y-2">
+          <RefreshCw className="w-8 h-8 text-[#F47721] animate-spin mx-auto" />
+          <p className="text-xs font-bold text-[#10221D]/70">Loading Career Hub intelligence...</p>
         </div>
       ) : (
         <div>
-          
-          {/* TAB 1: Career Dashboard */}
+          {/* TAB 1: Dashboard Overview */}
           {activeTab === 'dashboard' && (
             <CareerDashboard
-              atsScore={typeof latestResume?.parsedData?.atsScore === 'number' ? latestResume.parsedData.atsScore : 82}
+              atsScore={typeof activeResume?.parsedData?.atsScore === 'number' ? activeResume.parsedData.atsScore : null}
               jobsFoundCount={jobs.length}
               savedJobsCount={savedJobs.length}
               applications={applications}
-              topSkills={latestResume?.parsedData?.skills || ['React', 'Node.js', 'TypeScript', 'MongoDB', 'AWS', 'Docker']}
+              topSkills={activeResume?.parsedData?.skills || []}
+              targetRole={activeTargetRole}
+              topRecommendedJobs={topThreeJobs}
+              onNavigateTab={setActiveTab}
+              onSaveToggle={handleSaveToggle}
+              onApplyJob={handleApplyJob}
+              savedJobs={savedJobs}
             />
           )}
 
-          {/* TAB 2: Recommended Jobs */}
+          {/* TAB 2: Recommended Jobs Full View */}
           {activeTab === 'jobs' && (
-            <div className="space-y-6">
-              
-              {/* Search bar */}
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-[#FDFBF3] p-4 rounded-2xl border-2 border-[#0F1E1B]">
-                <div className="relative w-full sm:w-96">
-                  <Search className="w-4 h-4 text-[#0F1E1B]/50 absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <div className="space-y-4">
+              {/* Search Header */}
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-[#FDFBF3] p-3.5 rounded-xl border-2 border-[#10221D] editorial-shadow-sm">
+                <div className="relative w-full sm:w-80">
+                  <Search className="w-3.5 h-3.5 text-[#10221D]/50 absolute left-3 top-1/2 -translate-y-1/2" />
                   <input
                     type="text"
-                    placeholder="Search by job title, company, or skill..."
+                    placeholder="Search by role, company, or keyword..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2 rounded-xl border border-[#0F1E1B]/20 text-xs font-bold text-[#0F1E1B] bg-[#F5F2E6] focus:outline-none focus:border-[#0F1E1B]"
+                    className="w-full pl-8 pr-3 py-1.5 rounded-lg border border-[#10221D]/20 text-xs font-medium text-[#10221D] bg-[#FAF8F0] focus:outline-hidden focus:border-[#10221D]"
                   />
                 </div>
-                <span className="text-xs font-bold text-[#0F1E1B]/70">
-                  Showing {filteredJobs.length} AI-Matched Positions
+                <span className="text-xs font-bold text-[#10221D]/70">
+                  Showing {filteredJobs.length} Matched Openings
                 </span>
               </div>
 
-              {/* Job Cards Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                {filteredJobs.map((job) => {
-                  const isSaved = savedJobs.some((sj) => sj.jobId === job.id || sj.jobId === job.jobId);
-                  return (
-                    <JobCard
-                      key={job.id || job.jobId}
-                      job={job}
-                      isSaved={isSaved}
-                      onSaveToggle={handleSaveToggle}
-                      onApply={handleApplyJob}
-                    />
-                  );
-                })}
-              </div>
-
+              {filteredJobs.length === 0 ? (
+                <div className="text-center py-16 bg-[#FDFBF3] rounded-2xl border-2 border-[#10221D] p-6 space-y-2">
+                  <Briefcase className="w-8 h-8 text-[#10221D]/30 mx-auto" />
+                  <h3 className="font-serif-headline text-base font-bold text-[#10221D]">No Jobs Matched</h3>
+                  <p className="text-xs text-[#10221D]/60 max-w-sm mx-auto">
+                    Try refining your search keyword or updating your target engineering role.
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {filteredJobs.map((job) => {
+                    const isSaved = savedJobs.some((sj) => sj.jobId === job.id || sj.jobId === job.jobId);
+                    const isApplied = applications.some((app) => app.jobId === job.id || app.jobId === job.jobId);
+                    return (
+                      <JobCard
+                        key={job.id || job.jobId}
+                        job={job}
+                        isSaved={isSaved}
+                        isApplied={isApplied}
+                        onSaveToggle={handleSaveToggle}
+                        onApply={handleApplyJob}
+                      />
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
 
@@ -333,26 +453,32 @@ export default function CareerHub() {
 
           {/* TAB 4: Saved Jobs */}
           {activeTab === 'saved' && (
-            <div className="space-y-6">
+            <div className="space-y-4">
               {savedJobs.length === 0 ? (
-                <div className="text-center py-16 bg-[#FDFBF3] rounded-2xl border-2 border-[#0F1E1B] p-6 space-y-3">
-                  <Bookmark className="w-10 h-10 text-[#0F1E1B]/30 mx-auto" />
-                  <h3 className="text-base font-bold font-serif-headline text-[#0F1E1B]">No Saved Jobs</h3>
-                  <p className="text-xs text-[#0F1E1B]/70 max-w-sm mx-auto">
-                    Click "Save Job" on any job card to bookmark positions for quick review and application.
+                <div className="text-center py-16 bg-[#FDFBF3] rounded-2xl border-2 border-[#10221D] p-6 space-y-2">
+                  <Bookmark className="w-8 h-8 text-[#10221D]/30 mx-auto" />
+                  <h3 className="font-serif-headline text-base font-bold text-[#10221D]">No Saved Jobs</h3>
+                  <p className="text-xs text-[#10221D]/60 max-w-sm mx-auto">
+                    Bookmark interesting job positions to review and apply to later.
                   </p>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                  {savedJobs.map((savedJob) => (
-                    <JobCard
-                      key={savedJob._id || savedJob.id}
-                      job={savedJob}
-                      isSaved={true}
-                      onSaveToggle={handleSaveToggle}
-                      onApply={handleApplyJob}
-                    />
-                  ))}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {savedJobs.map((savedJob) => {
+                    const isApplied = applications.some(
+                      (app) => app.jobId === (savedJob.jobId || savedJob.id)
+                    );
+                    return (
+                      <JobCard
+                        key={savedJob._id || savedJob.id}
+                        job={savedJob}
+                        isSaved={true}
+                        isApplied={isApplied}
+                        onSaveToggle={handleSaveToggle}
+                        onApply={handleApplyJob}
+                      />
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -360,12 +486,21 @@ export default function CareerHub() {
 
           {/* TAB 5: Resume ATS Breakdown */}
           {activeTab === 'resume' && (
-            <ResumeAnalysisView resume={latestResume} />
+            <div className="space-y-4">
+              <ResumeAnalysisView resume={activeResume} />
+              <div className="text-center pt-2">
+                <button
+                  type="button"
+                  onClick={() => navigate('/resumes')}
+                  className="text-xs font-bold text-[#F47721] hover:underline"
+                >
+                  Go to Resume Studio to upload a new resume or manage documents →
+                </button>
+              </div>
+            </div>
           )}
-
         </div>
       )}
-
     </div>
   );
 }

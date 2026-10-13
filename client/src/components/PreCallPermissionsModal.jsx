@@ -127,26 +127,26 @@ export default function PreCallPermissionsModal({ onPermissionsGranted, onCancel
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#12211A]/80 backdrop-blur-sm animate-fadeIn">
-      <div className="bg-[#FBF9F3] border-3 border-[#12211A] text-[#12211A] w-full max-w-xl rounded-3xl p-6 sm:p-8 editorial-shadow-lg space-y-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-[#12211A]/80 backdrop-blur-sm animate-fadeIn">
+      <div className="bg-[#FBF9F3] border-3 border-[#12211A] text-[#12211A] w-full max-w-xl max-h-[92vh] overflow-y-auto rounded-3xl p-4 sm:p-8 editorial-shadow-lg space-y-4 sm:space-y-6">
         
         {/* Header */}
-        <div className="flex items-center justify-between pb-4 border-b-2 border-[#E4DDC9]">
-          <div className="flex items-center space-x-3">
-            <div className="p-2 bg-[#E7B92E] text-[#12211A] rounded-2xl border-2 border-[#12211A]">
-              <Sparkles className="w-5 h-5" />
+        <div className="flex items-center justify-between pb-3 sm:pb-4 border-b-2 border-[#E4DDC9] gap-2">
+          <div className="flex items-center space-x-2.5 sm:space-x-3 min-w-0">
+            <div className="p-2 bg-[#E7B92E] text-[#12211A] rounded-2xl border-2 border-[#12211A] shrink-0">
+              <Sparkles className="w-4 h-4 sm:w-5 h-5" />
             </div>
-            <div>
-              <h2 className="font-serif-headline text-2xl font-bold text-[#12211A]">
+            <div className="min-w-0">
+              <h2 className="font-serif-headline text-lg sm:text-2xl font-bold text-[#12211A] leading-tight truncate">
                 Live AI Video Call Setup
               </h2>
-              <p className="text-xs font-medium text-[#12211A]/70">
+              <p className="text-[11px] sm:text-xs font-medium text-[#12211A]/70 truncate">
                 Mock Technical Interview with Alex • {targetRole}
               </p>
             </div>
           </div>
-          <span className="px-3 py-1 bg-[#DCEEDF] text-[#12211A] border-2 border-[#12211A] text-xs font-black rounded-full uppercase tracking-wider">
-            WebRTC Mode
+          <span className="shrink-0 px-2 sm:px-3 py-1 bg-[#DCEEDF] text-[#12211A] border-2 border-[#12211A] text-[10px] sm:text-xs font-black rounded-full uppercase tracking-wider">
+            WebRTC
           </span>
         </div>
 
@@ -161,25 +161,25 @@ export default function PreCallPermissionsModal({ onPermissionsGranted, onCancel
               className="w-full h-full object-cover transform -scale-x-100"
             />
           ) : permissionState === 'testing' ? (
-            <div className="text-center text-[#FBF9F3] space-y-2">
+            <div className="text-center text-[#FBF9F3] space-y-2 p-4">
               <div className="inline-block w-8 h-8 border-4 border-[#E7B92E] border-t-transparent rounded-full animate-spin"></div>
               <p className="text-xs font-bold">Requesting camera & microphone access...</p>
             </div>
           ) : (
-            <div className="text-center text-[#FBF9F3]/70 p-6 space-y-3">
-              <VideoOff className="w-12 h-12 mx-auto text-[#C05C33]" />
+            <div className="text-center text-[#FBF9F3]/70 p-4 sm:p-6 space-y-2 sm:space-y-3">
+              <VideoOff className="w-10 h-10 sm:w-12 sm:h-12 mx-auto text-[#C05C33]" />
               <p className="text-xs font-bold text-rose-300">Camera preview unavailable</p>
             </div>
           )}
 
           {/* Device Badges Overlay */}
-          <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between pointer-events-none">
-            <div className="flex items-center space-x-2 bg-[#12211A]/80 backdrop-blur-md px-3 py-1.5 rounded-xl border border-white/20 text-white text-xs font-bold">
-              {hasCamera ? <Camera className="w-4 h-4 text-emerald-400" /> : <VideoOff className="w-4 h-4 text-rose-400" />}
+          <div className="absolute bottom-2 left-2 right-2 sm:bottom-3 sm:left-3 sm:right-3 flex flex-wrap items-center justify-between gap-1.5 pointer-events-none">
+            <div className="flex items-center space-x-1.5 bg-[#12211A]/85 backdrop-blur-md px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-xl border border-white/20 text-white text-[11px] sm:text-xs font-bold">
+              {hasCamera ? <Camera className="w-3.5 h-3.5 text-emerald-400" /> : <VideoOff className="w-3.5 h-3.5 text-rose-400" />}
               <span>{hasCamera ? 'Camera Ready' : 'Camera Off'}</span>
             </div>
-            <div className="flex items-center space-x-2 bg-[#12211A]/80 backdrop-blur-md px-3 py-1.5 rounded-xl border border-white/20 text-white text-xs font-bold">
-              {hasMic ? <Mic className="w-4 h-4 text-[#E7B92E]" /> : <MicOff className="w-4 h-4 text-rose-400" />}
+            <div className="flex items-center space-x-1.5 bg-[#12211A]/85 backdrop-blur-md px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-xl border border-white/20 text-white text-[11px] sm:text-xs font-bold">
+              {hasMic ? <Mic className="w-3.5 h-3.5 text-[#E7B92E]" /> : <MicOff className="w-3.5 h-3.5 text-rose-400" />}
               <span>{hasMic ? 'Mic Connected' : 'Mic Disconnected'}</span>
             </div>
           </div>
@@ -189,7 +189,7 @@ export default function PreCallPermissionsModal({ onPermissionsGranted, onCancel
         {permissionState === 'granted' && (
           <div className="space-y-1.5">
             <div className="flex justify-between text-xs font-bold text-[#12211A]">
-              <span>Microphone Test (Speak to test level)</span>
+              <span>Microphone Test (Speak to test)</span>
               <span>{micLevel}%</span>
             </div>
             <div className="w-full h-3 bg-[#E4DDC9] rounded-full border-2 border-[#12211A] overflow-hidden">
@@ -203,7 +203,7 @@ export default function PreCallPermissionsModal({ onPermissionsGranted, onCancel
 
         {/* Permission Denied Alert & Fallback options */}
         {permissionState === 'denied' && (
-          <div className="p-4 bg-rose-50 border-2 border-[#C05C33] rounded-2xl space-y-2 text-[#12211A] text-xs font-bold">
+          <div className="p-3.5 sm:p-4 bg-rose-50 border-2 border-[#C05C33] rounded-2xl space-y-1.5 sm:space-y-2 text-[#12211A] text-xs font-bold">
             <div className="flex items-center space-x-2 text-[#C05C33]">
               <AlertCircle className="w-4 h-4 shrink-0" />
               <span>Camera or Microphone Access Denied</span>
@@ -215,42 +215,42 @@ export default function PreCallPermissionsModal({ onPermissionsGranted, onCancel
         )}
 
         {/* Explicit Privacy Copy Notice */}
-        <div className="p-3.5 bg-[#DCEEDF]/60 border-2 border-[#B7D8BE] rounded-2xl flex items-start space-x-3 text-xs text-[#12211A]">
-          <ShieldCheck className="w-5 h-5 text-[#1D3327] shrink-0 mt-0.5" />
+        <div className="p-3 bg-[#DCEEDF]/60 border-2 border-[#B7D8BE] rounded-2xl flex items-start space-x-2.5 text-[11px] sm:text-xs text-[#12211A]">
+          <ShieldCheck className="w-4 h-4 sm:w-5 sm:h-5 text-[#1D3327] shrink-0 mt-0.5" />
           <p className="leading-snug">
             <strong>Privacy Protection:</strong> Webcam frames are processed locally for live preview and speech detection. Camera video is never recorded or stored on any server.
           </p>
         </div>
 
         {/* Actions */}
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
+        <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-2.5 pt-1">
           <button
             type="button"
             onClick={onCancel}
-            className="w-full sm:w-auto px-5 py-3 rounded-2xl font-bold text-[#12211A] bg-[#E4DDC9] hover:bg-[#D8CFA7] transition-all border-2 border-[#12211A] flex items-center justify-center space-x-2 text-xs"
+            className="w-full sm:w-auto px-4 py-2.5 rounded-2xl font-bold text-[#12211A] bg-[#E4DDC9] hover:bg-[#D8CFA7] transition-all border-2 border-[#12211A] flex items-center justify-center space-x-2 text-xs min-h-[44px]"
           >
-            <ArrowLeft className="w-4 h-4" />
+            <ArrowLeft className="w-4 h-4 shrink-0" />
             <span>Fallback to Standard Mode</span>
           </button>
 
-          <div className="flex items-center space-x-2 w-full sm:w-auto">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
             {permissionState !== 'granted' && (
               <button
                 type="button"
                 onClick={requestPermissions}
-                className="px-4 py-3 rounded-2xl font-bold text-[#12211A] bg-[#E4DDC9] hover:bg-[#D8CFA7] transition-all border-2 border-[#12211A] text-xs flex items-center justify-center space-x-1"
+                className="px-4 py-2.5 rounded-2xl font-bold text-[#12211A] bg-[#E4DDC9] hover:bg-[#D8CFA7] transition-all border-2 border-[#12211A] text-xs flex items-center justify-center space-x-1 min-h-[44px]"
               >
-                <Mic className="w-3.5 h-3.5" />
+                <Mic className="w-3.5 h-3.5 shrink-0" />
                 <span>Retry</span>
               </button>
             )}
             <button
               type="button"
               onClick={handleProceed}
-              className="w-full sm:w-auto px-6 py-3 rounded-2xl font-bold text-[#FBF9F3] bg-[#12211A] hover:bg-[#1D3327] transition-all border-2 border-[#12211A] editorial-shadow flex items-center justify-center space-x-2 text-sm"
+              className="w-full sm:w-auto px-5 py-2.5 rounded-2xl font-bold text-[#FBF9F3] bg-[#12211A] hover:bg-[#1D3327] transition-all border-2 border-[#12211A] editorial-shadow flex items-center justify-center space-x-2 text-xs sm:text-sm min-h-[44px]"
             >
-              <CheckCircle2 className="w-4 h-4 text-[#E7B92E]" />
-              <span>{permissionState === 'granted' ? 'Join Video Call with Alex' : 'Join Call Now (Fallback Mode)'}</span>
+              <CheckCircle2 className="w-4 h-4 text-[#E7B92E] shrink-0" />
+              <span>{permissionState === 'granted' ? 'Join Video Call with Alex' : 'Join Call Now (Fallback)'}</span>
             </button>
           </div>
         </div>

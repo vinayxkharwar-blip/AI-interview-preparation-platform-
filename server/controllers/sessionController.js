@@ -11,6 +11,7 @@ import { buildQuestionGenerationPrompt } from '../prompts/questionPrompts.js';
 import { buildImprovementPlanPrompt } from '../prompts/improvementPrompts.js';
 import { checkOwnership } from '../utils/authz.js';
 import { memoryResumes } from './resumeController.js';
+import { sanitizeRole } from '../utils/roleSanitizer.js';
 
 // In-memory fallback stores when MongoDB is offline/reconnecting
 export const memorySessions = [];
@@ -33,30 +34,38 @@ export const startSession = async (req, res) => {
 
     const { resumeId, targetRole, interviewType = 'technical', difficulty = 'mid', count = 5, focusTopic, previousScore } = req.body;
 
-    const effectiveTargetRole = targetRole || req.user.targetRole;
-    if (!effectiveTargetRole) {
+    const rawTargetRole = targetRole || req.user.targetRole;
+    if (!rawTargetRole || (typeof rawTargetRole === 'string' && !rawTargetRole.trim())) {
       return res.status(400).json({ message: 'Cannot generate questions: user profile data is missing' });
     }
+    const effectiveTargetRole = sanitizeRole(rawTargetRole);
 
     const isValidResumeId = resumeId && mongoose.Types.ObjectId.isValid(resumeId);
     let parsedResume = null;
-    if (isValidResumeId) {
-      try {
-        const resumeDoc = await Resume.findById(resumeId);
-        if (resumeDoc) {
-          parsedResume = resumeDoc.parsedData;
-        }
-      } catch (e) {
-        console.log('[Session DB Notice] Could not fetch resume by ID:', e.message);
-      }
-    }
+    let validatedResumeId = null;
 
-    if (!parsedResume && resumeId) {
-      const memResume = memoryResumes.find(
-        (r) => String(r._id) === String(resumeId) || String(r.id) === String(resumeId)
-      );
-      if (memResume) {
-        parsedResume = memResume.parsedData;
+    if (isValidResumeId) {
+      let resumeDoc = null;
+      if (mongoose.connection.readyState === 1) {
+        try {
+          resumeDoc = await Resume.findById(resumeId);
+        } catch (e) {
+          console.log('[Session DB Notice] Could not fetch resume by ID:', e.message);
+        }
+      }
+
+      if (!resumeDoc) {
+        resumeDoc = memoryResumes.find(
+          (r) => String(r._id) === String(resumeId) || String(r.id) === String(resumeId)
+        );
+      }
+
+      if (resumeDoc) {
+        if (!checkOwnership(resumeDoc, req.user)) {
+          return res.status(403).json({ message: 'Forbidden: You do not have permission to access this resume' });
+        }
+        parsedResume = resumeDoc.parsedData;
+        validatedResumeId = resumeDoc._id;
       }
     }
 
@@ -72,7 +81,7 @@ export const startSession = async (req, res) => {
         session = await Session.create({
           _id: sessionId,
           user: validUserId,
-          resume: isValidResumeId ? resumeId : null,
+          resume: validatedResumeId || null,
           targetRole: effectiveTargetRole,
           interviewType,
           difficulty,
@@ -91,7 +100,7 @@ export const startSession = async (req, res) => {
         _id: sessionId,
         id: sessionId,
         user: req.user._id,
-        resume: resumeId || null,
+        resume: validatedResumeId || null,
         targetRole: effectiveTargetRole,
         interviewType,
         difficulty,

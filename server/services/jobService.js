@@ -88,6 +88,62 @@ const MOCK_JOBS = [
     applyUrl: 'https://github.com/careers',
     source: 'Internal',
   },
+  {
+    id: 'job-107',
+    company: 'CrowdStrike',
+    logo: 'https://images.unsplash.com/photo-1563986768609-322da13575f3?auto=format&fit=crop&w=120&q=80',
+    title: 'Cybersecurity Analyst / SOC Analyst',
+    location: 'Remote (US/India)',
+    salary: '$110,000 - $150,000',
+    jobType: 'Full-time',
+    experience: 'Associate - Mid Level (2+ yrs)',
+    description: 'Monitor enterprise security events, perform incident response, triage SIEM alerts, and conduct threat hunting across zero-trust networks.',
+    skills: ['SIEM', 'Splunk', 'Network Security', 'Incident Response', 'Wireshark', 'Linux', 'Python', 'Threat Intelligence'],
+    applyUrl: 'https://www.crowdstrike.com/careers',
+    source: 'Internal',
+  },
+  {
+    id: 'job-108',
+    company: 'Atlassian',
+    logo: 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=120&q=80',
+    title: 'QA Engineer / Software Tester (Automation)',
+    location: 'Remote',
+    salary: '$105,000 - $145,000',
+    jobType: 'Full-time',
+    experience: 'Mid Level (2-4 yrs)',
+    description: 'Design end-to-end automated testing suites, perform regression drills, manage Playwright/Selenium test harnesses, and integrate automated quality gates into CI/CD.',
+    skills: ['Selenium', 'Playwright', 'Cypress', 'JavaScript', 'Python', 'API Testing', 'Postman', 'Jira'],
+    applyUrl: 'https://www.atlassian.com/company/careers',
+    source: 'Internal',
+  },
+  {
+    id: 'job-109',
+    company: 'Snowflake',
+    logo: 'https://images.unsplash.com/photo-1504868584819-f8e8b4b6d7e3?auto=format&fit=crop&w=120&q=80',
+    title: 'Data Analyst & Business Intelligence Specialist',
+    location: 'Remote / San Jose, CA',
+    salary: '$115,000 - $155,000',
+    jobType: 'Full-time',
+    experience: 'Mid Level (2+ yrs)',
+    description: 'Transform complex enterprise data into executive dashboards, execute SQL analytics models, and collaborate with product teams on growth metrics.',
+    skills: ['SQL', 'Python', 'Tableau', 'Power BI', 'Data Modeling', 'Snowflake', 'Excel', 'Statistics'],
+    applyUrl: 'https://careers.snowflake.com',
+    source: 'Internal',
+  },
+  {
+    id: 'job-110',
+    company: 'Accenture Technology',
+    logo: 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=120&q=80',
+    title: 'SAP Consultant / Technical Support Engineer',
+    location: 'Bengaluru / Hyderabad / Remote',
+    salary: '$95,000 - $135,000',
+    jobType: 'Full-time',
+    experience: 'Mid Level (3+ yrs)',
+    description: 'Configure and support enterprise SAP S/4HANA workflows, diagnose technical incidents, provide client integration support, and maintain high service SLAs.',
+    skills: ['SAP S/4HANA', 'ABAP', 'SQL', 'ITIL', 'Troubleshooting', 'ERP Systems', 'Customer Support', 'Jira Service Management'],
+    applyUrl: 'https://www.accenture.com/careers',
+    source: 'Internal',
+  },
 ];
 
 /**
@@ -98,10 +154,23 @@ const MOCK_JOBS = [
 export const calculateJobMatch = (userSkills = [], jobSkills = []) => {
   if (!Array.isArray(jobSkills) || jobSkills.length === 0) {
     return {
-      matchPercentage: 85,
-      matchedSkills: userSkills,
+      matchPercentage: 0,
+      matchedSkills: [],
       missingSkills: [],
       skillRecommendations: [],
+    };
+  }
+
+  if (!Array.isArray(userSkills) || userSkills.length === 0) {
+    return {
+      matchPercentage: 0,
+      matchedSkills: [],
+      missingSkills: [...jobSkills],
+      skillRecommendations: jobSkills.slice(0, 3).map((skill) => ({
+        skill,
+        recommendation: `Gain hands-on proficiency in ${skill} to increase ATS interview eligibility by +15%.`,
+        resources: `Recommended Practice: Complete a 2-hour mini project incorporating ${skill}.`,
+      })),
     };
   }
 
@@ -122,8 +191,7 @@ export const calculateJobMatch = (userSkills = [], jobSkills = []) => {
   });
 
   const rawScore = (matchedSkills.length / jobSkills.length) * 100;
-  // Baseline match score between 55% and 98%
-  const matchPercentage = Math.min(98, Math.max(55, Math.round(rawScore)));
+  const matchPercentage = matchedSkills.length === 0 ? 0 : Math.min(98, Math.max(15, Math.round(rawScore)));
 
   const skillRecommendations = missingSkills.map((skill) => ({
     skill,
@@ -149,9 +217,18 @@ export const fetchJobRecommendations = async ({ targetRole = '', skills = [], ex
 
   if (targetRole && targetRole.trim()) {
     const roleLower = targetRole.toLowerCase().trim();
-    const roleMatches = filteredJobs.filter(
-      (j) => j.title.toLowerCase().includes(roleLower) || j.description.toLowerCase().includes(roleLower)
-    );
+    const keywords = roleLower.split(/[\s/&-]+/).filter((w) => w.length > 1);
+
+    const roleMatches = filteredJobs.filter((j) => {
+      const titleLower = j.title.toLowerCase();
+      const descLower = j.description.toLowerCase();
+      return (
+        titleLower.includes(roleLower) ||
+        descLower.includes(roleLower) ||
+        keywords.some((kw) => titleLower.includes(kw))
+      );
+    });
+
     if (roleMatches.length > 0) {
       filteredJobs = roleMatches;
     }

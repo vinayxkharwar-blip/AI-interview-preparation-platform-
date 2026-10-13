@@ -11,7 +11,7 @@ import { generateLLMJson } from '../services/llmService.js';
 import { buildImprovementPlanPrompt } from '../prompts/improvementPrompts.js';
 import { buildLiveInterviewTurnPrompt } from '../prompts/liveInterviewPrompts.js';
 import mongoose from 'mongoose';
-import { checkOwnership } from '../utils/authz.js';
+import { checkOwnership, checkSessionOwnership } from '../utils/authz.js';
 import { synthesizeOpenAISpeech, synthesizeGeminiSpeech } from '../services/ttsService.js';
 
 // @desc Generate LiveKit WebRTC Access Token for live session
@@ -453,6 +453,12 @@ export const completeLiveSession = async (req, res) => {
 export const streamLiveTts = async (req, res) => {
   const reqStart = Date.now();
   try {
+    const { id: sessionId } = req.params;
+    const ownership = await checkSessionOwnership(sessionId, req.user);
+    if (!ownership.authorized) {
+      return res.status(ownership.status).json({ message: ownership.message });
+    }
+
     const { text, voice = 'alloy' } = req.body;
     if (!text || !text.trim()) {
       return res.status(400).json({ message: 'Text is required for TTS synthesis.' });

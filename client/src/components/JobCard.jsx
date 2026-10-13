@@ -18,12 +18,15 @@ import {
 export default function JobCard({ 
   job, 
   isSaved = false, 
+  isApplied = false,
   onSaveToggle, 
   onApply 
 }) {
   const navigate = useNavigate();
   const [showSkillTips, setShowSkillTips] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [showApplyConfirm, setShowApplyConfirm] = useState(false);
+  const [loggingApply, setLoggingApply] = useState(false);
 
   const handleSaveClick = async () => {
     if (saving) return;
@@ -34,13 +37,25 @@ export default function JobCard({
     setSaving(false);
   };
 
-  const handleApplyClick = () => {
+  const handleOpenExternalSite = () => {
     if (job.applyUrl) {
       window.open(job.applyUrl, '_blank', 'noopener,noreferrer');
+      if (!isApplied) {
+        setShowApplyConfirm(true);
+      }
+    } else {
+      setShowApplyConfirm(true);
     }
+  };
+
+  const handleConfirmApplication = async () => {
+    if (loggingApply) return;
+    setLoggingApply(true);
     if (onApply) {
-      onApply(job);
+      await onApply(job);
     }
+    setLoggingApply(false);
+    setShowApplyConfirm(false);
   };
 
   const handleStartInterview = () => {
@@ -76,26 +91,26 @@ export default function JobCard({
       {/* Top Header Row */}
       <div className="space-y-3">
         <div className="flex items-start justify-between gap-3">
-          <div className="flex items-center space-x-3.5">
-            <div className="w-12 h-12 rounded-xl bg-[#0F1E1B]/5 border border-[#0F1E1B]/15 overflow-hidden flex items-center justify-center shrink-0">
+          <div className="flex items-center space-x-3 sm:space-x-3.5 min-w-0 flex-1">
+            <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-[#0F1E1B]/5 border border-[#0F1E1B]/15 overflow-hidden flex items-center justify-center shrink-0">
               {job.logo ? (
                 <img src={job.logo} alt={job.company} className="w-full h-full object-cover" />
               ) : (
-                <Building2 className="w-6 h-6 text-[#0F1E1B]/70" />
+                <Building2 className="w-5 h-5 sm:w-6 sm:h-6 text-[#0F1E1B]/70" />
               )}
             </div>
-            <div>
-              <span className="text-xs font-extrabold uppercase tracking-wider text-[#C1440E]">
+            <div className="min-w-0 flex-1">
+              <span className="text-[11px] sm:text-xs font-extrabold uppercase tracking-wider text-[#C1440E] block truncate">
                 {job.company}
               </span>
-              <h3 className="text-lg font-bold font-serif-headline text-[#0F1E1B] leading-snug group-hover:text-[#C1440E] transition-colors">
+              <h3 className="text-base sm:text-lg font-bold font-serif-headline text-[#0F1E1B] leading-snug group-hover:text-[#C1440E] transition-colors break-words">
                 {job.title}
               </h3>
             </div>
           </div>
 
           {/* Match % Badge */}
-          <div className={`px-3 py-1 rounded-xl border text-xs font-black flex items-center space-x-1.5 shrink-0 ${matchColor}`}>
+          <div className={`px-2.5 sm:px-3 py-1 rounded-xl border text-[11px] sm:text-xs font-black flex items-center space-x-1.5 shrink-0 ${matchColor}`}>
             <Sparkles className="w-3.5 h-3.5" />
             <span>{job.matchPercentage || 85}% Match</span>
           </div>
@@ -189,19 +204,56 @@ export default function JobCard({
         )}
       </div>
 
+      {/* Explicit Application Confirmation Drawer */}
+      {showApplyConfirm && !isApplied && (
+        <div className="bg-[#FAF8F0] border-2 border-emerald-600 rounded-xl p-3 space-y-2 text-xs">
+          <div className="flex items-center space-x-1.5 font-bold text-emerald-950">
+            <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" />
+            <span>Did you submit your application on the employer portal?</span>
+          </div>
+          <p className="text-[11px] text-[#0F1E1B]/70 font-medium leading-tight">
+            Confirming will record this opening in your verified Application Tracker.
+          </p>
+          <div className="flex items-center space-x-2 pt-1">
+            <button
+              type="button"
+              onClick={handleConfirmApplication}
+              disabled={loggingApply}
+              className="px-3 py-1 bg-emerald-800 hover:bg-emerald-900 text-white rounded-lg text-xs font-bold transition-all shadow-xs disabled:opacity-50 cursor-pointer"
+            >
+              {loggingApply ? 'Recording...' : 'Yes, Log Application'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowApplyConfirm(false)}
+              className="px-2.5 py-1 text-xs font-bold text-[#0F1E1B]/70 hover:text-[#0F1E1B] cursor-pointer"
+            >
+              Not Yet
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Action Buttons Grid */}
-      <div className="pt-3 border-t border-[#0F1E1B]/10 grid grid-cols-2 gap-2">
-        <button
-          onClick={handleApplyClick}
-          className="px-3 py-2 rounded-xl text-xs font-bold bg-[#0F1E1B] text-[#FDFBF3] hover:bg-[#1A332E] transition-all flex items-center justify-center space-x-1.5 shadow-xs"
-        >
-          <span>Apply Now</span>
-          <ExternalLink className="w-3.5 h-3.5 text-[#F5D90A]" />
-        </button>
+      <div className="pt-3 border-t border-[#0F1E1B]/10 grid grid-cols-1 xs:grid-cols-2 gap-2">
+        {isApplied ? (
+          <div className="px-3 py-2 rounded-xl text-[11px] sm:text-xs font-bold bg-emerald-100 text-emerald-900 border border-emerald-400 flex items-center justify-center space-x-1.5 shadow-xs min-h-[38px]">
+            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700" />
+            <span>Applied ✓</span>
+          </div>
+        ) : (
+          <button
+            onClick={handleOpenExternalSite}
+            className="px-3 py-2 rounded-xl text-[11px] sm:text-xs font-bold bg-[#0F1E1B] text-[#FDFBF3] hover:bg-[#1A332E] transition-all flex items-center justify-center space-x-1.5 shadow-xs cursor-pointer min-h-[38px]"
+          >
+            <span>Apply on Site</span>
+            <ExternalLink className="w-3.5 h-3.5 text-[#F5D90A]" />
+          </button>
+        )}
 
         <button
           onClick={handleStartInterview}
-          className="px-3 py-2 rounded-xl text-xs font-bold bg-[#F5D90A] text-[#0F1E1B] hover:bg-[#e0c609] border-2 border-[#0F1E1B] transition-all flex items-center justify-center space-x-1.5 font-sans-body"
+          className="px-3 py-2 rounded-xl text-[11px] sm:text-xs font-bold bg-[#F5D90A] text-[#0F1E1B] hover:bg-[#e0c609] border-2 border-[#0F1E1B] transition-all flex items-center justify-center space-x-1.5 font-sans-body min-h-[38px] cursor-pointer"
         >
           <PlayCircle className="w-3.5 h-3.5 text-[#0F1E1B]" />
           <span>Start Interview</span>
@@ -209,7 +261,7 @@ export default function JobCard({
 
         <button
           onClick={handleGenerateCoverLetter}
-          className="px-3 py-1.5 rounded-xl text-xs font-bold bg-[#F5F2E6] text-[#0F1E1B] hover:bg-[#E6E4DC] border border-[#0F1E1B]/20 transition-all flex items-center justify-center space-x-1.5"
+          className="px-3 py-2 rounded-xl text-[11px] sm:text-xs font-bold bg-[#F5F2E6] text-[#0F1E1B] hover:bg-[#E6E4DC] border border-[#0F1E1B]/20 transition-all flex items-center justify-center space-x-1.5 min-h-[38px] cursor-pointer"
         >
           <FileText className="w-3.5 h-3.5 text-[#C1440E]" />
           <span>AI Cover Letter</span>
@@ -218,7 +270,7 @@ export default function JobCard({
         <button
           onClick={handleSaveClick}
           disabled={saving}
-          className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all flex items-center justify-center space-x-1.5 ${
+          className={`px-3 py-2 rounded-xl text-[11px] sm:text-xs font-bold border transition-all flex items-center justify-center space-x-1.5 min-h-[38px] cursor-pointer ${
             isSaved
               ? 'bg-[#C1440E]/10 text-[#C1440E] border-[#C1440E]'
               : 'bg-[#F5F2E6] text-[#0F1E1B] border-[#0F1E1B]/20 hover:border-[#0F1E1B]'

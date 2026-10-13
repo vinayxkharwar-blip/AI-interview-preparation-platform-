@@ -1,5 +1,5 @@
 import express from 'express';
-import { uploadResume, getUserResumes, getResumeById } from '../controllers/resumeController.js';
+import { uploadResume, getUserResumes, getResumeById, deleteResume } from '../controllers/resumeController.js';
 import { protect } from '../middleware/authMiddleware.js';
 import { handleResumeUpload } from '../middleware/uploadMiddleware.js';
 import { aiLimiter } from '../middleware/rateLimiter.js';
@@ -11,5 +11,6 @@ router.use(protect);
 router.post('/upload', aiLimiter, handleResumeUpload, uploadResume);
 router.get('/', getUserResumes);
 router.get('/:id', getResumeById);
+router.delete('/:id', deleteResume);
 
 export default router;
