@@ -46,22 +46,6 @@ export default function Login() {
     }
   };
 
-  const handleDemoLogin = async () => {
-    setEmail('test@example.com');
-    setPassword('password123');
-    setLoading(true);
-    setError('');
-    try {
-      await login('test@example.com', 'password123');
-      setLoading(false);
-      navigate('/dashboard');
-    } catch (err) {
-      console.error('Demo login error:', err);
-      setError('Demo login issue. Please try signing up.');
-      setLoading(false);
-    }
-  };
-
   return (
     <div className="min-h-[85vh] flex items-center justify-center py-8 sm:py-12 px-3.5 sm:px-6 lg:px-8">
       <div className="max-w-md w-full bg-[#FDFBF3] text-[#0F1E1B] p-5 sm:p-8 sm:p-10 rounded-2xl sm:rounded-3xl border-3 border-[#0F1E1B] editorial-shadow-lg space-y-6 sm:space-y-8 animate-fadeIn relative">
@@ -83,21 +67,6 @@ export default function Login() {
             <span>{error}</span>
           </div>
         )}
-
-        {/* Quick Demo Login Option */}
-        <div className="bg-[#F5F2E6] p-3 sm:p-3.5 rounded-2xl border-2 border-[#0F1E1B]/20 flex flex-col xs:flex-row items-start xs:items-center justify-between gap-2.5">
-          <div className="text-xs font-bold text-[#0F1E1B]">
-            <span>💡 Quick Test?</span>
-            <span className="block text-[11px] text-[#0F1E1B]/70 font-medium">Auto-fill test candidate credentials</span>
-          </div>
-          <button
-            type="button"
-            onClick={handleDemoLogin}
-            className="w-full xs:w-auto px-3 py-1.5 rounded-xl bg-[#F5D90A] text-[#0F1E1B] font-bold text-xs border-2 border-[#0F1E1B] hover:bg-[#e0c608] transition-colors shadow-xs text-center cursor-pointer"
-          >
-            One-Click Login
-          </button>
-        </div>
 
         <form noValidate onSubmit={handleSubmit} className="space-y-5">
           <div>
