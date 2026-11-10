@@ -1,8 +1,9 @@
-import React, { useState, useContext } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useContext } from 'react';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import { validateEmail } from '../utils/validation';
-import { Sparkles, Mail, Lock, LogIn, AlertCircle, Loader2, ArrowRight, Check } from 'lucide-react';
+import { isTokenExpired, clearAuthSession } from '../utils/token';
+import { Sparkles, Mail, Lock, LogIn, AlertCircle, Loader2, ArrowRight, Check, Clock } from 'lucide-react';
 import PrepPilotIcon from '../components/brand/PrepPilotIcon';
 import PrepPilotLogo from '../components/brand/PrepPilotLogo';
 
@@ -11,9 +12,26 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [infoMessage, setInfoMessage] = useState('');
 
   const { login } = useContext(AuthContext);
   const navigate = useNavigate();
+  const location = useLocation();
+
+  useEffect(() => {
+    // Proactively clear any expired session tokens when arriving on login page
+    const rawToken = localStorage.getItem('token');
+    if (rawToken && isTokenExpired(rawToken)) {
+      clearAuthSession();
+    }
+
+    // Check if user was gracefully redirected due to session expiration
+    const reason = sessionStorage.getItem('preppilot_auth_redirect_reason');
+    if (reason) {
+      setInfoMessage(reason);
+      sessionStorage.removeItem('preppilot_auth_redirect_reason');
+    }
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -35,7 +53,9 @@ export default function Login() {
     try {
       await login(emailCheck.normalizedEmail, password);
       setLoading(false);
-      navigate('/dashboard');
+      const searchParams = new URLSearchParams(location.search);
+      const redirectTo = searchParams.get('redirect') || '/dashboard';
+      navigate(redirectTo);
     } catch (err) {
       console.error('Login error:', err);
       const serverMessage = typeof err.response?.data === 'string'
@@ -60,6 +80,13 @@ export default function Login() {
             Sign in to access your AI mock sessions, transcripts & growth roadmaps.
           </p>
         </div>
+
+        {infoMessage && (
+          <div data-testid="info-message" role="status" className="p-3.5 sm:p-4 bg-amber-50 border-2 border-amber-600 rounded-2xl flex items-center space-x-3 text-amber-900 text-xs font-bold">
+            <Clock className="w-4 h-4 shrink-0 text-amber-700" />
+            <span>{infoMessage}</span>
+          </div>
+        )}
 
         {error && (
           <div data-testid="error-message" role="alert" className="p-3.5 sm:p-4 bg-rose-50 border-2 border-rose-600 rounded-2xl flex items-center space-x-3 text-rose-800 text-xs font-bold">

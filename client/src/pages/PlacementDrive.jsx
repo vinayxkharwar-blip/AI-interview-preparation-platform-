@@ -226,10 +226,10 @@ export default function PlacementDrive() {
     }
   };
 
-  const handlePYQComplete = (result) => {
+  const handlePYQComplete = async (result) => {
     setPyqResult(result);
     setPyqView('result');
-    fetchCurrentDrive();
+    await fetchCurrentDrive();
   };
 
   const handleRetakePYQ = () => {
@@ -358,11 +358,11 @@ export default function PlacementDrive() {
           driveId={drive._id}
           testData={activeTest}
           onComplete={(updatedDrive) => {
-            setDrive(updatedDrive);
+            if (updatedDrive) setDrive(updatedDrive);
           }}
-          onCancel={() => {
+          onCancel={async () => {
             setActiveTest(null);
-            fetchCurrentDrive();
+            await fetchCurrentDrive();
           }}
         />
       </div>
@@ -459,6 +459,7 @@ export default function PlacementDrive() {
           result={pyqResult}
           onRetake={handleRetakePYQ}
           onBackToSelector={() => setPyqView('selector')}
+          onBackToOverview={() => setPyqView('none')}
         />
         <AttemptHistoryModal
           isOpen={showHistoryModal}

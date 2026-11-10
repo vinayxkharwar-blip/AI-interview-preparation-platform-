@@ -3,6 +3,8 @@ import PlacementDrive from '../models/PlacementDrive.js';
 import Session from '../models/Session.js';
 import Resume from '../models/Resume.js';
 import Question from '../models/Question.js';
+import AptitudeAttempt from '../models/AptitudeAttempt.js';
+import { memoryAptitudeAttempts } from '../services/aptitudePYQService.js';
 import { checkOwnership } from '../utils/authz.js';
 import { generateAptitudeTest, evaluateAptitudeAnswers } from '../services/aptitudeService.js';
 import { initializeGDRound, generatePeerResponses, evaluateGDPerformance } from '../services/gdService.js';
@@ -11,6 +13,7 @@ import { buildQuestionGenerationPrompt } from '../prompts/questionPrompts.js';
 import User from '../models/User.js';
 import { memoryUsers } from './authController.js';
 import { sanitizeRole } from '../utils/roleSanitizer.js';
+import { selectTechnicalQuestions } from '../services/technicalQuestionService.js';
 import { memorySessions, memoryQuestions } from './sessionController.js';
 import { memoryResumes } from './resumeController.js';
 
@@ -20,10 +23,10 @@ export const memoryPlacementDrives = [];
 /**
  * Helper to find drive by query in DB or memory fallback
  */
-const findDrive = async (filter) => {
+export const findDrive = async (filter) => {
   if (mongoose.connection.readyState === 1) {
     try {
-      const doc = await PlacementDrive.findOne(filter).sort({ createdAt: -1 });
+      const doc = await PlacementDrive.findOne(filter).sort({ updatedAt: -1, createdAt: -1 });
       if (doc) return doc;
     } catch (e) {
       console.log('[Placement DB Notice] findOne fallback:', e.message);
@@ -42,11 +45,13 @@ const findDrive = async (filter) => {
 /**
  * Helper to save or update drive in DB and memory
  */
-const saveDrive = async (driveData) => {
+export const saveDrive = async (driveData) => {
   let savedDoc = null;
   if (mongoose.connection.readyState === 1) {
     try {
-      if (driveData._id && mongoose.Types.ObjectId.isValid(driveData._id)) {
+      if (typeof driveData.save === 'function') {
+        savedDoc = await driveData.save();
+      } else if (driveData._id && mongoose.Types.ObjectId.isValid(driveData._id)) {
         savedDoc = await PlacementDrive.findByIdAndUpdate(
           driveData._id,
           { $set: driveData },
@@ -56,19 +61,178 @@ const saveDrive = async (driveData) => {
         savedDoc = await PlacementDrive.create(driveData);
       }
     } catch (e) {
-      console.log('[Placement DB Notice] saveDrive error:', e.message);
+      console.warn('[Placement DB Error] saveDrive error:', e.message);
+      // Fallback: try plain object findByIdAndUpdate if doc.save failed
+      if (driveData._id && mongoose.Types.ObjectId.isValid(driveData._id)) {
+        try {
+          const plainObj = typeof driveData.toObject === 'function' ? driveData.toObject() : driveData;
+          savedDoc = await PlacementDrive.findByIdAndUpdate(
+            driveData._id,
+            { $set: plainObj },
+            { new: true, upsert: true, runValidators: false }
+          );
+        } catch (e2) {
+          console.error('[Placement DB Error] saveDrive fallback failed:', e2.message);
+        }
+      }
     }
   }
 
   // Update in-memory fallback
-  const idx = memoryPlacementDrives.findIndex((d) => String(d._id) === String(driveData._id));
+  const driveObj = savedDoc
+    ? (typeof savedDoc.toObject === 'function' ? savedDoc.toObject() : savedDoc)
+    : (typeof driveData.toObject === 'function' ? driveData.toObject() : { ...driveData, updatedAt: new Date() });
+
+  const idx = memoryPlacementDrives.findIndex(
+    (d) => String(d._id) === String(driveData._id) || String(d.id) === String(driveData._id)
+  );
   if (idx >= 0) {
-    memoryPlacementDrives[idx] = savedDoc ? savedDoc.toObject() : { ...driveData, updatedAt: new Date() };
+    memoryPlacementDrives[idx] = driveObj;
   } else {
-    memoryPlacementDrives.push(savedDoc ? savedDoc.toObject() : { ...driveData, createdAt: new Date() });
+    memoryPlacementDrives.push(driveObj);
   }
 
-  return savedDoc || driveData;
+  return savedDoc || driveObj;
+};
+
+/**
+ * Helper to sync Round 1 Aptitude Test result (from either diagnostic test or company PYQ test)
+ * into candidate's active PlacementDrive. Automatically unlocks Round 2 when passed.
+ */
+export const syncAptitudeResultToDrive = async (userId, {
+  score = 0,
+  passed = false,
+  breakdown = null,
+  questions = null,
+  feedback = '',
+  timeSpentSeconds = 0,
+  incrementAttempts = true,
+  company = null,
+}) => {
+  let drive = await findDrive({ user: userId });
+  if (!drive) {
+    const newDriveId = new mongoose.Types.ObjectId().toString();
+    const initialDrive = {
+      _id: newDriveId,
+      id: newDriveId,
+      user: userId,
+      targetRole: 'Full Stack Engineer',
+      status: 'in_progress',
+      currentRound: 1,
+      overallScore: 0,
+      rounds: {
+        round1_aptitude: {
+          status: 'unlocked',
+          attempts: 0,
+          maxAttempts: 3,
+          passThreshold: 60,
+          score: 0,
+          passed: false,
+          breakdown: {
+            quantitative: { score: 0, total: 5 },
+            logical: { score: 0, total: 5 },
+            verbal: { score: 0, total: 5 },
+          },
+          questions: [],
+          feedback: '',
+          completedAt: null,
+        },
+        round2_technical: {
+          status: 'locked',
+          attempts: 0,
+          maxAttempts: 3,
+          passThreshold: 60,
+          sessionId: null,
+          score: 0,
+          passed: false,
+          categoryBreakdown: [],
+          feedback: { strengths: [], weaknesses: [], summary: '' },
+          completedAt: null,
+        },
+        round3_gd: {
+          status: 'locked',
+          attempts: 0,
+          maxAttempts: 3,
+          passThreshold: 60,
+          topic: '',
+          discussionContext: '',
+          transcript: [],
+          score: 0,
+          passed: false,
+          rubrics: {
+            clarityAndArticulation: 0,
+            problemSolvingAndIdeas: 0,
+            collaborationAndListening: 0,
+            persuasionAndConfidence: 0,
+          },
+          feedback: { strengths: [], weaknesses: [], summary: '' },
+          completedAt: null,
+        },
+        round4_resume: {
+          status: 'locked',
+          attempts: 0,
+          maxAttempts: 3,
+          passThreshold: 60,
+          resumeId: null,
+          sessionId: null,
+          score: 0,
+          passed: false,
+          categoryBreakdown: [],
+          feedback: { strengths: [], weaknesses: [], summary: '' },
+          completedAt: null,
+        },
+      },
+      finalReport: {
+        verdict: 'IN_PROGRESS',
+        readinessScore: 0,
+        hiringRecommendation: '',
+        executiveSummary: '',
+        roundSummary: [],
+        topStrengths: [],
+        areasForImprovement: [],
+        generatedAt: null,
+      },
+    };
+    drive = await saveDrive(initialDrive);
+  }
+
+  const round1 = drive.rounds.round1_aptitude;
+  if (incrementAttempts) {
+    round1.attempts = (round1.attempts || 0) + 1;
+  }
+
+  // Update score if higher or newly passing
+  if (passed || score > (round1.score || 0)) {
+    round1.score = score;
+  }
+  if (breakdown) round1.breakdown = breakdown;
+  if (questions && questions.length > 0) round1.questions = questions;
+  if (timeSpentSeconds) round1.timeSpentSeconds = Number(timeSpentSeconds) || 0;
+  if (feedback) round1.feedback = feedback;
+
+  if (passed) {
+    round1.passed = true;
+    round1.status = 'completed';
+    round1.completedAt = new Date();
+    drive.currentRound = Math.max(drive.currentRound || 1, 2);
+
+    // Automatically unlock Round 2 Technical Interview
+    if (drive.rounds.round2_technical.status === 'locked') {
+      drive.rounds.round2_technical.status = 'unlocked';
+    }
+  } else {
+    // If not passed and not previously passed
+    if (!round1.passed) {
+      if (round1.attempts >= (round1.maxAttempts || 3)) {
+        round1.status = 'failed';
+        drive.status = 'failed';
+      } else {
+        round1.status = 'unlocked'; // Can retry
+      }
+    }
+  }
+
+  return await saveDrive(drive);
 };
 
 /**
@@ -165,6 +329,82 @@ export const getCurrentDrive = async (req, res) => {
       };
 
       drive = await saveDrive(initialDrive);
+    }
+
+    // Progression auto-reconciliation and self-healing:
+    let needsSave = false;
+
+    // Check if candidate passed an AptitudeAttempt in DB (e.g., Company PYQ Test)
+    if (!drive.rounds.round1_aptitude.passed) {
+      let passedAttempt = null;
+      if (mongoose.connection.readyState === 1) {
+        try {
+          passedAttempt = await AptitudeAttempt.findOne({
+            user: userId,
+            passed: true,
+            percentage: { $gte: 60 },
+          }).sort({ percentage: -1, createdAt: -1 });
+        } catch (e) {
+          console.log('[Placement DB Notice] AptitudeAttempt check fallback:', e.message);
+        }
+      }
+      if (!passedAttempt) {
+        passedAttempt = memoryAptitudeAttempts.find(
+          (a) => String(a.user) === String(userId) && a.passed && (a.percentage >= 60)
+        );
+      }
+
+      if (passedAttempt) {
+        drive.rounds.round1_aptitude.passed = true;
+        drive.rounds.round1_aptitude.status = 'completed';
+        drive.rounds.round1_aptitude.score = Math.max(
+          drive.rounds.round1_aptitude.score || 0,
+          Math.round(passedAttempt.percentage)
+        );
+        drive.rounds.round1_aptitude.attempts = Math.max(
+          drive.rounds.round1_aptitude.attempts || 1,
+          1
+        );
+        drive.rounds.round1_aptitude.feedback = `Cleared benchmark with ${Math.round(
+          passedAttempt.percentage
+        )}% on ${passedAttempt.company || 'Placement'} Aptitude Test.`;
+        if (drive.rounds.round2_technical.status === 'locked') {
+          drive.rounds.round2_technical.status = 'unlocked';
+        }
+        drive.currentRound = Math.max(drive.currentRound || 1, 2);
+        needsSave = true;
+      }
+    }
+
+    // Ensure Round 2 is unlocked if Round 1 is passed
+    if (drive.rounds.round1_aptitude.passed) {
+      if (drive.rounds.round2_technical.status === 'locked') {
+        drive.rounds.round2_technical.status = 'unlocked';
+        drive.currentRound = Math.max(drive.currentRound || 1, 2);
+        needsSave = true;
+      }
+    }
+
+    // Ensure Round 3 is unlocked if Round 2 is passed
+    if (drive.rounds.round2_technical.passed) {
+      if (drive.rounds.round3_gd.status === 'locked') {
+        drive.rounds.round3_gd.status = 'unlocked';
+        drive.currentRound = Math.max(drive.currentRound || 1, 3);
+        needsSave = true;
+      }
+    }
+
+    // Ensure Round 4 is unlocked if Round 3 is passed
+    if (drive.rounds.round3_gd.passed) {
+      if (drive.rounds.round4_resume.status === 'locked') {
+        drive.rounds.round4_resume.status = 'unlocked';
+        drive.currentRound = Math.max(drive.currentRound || 1, 4);
+        needsSave = true;
+      }
+    }
+
+    if (needsSave) {
+      drive = await saveDrive(drive);
     }
 
     res.json({ drive });
@@ -457,8 +697,8 @@ export const submitAptitudeTest = async (req, res) => {
 
     if (evaluation.passed) {
       round1.status = 'completed';
-      drive.currentRound = 2;
-      // Unlock Round 2
+      drive.currentRound = Math.max(drive.currentRound || 1, 2);
+      // Automatically unlock Round 2
       if (drive.rounds.round2_technical.status === 'locked') {
         drive.rounds.round2_technical.status = 'unlocked';
       }
@@ -471,7 +711,7 @@ export const submitAptitudeTest = async (req, res) => {
       }
     }
 
-    await saveDrive(drive);
+    const savedDrive = await saveDrive(drive);
 
     res.json({
       message: evaluation.passed ? 'Congratulations! You passed the Aptitude Test.' : 'Aptitude test not cleared.',
@@ -487,7 +727,7 @@ export const submitAptitudeTest = async (req, res) => {
         feedback: evaluation.feedback,
         questions: evaluation.questions,
       },
-      drive,
+      drive: savedDrive,
     });
   } catch (error) {
     console.error('[submitAptitudeTest Error]', error);
@@ -567,62 +807,14 @@ export const startTechnicalRound = async (req, res) => {
     }
     memorySessions.push(session);
 
-    // 2. Generate questions via existing LLM service
-    const prompt = buildQuestionGenerationPrompt({
+    // 2. Select optimized technical questions
+    const rawQuestions = selectTechnicalQuestions({
       targetRole,
       interviewType: 'technical',
       difficulty,
       count: 5,
       focusTopic: 'Placement Drive Core Engineering & Architecture',
     });
-
-    let rawQuestions = [];
-    try {
-      const llmResult = await generateLLMJson(prompt, 'You are an expert technical interview question generator.');
-      rawQuestions = Array.isArray(llmResult.questions) ? llmResult.questions : [];
-    } catch (llmErr) {
-      console.warn('[Technical LLM Warning]', llmErr.message);
-    }
-
-    if (!rawQuestions || rawQuestions.length === 0) {
-      rawQuestions = [
-        {
-          questionNumber: 1,
-          questionText: `Explain how you design scalable backend architectures and manage database concurrency in ${targetRole} systems.`,
-          category: 'System Architecture',
-          expectedKeyPoints: ['Horizontal scaling', 'Connection pooling', 'Transaction isolation & ACID'],
-          hints: ['Discuss microservices vs monolithic trade-offs.'],
-        },
-        {
-          questionNumber: 2,
-          questionText: 'How do you optimize asynchronous event loops, API latency, and caching strategies under heavy loads?',
-          category: 'Performance Engineering',
-          expectedKeyPoints: ['Event loop non-blocking I/O', 'Redis / Memcached caching', 'Database indexing'],
-          hints: ['Detail real-world metrics and benchmarks.'],
-        },
-        {
-          questionNumber: 3,
-          questionText: 'Describe how you handle state synchronization, race conditions, and error recovery across distributed services.',
-          category: 'Distributed Systems',
-          expectedKeyPoints: ['Idempotency keys', 'Eventual consistency', 'Dead-letter queues'],
-          hints: ['Focus on resilience patterns like circuit breakers.'],
-        },
-        {
-          questionNumber: 4,
-          questionText: 'What strategies do you employ for comprehensive test automation, CI/CD pipelines, and zero-downtime deployments?',
-          category: 'DevOps & Quality',
-          expectedKeyPoints: ['Unit/Integration/E2E test pyramid', 'Blue-Green / Canary releases', 'Rollback strategies'],
-          hints: ['Emphasize release confidence.'],
-        },
-        {
-          questionNumber: 5,
-          questionText: 'Walk through a complex technical bug or production outage you diagnosed and resolved.',
-          category: 'Debugging & Reliability',
-          expectedKeyPoints: ['Root cause analysis', 'Telemetry & APM logs', 'Preventive post-mortem actions'],
-          hints: ['Use the STAR methodology.'],
-        },
-      ];
-    }
 
     // Save Questions to DB/memory
     const questionsToSave = rawQuestions.map((q, idx) => {

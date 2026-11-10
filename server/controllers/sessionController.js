@@ -12,6 +12,7 @@ import { buildImprovementPlanPrompt } from '../prompts/improvementPrompts.js';
 import { checkOwnership } from '../utils/authz.js';
 import { memoryResumes } from './resumeController.js';
 import { sanitizeRole } from '../utils/roleSanitizer.js';
+import { selectTechnicalQuestions } from '../services/technicalQuestionService.js';
 
 // In-memory fallback stores when MongoDB is offline/reconnecting
 export const memorySessions = [];
@@ -23,6 +24,8 @@ export const memoryImprovementPlans = [];
 // @desc Start a new interview session
 // @route POST /api/sessions/start
 export const startSession = async (req, res) => {
+  const t0_handlerStart = Date.now();
+  console.log(`⏱️ [START SESSION TRACE] Handler initiated at t=0ms`);
   try {
     if (req.dbAvailable === false || mongoose.connection.readyState !== 1) {
       return res.status(503).json({ message: 'Database connection unavailable. Please check MongoDB Atlas network access settings.' });
@@ -44,6 +47,7 @@ export const startSession = async (req, res) => {
     let parsedResume = null;
     let validatedResumeId = null;
 
+    const t_resumeStart = Date.now();
     if (isValidResumeId) {
       let resumeDoc = null;
       if (mongoose.connection.readyState === 1) {
@@ -68,6 +72,8 @@ export const startSession = async (req, res) => {
         validatedResumeId = resumeDoc._id;
       }
     }
+    const t_resumeEnd = Date.now();
+    console.log(`⏱️ [START SESSION TRACE] 1. Resume lookup: ${t_resumeEnd - t_resumeStart}ms`);
 
     const sessionId = new mongoose.Types.ObjectId().toString();
     const validUserId = req.user._id && mongoose.Types.ObjectId.isValid(req.user._id)
@@ -75,6 +81,7 @@ export const startSession = async (req, res) => {
       : new mongoose.Types.ObjectId().toString();
 
     // 1. Create Session DB record
+    const t_sessionDbStart = Date.now();
     let session = null;
     if (mongoose.connection.readyState === 1) {
       try {
@@ -112,74 +119,28 @@ export const startSession = async (req, res) => {
       };
     }
     memorySessions.push(session);
+    const t_sessionDbEnd = Date.now();
+    console.log(`⏱️ [START SESSION TRACE] 2. MongoDB Session creation: ${t_sessionDbEnd - t_sessionDbStart}ms`);
 
-    // 2. Generate questions via LLM
+    // 2. Select optimized technical questions
     if (!req.user || !effectiveTargetRole) {
       return res.status(400).json({ message: 'Cannot generate questions: user profile data is missing' });
     }
 
-    const prompt = buildQuestionGenerationPrompt({
-      parsedResume,
+    const t_qSelectionStart = Date.now();
+    const rawQuestions = selectTechnicalQuestions({
       targetRole: effectiveTargetRole,
       interviewType,
       difficulty,
       count: session.totalQuestions,
       focusTopic,
+      parsedResume,
     });
-
-    let rawQuestions = [];
-    try {
-      const llmResult = await generateLLMJson(prompt, 'You are an expert interview question generator.');
-      if (!llmResult) {
-        throw new Error('Cannot generate questions: user profile data is missing or LLM failed to respond');
-      }
-      rawQuestions = Array.isArray(llmResult.questions) ? llmResult.questions : (llmResult.questions || []);
-    } catch (llmErr) {
-      console.error('[Session Controller] Question generation LLM error:', llmErr.message);
-    }
-
-    if (!Array.isArray(rawQuestions) || rawQuestions.length === 0) {
-      console.warn('[Session Controller] LLM returned 0 questions. Using fallback interview question set.');
-      rawQuestions = [
-        {
-          questionNumber: 1,
-          questionText: `Can you explain your background and key technical experience relevant to ${targetRole}?`,
-          category: 'General / Background',
-          expectedKeyPoints: ['Relevant technical experience', 'Key projects', 'Role fit'],
-          hints: ['Focus on impactful projects and core strengths.'],
-        },
-        {
-          questionNumber: 2,
-          questionText: `Describe a challenging problem you solved in ${focusTopic || 'a recent project'} and how you handled technical trade-offs.`,
-          category: 'Problem Solving',
-          expectedKeyPoints: ['Problem description', 'Approach & Analysis', 'Results & Trade-offs'],
-          hints: ['Use the STAR method.'],
-        },
-        {
-          questionNumber: 3,
-          questionText: 'How do you approach application performance, error handling, and system reliability?',
-          category: 'Architecture & Quality',
-          expectedKeyPoints: ['Monitoring & Logging', 'Resilience patterns', 'Testing strategy'],
-          hints: ['Discuss real-world production practices.'],
-        },
-        {
-          questionNumber: 4,
-          questionText: 'Explain how asynchronous operations, event loops, and state management work in your primary tech stack.',
-          category: 'Core Concepts',
-          expectedKeyPoints: ['Event loop / Call stack', 'Asynchronous flow', 'State synchronization'],
-          hints: ['Explain execution order clearly.'],
-        },
-        {
-          questionNumber: 5,
-          questionText: 'How do you prioritize technical debt vs feature delivery in a fast-paced environment?',
-          category: 'Behavioral & Leadership',
-          expectedKeyPoints: ['Pragmatic trade-offs', 'Team communication', 'Iterative refactoring'],
-          hints: ['Balance long-term quality with short-term delivery.'],
-        },
-      ].slice(0, session.totalQuestions);
-    }
+    const t_qSelectionEnd = Date.now();
+    console.log(`⏱️ [START SESSION TRACE] 3. Technical question selection (Optimized Engine): ${t_qSelectionEnd - t_qSelectionStart}ms`);
 
     // 3. Save Questions to DB and memory store
+    const t_questionsDbStart = Date.now();
     const questionsToSave = rawQuestions.map((q, idx) => {
       const qId = new mongoose.Types.ObjectId().toString();
       return {
@@ -211,6 +172,11 @@ export const startSession = async (req, res) => {
         memoryQuestions.push(q);
       }
     });
+    const t_questionsDbEnd = Date.now();
+    console.log(`⏱️ [START SESSION TRACE] 4. MongoDB Question insertion: ${t_questionsDbEnd - t_questionsDbStart}ms`);
+
+    const t_totalElapsed = Date.now() - t0_handlerStart;
+    console.log(`⏱️ [START SESSION TRACE] 5. Total handler execution time: ${t_totalElapsed}ms`);
 
     res.status(201).json({
       session,

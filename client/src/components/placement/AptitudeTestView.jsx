@@ -14,6 +14,7 @@ import {
   Layers
 } from 'lucide-react';
 import { submitAptitudeTest } from '../../api/placementApi';
+import { isTokenExpired, clearAuthSession } from '../../utils/token';
 
 export const AptitudeTestView = ({ driveId, testData, onComplete, onCancel }) => {
   const [currentIdx, setCurrentIdx] = useState(0);
@@ -74,6 +75,18 @@ export const AptitudeTestView = ({ driveId, testData, onComplete, onCancel }) =>
 
   const handleSubmit = async (isAuto = false) => {
     if (isSubmitting || result) return;
+
+    // Check token validity before attempting submission
+    const currentToken = localStorage.getItem('token');
+    if (!currentToken || isTokenExpired(currentToken)) {
+      clearAuthSession();
+      sessionStorage.setItem(
+        'preppilot_auth_redirect_reason',
+        'Your session expired during the test. Please log in again to continue.'
+      );
+      window.location.href = `/login?redirect=${encodeURIComponent(window.location.pathname)}`;
+      return;
+    }
 
     if (!isAuto) {
       const answeredCount = Object.keys(answers).length;
@@ -151,12 +164,23 @@ export const AptitudeTestView = ({ driveId, testData, onComplete, onCancel }) =>
             </button>
           </div>
         ) : (
-          <button
-            onClick={onCancel}
-            className="bg-[#0F1E1B] text-[#FDFBF3] px-4 py-2 rounded-xl text-xs font-bold border-2 border-[#0F1E1B] editorial-shadow-sm hover:bg-[#1A332E] transition-all"
-          >
-            Back to Dashboard
-          </button>
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={onCancel}
+              className="bg-[#0F1E1B] text-[#FDFBF3] px-4 py-2 rounded-xl text-xs font-bold border-2 border-[#0F1E1B] editorial-shadow-sm hover:bg-[#1A332E] transition-all"
+            >
+              Back to Dashboard
+            </button>
+            {result.passed && (
+              <button
+                onClick={onCancel}
+                className="bg-[#F47721] hover:bg-[#e06714] text-white px-4 py-2 rounded-xl text-xs font-bold border-2 border-[#0F1E1B] editorial-shadow-sm flex items-center space-x-1.5 transition-all"
+              >
+                <span>Proceed to Round 2</span>
+                <ArrowRight className="w-3.5 h-3.5 text-white" />
+              </button>
+            )}
+          </div>
         )}
       </div>
 
@@ -311,6 +335,32 @@ export const AptitudeTestView = ({ driveId, testData, onComplete, onCancel }) =>
                 )}
               </div>
             ))}
+          </div>
+
+          {/* Bottom Actions */}
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-6 border-t border-[#0F1E1B]/15">
+            <button
+              onClick={onCancel}
+              className="w-full sm:w-auto bg-[#0F1E1B] text-[#FDFBF3] px-5 py-2.5 rounded-xl text-xs font-bold border-2 border-[#0F1E1B] editorial-shadow-sm hover:bg-[#1A332E] transition-all"
+            >
+              ← Back to Dashboard
+            </button>
+            {result.passed ? (
+              <button
+                onClick={onCancel}
+                className="w-full sm:w-auto bg-[#F47721] hover:bg-[#e06714] text-white px-5 py-2.5 rounded-xl text-xs font-bold border-2 border-[#0F1E1B] editorial-shadow-sm flex items-center justify-center space-x-2 transition-transform hover:scale-102"
+              >
+                <span>Proceed to Round 2: Technical Interview</span>
+                <ArrowRight className="w-4 h-4 text-white" />
+              </button>
+            ) : (
+              <button
+                onClick={onCancel}
+                className="w-full sm:w-auto bg-white hover:bg-[#F5F2E6] text-[#0F1E1B] px-5 py-2.5 rounded-xl text-xs font-bold border-2 border-[#0F1E1B] editorial-shadow-sm transition-all"
+              >
+                Return to Placement Arena
+              </button>
+            )}
           </div>
         </div>
       ) : (

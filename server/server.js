@@ -79,13 +79,21 @@ const validateEnv = () => {
 
 validateEnv();
 
+// Catch unexpected rejections/exceptions to prevent unhandled node process termination
+process.on('unhandledRejection', (reason) => {
+  console.error('⚠️ [Process Unhandled Rejection]', reason);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('❌ [Process Uncaught Exception]', err.stack || err.message);
+});
+
 const app = express();
 
-// Connect to MongoDB (skip if running lightweight tests)
-if (!process.env.TEST_MODE) {
-  connectDB();
-}
+// Trust reverse proxies (Vite dev server, Render, Vercel, Nginx) so rate limiter and IP extraction behave correctly
+app.set('trust proxy', 1);
 
+// MongoDB connection state middleware
 app.use((req, res, next) => {
   req.dbAvailable = mongoose.connection.readyState === 1;
   next();
@@ -137,6 +145,11 @@ export const getAllowedOrigins = () => {
 export const isOriginAllowed = (origin, allowedList) => {
   if (!origin) return true; // Requests without Origin header (curl, mobile apps, server-to-server)
   const normalized = normalizeOrigin(origin).toLowerCase();
+
+  // Allow any localhost / 127.0.0.1 development port
+  if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(normalized)) {
+    return true;
+  }
 
   // Check against normalized allowed list
   if (allowedList.some((allowed) => normalizeOrigin(allowed).toLowerCase() === normalized)) {
@@ -233,6 +246,10 @@ app.use('/api/admin/aptitude', adminAptitudeRoutes);
 
 // Global Error Handler
 app.use((err, req, res, next) => {
+  if (res.headersSent) {
+    return next(err);
+  }
+
   if (err.message && err.message.includes('CORS')) {
     console.warn(`[CORS Error Handler] ${err.message}`);
     return res.status(403).json({
@@ -247,31 +264,92 @@ app.use((err, req, res, next) => {
   });
 });
 
-let PORT = process.env.PORT || 5000;
+let PORT = Number(process.env.PORT) || 5000;
+let activeServer = null;
 
-const startServer = (portToTry) => {
-  const server = app.listen(portToTry, '0.0.0.0', () => {
-    console.log(`====================================================`);
-    console.log(`🚀 AI Interview Server running on http://localhost:${portToTry}`);
-    console.log(`====================================================`);
-  });
-
-  server.on('error', (err) => {
-    if (err.code === 'EADDRINUSE') {
-      console.warn(`[Port Notice] Port ${portToTry} is already in use. Retrying on port ${portToTry + 1}...`);
-      startServer(portToTry + 1);
-    } else {
-      console.error('[Server Error]', err);
+/**
+ * Coordinated Server Startup
+ * 1. Connects to MongoDB Atlas first (with graceful fallback logging)
+ * 2. Binds HTTP server to port 5000 on '0.0.0.0'
+ * 3. Logs startup banner strictly inside the listen callback with bound port
+ * 4. Gracefully manages process lifecycle (SIGINT, SIGTERM)
+ */
+const startServer = async (portToTry = PORT) => {
+  // 1. Coordinate database connection first
+  if (!process.env.TEST_MODE && mongoose.connection.readyState !== 1) {
+    try {
+      await connectDB();
+    } catch (dbErr) {
+      console.warn(`[Startup Warning] MongoDB connection encountered error: ${dbErr.message}`);
+      console.warn('[Startup Notice] Operating with in-memory fallback store.');
     }
+  }
+
+  // 2. Start HTTP listener
+  return new Promise((resolve, reject) => {
+    const server = app.listen(portToTry, '0.0.0.0', () => {
+      activeServer = server;
+      const addr = server.address();
+      const actualPort = typeof addr === 'object' && addr ? addr.port : portToTry;
+      console.log(`====================================================`);
+      console.log(`🚀 AI Interview Server running on http://localhost:${actualPort}`);
+      console.log(`====================================================`);
+      resolve(server);
+    });
+
+    server.on('error', (err) => {
+      if (err.code === 'EADDRINUSE') {
+        console.warn(`[Port Notice] Port ${portToTry} is already in use. Retrying on port ${portToTry + 1}...`);
+        startServer(portToTry + 1).then(resolve).catch(reject);
+      } else {
+        console.error('[Server Error]', err);
+        reject(err);
+      }
+    });
   });
 };
 
-const isDirectRun = !process.argv[1] || 
-  process.argv[1].endsWith('server.js') || 
-  path.resolve(process.argv[1]).toLowerCase() === path.resolve(__filename).toLowerCase();
+// Graceful process lifecycle handlers
+const handleShutdown = (signal) => {
+  console.log(`\n[Process Lifecycle] Received ${signal}. Shutting down cleanly...`);
+  if (activeServer) {
+    activeServer.close(() => {
+      console.log('[Process Lifecycle] HTTP listener closed.');
+      if (mongoose.connection.readyState === 1) {
+        mongoose.connection.close(false).then(() => {
+          console.log('[Process Lifecycle] MongoDB connection closed.');
+          process.exit(0);
+        }).catch(() => process.exit(0));
+      } else {
+        process.exit(0);
+      }
+    });
+  } else {
+    process.exit(0);
+  }
+};
+
+process.on('SIGINT', () => handleShutdown('SIGINT'));
+process.on('SIGTERM', () => handleShutdown('SIGTERM'));
+
+const isDirectRun = (() => {
+  if (!process.argv[1]) return true;
+  const scriptPath = path.resolve(process.argv[1]).toLowerCase();
+  const currentFile = path.resolve(__filename).toLowerCase();
+  const currentDir = path.dirname(currentFile).toLowerCase();
+
+  return (
+    scriptPath === currentFile ||
+    scriptPath === currentDir ||
+    scriptPath.endsWith('server.js') ||
+    scriptPath.endsWith('server')
+  );
+})();
 
 if (isDirectRun && !process.env.NO_AUTO_START) {
-  startServer(Number(PORT));
+  startServer(PORT).catch((err) => {
+    console.error('❌ [Fatal Startup Error]', err);
+  });
 }
 
 export { app, startServer };

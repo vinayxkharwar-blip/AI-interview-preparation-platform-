@@ -1,6 +1,9 @@
 import express from 'express';
 import {
   getAvailableCompanies,
+  getCompanyPattern,
+  getAptitudeCategories,
+  getAptitudeAnalytics,
   getFilteredQuestionsInfo,
   startAptitudeTest,
   submitAptitudeTest,
@@ -11,11 +14,14 @@ import { protect } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
-// Public metadata of companies and available filters
+// Public metadata of companies, patterns, categories, and available filters
 router.get('/companies', getAvailableCompanies);
+router.get('/companies/:company/pattern', getCompanyPattern);
+router.get('/categories', getAptitudeCategories);
 router.get('/questions', getFilteredQuestionsInfo);
 
-// Protected student test sessions & attempts
+// Protected student test sessions, attempts, and analytics
+router.get('/analytics', protect, getAptitudeAnalytics);
 router.post('/tests/start', protect, startAptitudeTest);
 router.post('/tests/:testId/submit', protect, submitAptitudeTest);
 router.get('/tests/:testId/result', protect, getAptitudeTestResult);

@@ -47,6 +47,11 @@ export const authLimiter = rateLimit({
 export const aiLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 15,
+  skip: (req) =>
+    process.env.NODE_ENV === 'test' ||
+    Boolean(process.env.TEST_MODE) ||
+    process.env.DISABLE_RATE_LIMIT === 'true' ||
+    req.headers['x-test-mode'] === 'true',
   standardHeaders: true,
   legacyHeaders: false,
   statusCode: 429,

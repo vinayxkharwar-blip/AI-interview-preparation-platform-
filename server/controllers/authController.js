@@ -65,6 +65,32 @@ export const formatUser = (u) => {
   };
 };
 
+// @desc Refresh active session token
+// @route POST /api/auth/refresh
+export const refreshToken = async (req, res) => {
+  try {
+    const user = req.user;
+    if (!user) {
+      return res.status(401).json({ message: 'User not authorized.' });
+    }
+    const formattedUser = formatUser(user);
+    const newToken = generateToken(
+      formattedUser.id,
+      formattedUser.name,
+      formattedUser.email,
+      formattedUser.targetRole,
+      formattedUser.role
+    );
+    return res.json({
+      token: newToken,
+      user: formattedUser,
+    });
+  } catch (error) {
+    console.error('[Refresh Token Error]', error);
+    return res.status(500).json({ message: 'Failed to refresh session token.' });
+  }
+};
+
 // @desc Register user
 // @route POST /api/auth/register
 export const registerUser = async (req, res) => {
@@ -144,7 +170,8 @@ export const loginUser = async (req, res) => {
       return res.status(503).json({ message: 'Database connection unavailable. Please check MongoDB Atlas network access settings.' });
     }
 
-    const { email, password } = req.body;
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const { email, password } = body;
 
     if (!email || !password || (typeof email === 'string' && !email.trim()) || (typeof password === 'string' && !password.trim())) {
       return res.status(400).json({ message: 'Please provide email and password.' });
@@ -156,15 +183,24 @@ export const loginUser = async (req, res) => {
       return res.status(400).json({ message: 'Please enter a valid email address.' });
     }
 
+    // Diagnostic logging without exposing sensitive data (no passwords, secrets, or tokens)
+    console.log(`[Auth Diagnostic] Processing login request for email: "${cleanEmail}", DB readyState: ${mongoose.connection.readyState}`);
+
+    // If client sent an Authorization header from an expired or prior session, explicitly ignore it
+    if (req.headers && req.headers.authorization) {
+      console.log(`[Auth Diagnostic] Stale Authorization header detected on login route; isolating fresh login session.`);
+    }
+
     let user = null;
     try {
       user = await User.findOne({ email: cleanEmail });
     } catch (e) {
-      console.log('[DB Auth Warning] Login query error:', e.message);
+      console.warn('[DB Auth Warning] Login query error:', e.message);
     }
 
     // Generic error message for both non-existent account and wrong password
     if (!user) {
+      console.log(`[Auth Diagnostic] Login failed: User not found for email "${cleanEmail}"`);
       return res.status(401).json({ message: 'Invalid email or password.' });
     }
 
@@ -180,21 +216,30 @@ export const loginUser = async (req, res) => {
     }
 
     if (!isMatch) {
+      console.log(`[Auth Diagnostic] Login failed: Password mismatch for email "${cleanEmail}"`);
       return res.status(401).json({ message: 'Invalid email or password.' });
     }
 
     const formattedUser = formatUser(user);
+    if (!formattedUser || !formattedUser.id) {
+      throw new Error('Failed to format user payload for authentication token.');
+    }
+
     const token = generateToken(formattedUser.id, formattedUser.name, formattedUser.email, formattedUser.targetRole, formattedUser.role);
+
+    console.log(`[Auth Diagnostic] Login successful for user ID: ${formattedUser.id}, email: "${cleanEmail}", role: "${formattedUser.role}"`);
 
     return res.json({
       token,
       user: formattedUser,
     });
   } catch (error) {
-    console.error('[Login Error]', error);
-    return res.status(500).json({
-      message: `Server error during login: ${error.message || 'Internal Error'}`,
-    });
+    console.error('[Auth Diagnostic Error] Exception during login:', error.stack || error.message);
+    if (!res.headersSent) {
+      return res.status(500).json({
+        message: `Server error during login: ${error.message || 'Internal Error'}`,
+      });
+    }
   }
 };
 

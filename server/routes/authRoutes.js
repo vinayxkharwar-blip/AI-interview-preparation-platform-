@@ -1,6 +1,6 @@
 import express from 'express';
 import mongoose from 'mongoose';
-import { registerUser, loginUser, getMe, updateProfile, changePassword, deleteAccount } from '../controllers/authController.js';
+import { registerUser, loginUser, getMe, updateProfile, changePassword, deleteAccount, refreshToken } from '../controllers/authController.js';
 import { protect } from '../middleware/authMiddleware.js';
 import { authLimiter } from '../middleware/rateLimiter.js';
 import { validateRegisterInput, validateLoginInput } from '../middleware/validateAuth.js';
@@ -10,6 +10,7 @@ const router = express.Router();
 router.post('/register', authLimiter, validateRegisterInput, registerUser);
 router.post('/signup', authLimiter, validateRegisterInput, registerUser); // Alias
 router.post('/login', authLimiter, validateLoginInput, loginUser);
+router.post('/refresh', protect, refreshToken);
 router.get('/me', protect, getMe);
 router.put('/profile', protect, updateProfile);
 router.put('/password', protect, changePassword);

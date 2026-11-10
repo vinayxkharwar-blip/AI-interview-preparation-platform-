@@ -14,6 +14,7 @@ import {
   ShieldAlert
 } from 'lucide-react';
 import { submitPYQTest } from '../../api/aptitudePYQApi';
+import { isTokenExpired, clearAuthSession } from '../../utils/token';
 
 export const PYQTestEngine = ({
   testData,
@@ -80,6 +81,19 @@ export const PYQTestEngine = ({
 
   const handleSubmitConfirmed = async () => {
     if (isSubmitting) return;
+
+    // Check token validity before attempting submission
+    const currentToken = localStorage.getItem('token');
+    if (!currentToken || isTokenExpired(currentToken)) {
+      clearAuthSession();
+      sessionStorage.setItem(
+        'preppilot_auth_redirect_reason',
+        'Your session expired during the test. Please log in again to continue.'
+      );
+      window.location.href = `/login?redirect=${encodeURIComponent(window.location.pathname)}`;
+      return;
+    }
+
     setIsSubmitting(true);
     clearInterval(timerRef.current);
 

@@ -19,6 +19,7 @@ export const PYQResultView = ({
   result,
   onRetake,
   onBackToSelector,
+  onBackToOverview,
 }) => {
   const [filterSection, setFilterSection] = useState('all'); // 'all', 'incorrect', 'correct'
 
@@ -72,6 +73,20 @@ export const PYQResultView = ({
           >
             Back to Companies
           </button>
+          {result.passed && (
+            <button
+              onClick={() => {
+                if (typeof onBackToOverview === 'function') {
+                  onBackToOverview();
+                } else {
+                  onBackToSelector();
+                }
+              }}
+              className="bg-[#F47721] hover:bg-[#e06714] text-white px-4 py-2.5 rounded-xl text-xs font-bold border-2 border-[#0F1E1B] editorial-shadow-sm flex items-center space-x-1.5 transition-all"
+            >
+              <span>Round 2 Unlocked →</span>
+            </button>
+          )}
         </div>
       </div>
 

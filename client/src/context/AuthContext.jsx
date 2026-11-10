@@ -1,10 +1,25 @@
 import React, { createContext, useState, useEffect, useCallback } from 'react';
 import axiosClient from '../api/axiosClient';
+import { isTokenExpired, clearAuthSession } from '../utils/token';
 
 export const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
+  const [token, setToken] = useState(() => {
+    const savedToken = localStorage.getItem('token');
+    if (savedToken && isTokenExpired(savedToken)) {
+      clearAuthSession();
+      return null;
+    }
+    return savedToken || null;
+  });
+
   const [user, setUser] = useState(() => {
+    const savedToken = localStorage.getItem('token');
+    if (!savedToken || isTokenExpired(savedToken)) {
+      clearAuthSession();
+      return null;
+    }
     try {
       const saved = localStorage.getItem('user');
       if (saved) {
@@ -20,7 +35,7 @@ export const AuthProvider = ({ children }) => {
     }
     return null;
   });
-  const [token, setToken] = useState(localStorage.getItem('token') || null);
+
   const [loading, setLoading] = useState(true);
 
   const normalizeUser = (userData) => {
@@ -35,8 +50,10 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     const loadUser = async () => {
-      if (!token) {
+      if (!token || isTokenExpired(token)) {
+        clearAuthSession();
         setUser(null);
+        setToken(null);
         setLoading(false);
         return;
       }
@@ -85,16 +102,8 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = useCallback(() => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    try {
-      Object.keys(localStorage).forEach((key) => {
-        if (key.startsWith('preppilot_')) {
-          localStorage.removeItem(key);
-        }
-      });
-      sessionStorage.clear();
-    } catch (e) {}
+    clearAuthSession();
+    sessionStorage.clear();
     setToken(null);
     setUser(null);
   }, []);

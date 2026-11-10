@@ -2,16 +2,20 @@ import mongoose from 'mongoose';
 import AptitudeQuestion from '../models/AptitudeQuestion.js';
 import AptitudeAttempt from '../models/AptitudeAttempt.js';
 import { checkOwnership } from '../utils/authz.js';
+import { syncAptitudeResultToDrive } from './placementController.js';
 import {
   getAvailableCompaniesMetadata,
+  getAptitudeCategoriesMetadata,
+  getUserAptitudeAnalytics,
   selectQuestionsForTest,
   gradeTestSubmission,
   memoryAptitudeQuestions,
   memoryAptitudeAttempts,
 } from '../services/aptitudePYQService.js';
+import { COMPANY_EXAM_PATTERNS, DEFAULT_COMPANY_PATTERN } from '../config/companyExamPatterns.js';
 
 /**
- * @desc Get companies that have verified question data in MongoDB
+ * @desc Get companies that have verified question data in MongoDB with exam patterns
  * @route GET /api/aptitude/companies
  */
 export const getAvailableCompanies = async (req, res) => {
@@ -28,24 +32,75 @@ export const getAvailableCompanies = async (req, res) => {
 };
 
 /**
+ * @desc Get official/simulated pattern and syllabus for a company
+ * @route GET /api/aptitude/companies/:company/pattern
+ */
+export const getCompanyPattern = async (req, res) => {
+  try {
+    const { company } = req.params;
+    const pattern = COMPANY_EXAM_PATTERNS[company] || DEFAULT_COMPANY_PATTERN;
+    res.json({
+      pattern,
+    });
+  } catch (error) {
+    console.error('[PYQ Controller getCompanyPattern Error]', error);
+    res.status(500).json({ message: error.message || 'Failed to fetch company pattern' });
+  }
+};
+
+/**
+ * @desc Get all categories and 72 placement subtopics with question counts
+ * @route GET /api/aptitude/categories
+ */
+export const getAptitudeCategories = async (req, res) => {
+  try {
+    const categories = await getAptitudeCategoriesMetadata();
+    res.json({
+      categories,
+    });
+  } catch (error) {
+    console.error('[PYQ Controller getAptitudeCategories Error]', error);
+    res.status(500).json({ message: error.message || 'Failed to fetch aptitude categories' });
+  }
+};
+
+/**
+ * @desc Get candidate performance analytics across companies and categories
+ * @route GET /api/aptitude/analytics
+ */
+export const getAptitudeAnalytics = async (req, res) => {
+  try {
+    const userId = req.user._id || req.user.id;
+    const analytics = await getUserAptitudeAnalytics(userId);
+    res.json({
+      analytics,
+    });
+  } catch (error) {
+    console.error('[PYQ Controller getAptitudeAnalytics Error]', error);
+    res.status(500).json({ message: error.message || 'Failed to fetch aptitude analytics' });
+  }
+};
+
+/**
  * @desc Get available question counts and filter options without exposing questions
  * @route GET /api/aptitude/questions
  */
 export const getFilteredQuestionsInfo = async (req, res) => {
   try {
-    const { company, examYear, topic, difficulty } = req.query;
+    const { company, examYear, topic, subtopic, difficulty } = req.query;
 
     const { availableCount } = await selectQuestionsForTest({
       company,
       examYear,
       topic,
+      subtopic,
       difficulty,
       questionCount: 1, // just count availability
     });
 
     res.json({
       availableCount,
-      filters: { company, examYear, topic, difficulty },
+      filters: { company, examYear, topic, subtopic, difficulty },
       isAvailable: availableCount > 0,
     });
   } catch (error) {
@@ -62,9 +117,10 @@ export const startAptitudeTest = async (req, res) => {
   try {
     const userId = req.user._id || req.user.id;
     const {
-      company,
+      company = 'General Aptitude',
       examYear,
       topic = 'All Topics',
+      subtopic = 'All Subtopics',
       difficulty = 'All Difficulties',
       testMode = 'full_mock',
       questionCount = 10,
@@ -72,11 +128,14 @@ export const startAptitudeTest = async (req, res) => {
       timeLimitMinutes = 15,
     } = req.body;
 
+    const companyPattern = COMPANY_EXAM_PATTERNS[company] || DEFAULT_COMPANY_PATTERN;
+
     // Fetch verified questions dynamically
     const { availableCount, selectedQuestions } = await selectQuestionsForTest({
       company,
       examYear,
       topic,
+      subtopic,
       difficulty,
       questionCount: Number(questionCount) || 10,
       userId,
@@ -84,7 +143,7 @@ export const startAptitudeTest = async (req, res) => {
 
     if (availableCount === 0 || selectedQuestions.length === 0) {
       return res.status(404).json({
-        message: `No verified PYQ questions are currently available for ${company || 'selected filters'}. Please choose another company or topic.`,
+        message: `No questions available for ${company || 'selected filters'}. Please choose another company or topic.`,
         availableCount: 0,
       });
     }
@@ -117,13 +176,15 @@ export const startAptitudeTest = async (req, res) => {
       user: userId,
       company: company || 'General Aptitude',
       examYear: examYear ? Number(examYear) : null,
-      examName: selectedQuestions[0]?.examName || `${company} Placement Test`,
+      examName: selectedQuestions[0]?.examName || companyPattern.examTitle || `${company} Placement Test`,
       topic,
+      subtopic,
       difficulty,
       testMode,
-      negativeMarking: Math.max(0, Number(negativeMarking) || 0),
+      negativeMarking: Math.max(0, Number(negativeMarking) >= 0 ? Number(negativeMarking) : (companyPattern.negativeMarking || 0)),
       marksPerQuestion: 1.0,
-      timeLimitMinutes: Number(timeLimitMinutes) || 15,
+      timeLimitMinutes: Number(timeLimitMinutes) || (questionCount <= 10 ? 15 : companyPattern.expectedDurationMinutes || 25),
+      passCutoffPercentage: companyPattern.passCutoffPercentage || 60,
       status: 'in_progress',
       questions: questionsSnapshot,
       totalQuestions: questionsSnapshot.length,
@@ -163,10 +224,12 @@ export const startAptitudeTest = async (req, res) => {
       examName: savedAttempt.examName,
       examYear: savedAttempt.examYear,
       topic: savedAttempt.topic,
+      subtopic: savedAttempt.subtopic,
       difficulty: savedAttempt.difficulty,
       testMode: savedAttempt.testMode,
       timeLimitMinutes: savedAttempt.timeLimitMinutes,
       negativeMarking: savedAttempt.negativeMarking,
+      passCutoffPercentage: savedAttempt.passCutoffPercentage,
       totalQuestions: clientQuestions.length,
       questions: clientQuestions,
     });
@@ -237,6 +300,7 @@ export const submitAptitudeTest = async (req, res) => {
     attempt.rawScore = evaluation.rawScore;
     attempt.maxScore = evaluation.maxScore;
     attempt.percentage = evaluation.percentage;
+    attempt.scorePercentage = evaluation.percentage;
     attempt.passed = evaluation.passed;
     attempt.topicBreakdown = evaluation.topicBreakdown;
     attempt.weakTopics = evaluation.weakTopics;
@@ -250,14 +314,33 @@ export const submitAptitudeTest = async (req, res) => {
       if (idx >= 0) memoryAptitudeAttempts[idx] = attempt;
     }
 
+    // Automatically sync Round 1 Aptitude result into candidate's Placement Drive journey
+    let updatedDrive = null;
+    try {
+      updatedDrive = await syncAptitudeResultToDrive(userId, {
+        score: Math.round(evaluation.percentage),
+        passed: evaluation.passed,
+        company: attempt.company,
+        feedback: evaluation.passed
+          ? `Passed ${attempt.company || 'Placement'} Aptitude Test with ${Math.round(evaluation.percentage)}% score.`
+          : `Did not clear benchmark (${Math.round(evaluation.percentage)}%) on ${attempt.company || 'Placement'} Aptitude Test.`,
+        incrementAttempts: true,
+        timeSpentSeconds: evaluation.timeSpentSeconds,
+      });
+    } catch (driveSyncError) {
+      console.warn('[PYQ Controller] PlacementDrive sync notice:', driveSyncError.message);
+    }
+
     res.json({
       message: evaluation.passed ? 'Test submitted successfully! Cutoff benchmark cleared.' : 'Test submitted. Review weak areas for improvement.',
+      drive: updatedDrive,
       result: {
         testId: attempt._id,
         company: attempt.company,
         examName: attempt.examName,
         examYear: attempt.examYear,
         topic: attempt.topic,
+        subtopic: attempt.subtopic,
         difficulty: attempt.difficulty,
         totalQuestions: attempt.totalQuestions,
         totalAttempted: attempt.totalAttempted,

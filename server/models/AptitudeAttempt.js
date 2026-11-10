@@ -134,6 +134,10 @@ const aptitudeAttemptSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    scorePercentage: {
+      type: Number,
+      default: 0,
+    },
     passed: {
       type: Boolean,
       default: false,

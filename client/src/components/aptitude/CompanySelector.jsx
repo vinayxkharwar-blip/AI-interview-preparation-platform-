@@ -14,54 +14,18 @@ import {
   History,
   UploadCloud,
   FileCheck2,
-  HelpCircle
+  HelpCircle,
+  Play,
+  BarChart3,
+  BookOpen,
+  PlusCircle,
+  Info
 } from 'lucide-react';
 import { getAvailableCompanies } from '../../api/aptitudePYQApi';
-
-export const SUPPORTED_COMPANIES = [
-  {
-    name: 'TCS',
-    examTitle: 'TCS NQT (National Qualifier Test)',
-    tagline: 'Cognitive & Numerical Reasoning',
-    accentColor: 'border-blue-600 bg-blue-50/50',
-    logoBadge: 'bg-blue-600 text-white',
-  },
-  {
-    name: 'Infosys',
-    examTitle: 'INFYTQ & Campus Certification',
-    tagline: 'Mathematical & Logical Ability',
-    accentColor: 'border-indigo-600 bg-indigo-50/50',
-    logoBadge: 'bg-indigo-600 text-white',
-  },
-  {
-    name: 'Accenture',
-    examTitle: 'Cognitive & Technical Assessment',
-    tagline: 'Critical Thinking & Abstract Reasoning',
-    accentColor: 'border-purple-600 bg-purple-50/50',
-    logoBadge: 'bg-purple-600 text-white',
-  },
-  {
-    name: 'Capgemini',
-    examTitle: 'Excellence Aptitude Qualifier',
-    tagline: 'Data Interpretation & Arithmetic',
-    accentColor: 'border-cyan-600 bg-cyan-50/50',
-    logoBadge: 'bg-cyan-600 text-white',
-  },
-  {
-    name: 'Cognizant',
-    examTitle: 'GenC Quantitative Qualifier',
-    tagline: 'Analytical & Quantitative Models',
-    accentColor: 'border-emerald-600 bg-emerald-50/50',
-    logoBadge: 'bg-emerald-600 text-white',
-  },
-  {
-    name: 'Wipro',
-    examTitle: 'Elite National Talent Hunt (NTH)',
-    tagline: 'Quantitative & Verbal Reasoning',
-    accentColor: 'border-amber-600 bg-amber-50/50',
-    logoBadge: 'bg-amber-600 text-white',
-  },
-];
+import CompanyPatternModal from './CompanyPatternModal';
+import CustomCompanyModal from './CustomCompanyModal';
+import TopicPracticeTab from './TopicPracticeTab';
+import AptitudeAnalyticsTab from './AptitudeAnalyticsTab';
 
 export const CompanySelector = ({
   user,
@@ -71,15 +35,22 @@ export const CompanySelector = ({
   actionLoading,
   refreshTrigger,
 }) => {
+  // Navigation tabs: 'company_prep', 'topic_practice', 'analytics'
+  const [activeTab, setActiveTab] = useState('company_prep');
+
   const [availableCompaniesData, setAvailableCompaniesData] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Configuration selections
-  const [selectedCompany, setSelectedCompany] = useState('TCS');
+  // Selected company and modals
+  const [patternModalCompany, setPatternModalCompany] = useState(null);
+  const [showPatternModal, setShowPatternModal] = useState(false);
+  const [showCustomCompanyModal, setShowCustomCompanyModal] = useState(false);
+
+  // Quick setup drawer for custom parameters on a selected company
+  const [drawerCompany, setDrawerCompany] = useState(null);
   const [selectedYear, setSelectedYear] = useState('all');
   const [selectedTopic, setSelectedTopic] = useState('All Topics');
   const [selectedDifficulty, setSelectedDifficulty] = useState('All Difficulties');
-  const [testMode, setTestMode] = useState('full_mock'); // 'full_mock' | 'topic_practice'
   const [questionCount, setQuestionCount] = useState(10);
   const [negativeMarking, setNegativeMarking] = useState(0.25);
 
@@ -99,39 +70,63 @@ export const CompanySelector = ({
     }
   };
 
-  // Merge static presets with any new companies found in MongoDB
-  const combinedCompanies = [...SUPPORTED_COMPANIES];
-  availableCompaniesData.forEach((dbComp) => {
-    if (!combinedCompanies.some((c) => c.name.toLowerCase() === dbComp.company.toLowerCase())) {
-      combinedCompanies.push({
-        name: dbComp.company,
-        examTitle: `${dbComp.company} Placement Assessment`,
-        tagline: 'Authentic Campus Recruitment PYQs',
-        accentColor: 'border-slate-600 bg-slate-50/50',
-        logoBadge: 'bg-slate-700 text-white',
-      });
-    }
-  });
+  const handleOpenPattern = (comp) => {
+    setPatternModalCompany(comp);
+    setShowPatternModal(true);
+  };
 
-  // Find active verified data for the selected company
-  const activeCompanyVerifiedData = availableCompaniesData.find(
-    (c) => c.company.toLowerCase() === selectedCompany.toLowerCase()
-  );
+  const handleStartQuickPractice = (comp) => {
+    const compName = typeof comp === 'string' ? comp : comp.company;
+    const targetCompData = availableCompaniesData.find(
+      (c) => c.company.toLowerCase() === compName.toLowerCase()
+    );
 
-  const availableYears = activeCompanyVerifiedData?.examYears || [];
-  const hasVerifiedData = (activeCompanyVerifiedData?.totalQuestions || 0) > 0;
-
-  const handleLaunch = () => {
     onStartTest({
-      company: selectedCompany,
+      company: compName,
+      examYear: null,
+      topic: 'All Topics',
+      subtopic: 'All Subtopics',
+      difficulty: 'Medium',
+      testMode: 'topic_practice',
+      questionCount: 10,
+      negativeMarking: targetCompData?.negativeMarking ?? 0.25,
+      timeLimitMinutes: 15,
+    });
+  };
+
+  const handleStartFullMock = (comp) => {
+    const compName = typeof comp === 'string' ? comp : comp.company;
+    const targetCompData = availableCompaniesData.find(
+      (c) => c.company.toLowerCase() === compName.toLowerCase()
+    );
+
+    onStartTest({
+      company: compName,
+      examYear: 2024,
+      topic: 'All Topics',
+      subtopic: 'All Subtopics',
+      difficulty: 'Medium',
+      testMode: 'full_mock',
+      questionCount: targetCompData?.fullMockQuestionCount || 20,
+      negativeMarking: targetCompData?.negativeMarking ?? 0.25,
+      timeLimitMinutes: targetCompData?.expectedDurationMinutes || 25,
+    });
+  };
+
+  const handleLaunchCustomConfigured = () => {
+    if (!drawerCompany) return;
+    onStartTest({
+      company: drawerCompany.company,
       examYear: selectedYear === 'all' ? null : Number(selectedYear),
       topic: selectedTopic,
+      subtopic: 'All Subtopics',
       difficulty: selectedDifficulty === 'All Difficulties' ? 'Medium' : selectedDifficulty,
-      testMode,
+      testMode: 'topic_practice',
       questionCount,
       negativeMarking,
       timeLimitMinutes: questionCount <= 10 ? 15 : 25,
     });
+    setDrawerCompany(null);
   };
 
   return (
@@ -141,19 +136,33 @@ export const CompanySelector = ({
         <div>
           <div className="flex items-center space-x-2">
             <span className="bg-[#F5D90A] text-[#0F1E1B] px-2.5 py-0.5 rounded text-[10px] font-black uppercase tracking-wider">
-              Verified PYQ Engine
+              Recruitment Assessment Engine
             </span>
-            <span className="text-xs font-bold text-[#0F1E1B]/60">Previous Year Placement Papers</span>
+            <span className="text-xs font-bold text-[#0F1E1B]/60">
+              Campus Placement Aptitude Arena
+            </span>
           </div>
           <h2 className="font-serif-headline text-2xl sm:text-3xl font-black text-[#0F1E1B] mt-1">
-            Company-Wise Aptitude Practice Arena
+            Company-Wise Aptitude Assessment Module
           </h2>
-          <p className="text-xs sm:text-sm text-[#0F1E1B]/70 max-w-xl mt-1">
-            Practice authenticated previous-year aptitude papers with company-specific marking schemes, negative marking, and verified step-by-step solutions.
+          <p className="text-xs sm:text-sm text-[#0F1E1B]/70 max-w-2xl mt-1 leading-relaxed">
+            Practice authenticated previous-year aptitude papers and realistic simulations modeled after official hiring patterns of TCS, Infosys, Accenture, Wipro, Capgemini, Cognizant, HCLTech, Tech Mahindra, and Deloitte.
           </p>
         </div>
 
-        <div className="flex items-center space-x-2.5 shrink-0">
+        <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+          <button
+            onClick={() => setActiveTab('analytics')}
+            className={`flex items-center space-x-1.5 px-3.5 py-2.5 rounded-xl text-xs font-bold border-2 transition-all ${
+              activeTab === 'analytics'
+                ? 'bg-[#0F1E1B] text-[#FDFBF3] border-[#0F1E1B]'
+                : 'bg-white hover:bg-[#F5F2E6] text-[#0F1E1B] border-[#0F1E1B] editorial-shadow-sm'
+            }`}
+          >
+            <BarChart3 className="w-3.5 h-3.5 text-emerald-600" />
+            <span>Analytics</span>
+          </button>
+
           <button
             onClick={onOpenHistory}
             className="flex items-center space-x-1.5 bg-white hover:bg-[#F5F2E6] text-[#0F1E1B] px-3.5 py-2.5 rounded-xl text-xs font-bold border-2 border-[#0F1E1B] editorial-shadow-sm transition-all"
@@ -162,235 +171,363 @@ export const CompanySelector = ({
             <span>Attempt History</span>
           </button>
 
-          {/* Admin Studio trigger */}
-          <button
-            onClick={onOpenAdminStudio}
-            className="flex items-center space-x-1.5 bg-[#0F1E1B] hover:bg-[#1A332E] text-[#FDFBF3] px-3.5 py-2.5 rounded-xl text-xs font-bold border-2 border-[#0F1E1B] editorial-shadow-sm transition-all"
-          >
-            <UploadCloud className="w-3.5 h-3.5 text-[#F5D90A]" />
-            <span>Admin PYQ Studio</span>
-          </button>
+          {(user?.role === 'admin' || user?.email?.includes('admin')) && (
+            <button
+              onClick={onOpenAdminStudio}
+              className="flex items-center space-x-1.5 bg-[#0F1E1B] hover:bg-[#1A332E] text-[#FDFBF3] px-3.5 py-2.5 rounded-xl text-xs font-bold border-2 border-[#0F1E1B] editorial-shadow-sm transition-all"
+            >
+              <UploadCloud className="w-3.5 h-3.5 text-[#F5D90A]" />
+              <span>Admin Studio</span>
+            </button>
+          )}
         </div>
       </div>
 
-      {/* 1. SELECT TARGET COMPANY */}
-      <div>
-        <div className="flex items-center justify-between mb-3">
-          <label className="text-xs font-black uppercase tracking-wider text-[#0F1E1B] flex items-center space-x-1.5">
-            <Building2 className="w-4 h-4 text-[#C1440E]" />
-            <span>1. Select Campus Recruitment Company</span>
-          </label>
-          <span className="text-xs font-bold text-[#0F1E1B]/60">
-            {availableCompaniesData.length} Companies with Verified PYQs
+      {/* Navigation Tabs Header */}
+      <div className="flex border-b-2 border-[#0F1E1B]/20">
+        <button
+          onClick={() => setActiveTab('company_prep')}
+          className={`flex items-center space-x-2 py-3 px-6 text-xs sm:text-sm font-black border-b-4 -mb-[3px] transition-all ${
+            activeTab === 'company_prep'
+              ? 'border-[#C1440E] text-[#0F1E1B] bg-white rounded-t-xl'
+              : 'border-transparent text-[#0F1E1B]/60 hover:text-[#0F1E1B]'
+          }`}
+        >
+          <Building2 className="w-4 h-4 text-[#C1440E]" />
+          <span>1. Company-Wise Preparation</span>
+          <span className="bg-[#F5D90A] text-[#0F1E1B] text-[10px] font-black px-2 py-0.5 rounded-full ml-1.5">
+            9 Companies + Custom
           </span>
-        </div>
+        </button>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {combinedCompanies.map((comp) => {
-            const isSelected = selectedCompany.toLowerCase() === comp.name.toLowerCase();
-            const verifiedRecord = availableCompaniesData.find(
-              (c) => c.company.toLowerCase() === comp.name.toLowerCase()
-            );
-            const verifiedCount = verifiedRecord?.totalQuestions || 0;
-            const years = verifiedRecord?.examYears || [];
+        <button
+          onClick={() => setActiveTab('topic_practice')}
+          className={`flex items-center space-x-2 py-3 px-6 text-xs sm:text-sm font-black border-b-4 -mb-[3px] transition-all ${
+            activeTab === 'topic_practice'
+              ? 'border-[#C1440E] text-[#0F1E1B] bg-white rounded-t-xl'
+              : 'border-transparent text-[#0F1E1B]/60 hover:text-[#0F1E1B]'
+          }`}
+        >
+          <Layers className="w-4 h-4 text-indigo-600" />
+          <span>2. Topic-Wise Practice</span>
+          <span className="bg-[#F5F2E6] text-[#0F1E1B] text-[10px] font-black px-2 py-0.5 rounded-full border border-[#0F1E1B]/20 ml-1.5">
+            72 Subtopics
+          </span>
+        </button>
 
-            return (
-              <button
-                key={comp.name}
-                onClick={() => {
-                  setSelectedCompany(comp.name);
-                  setSelectedYear('all');
-                }}
-                className={`p-5 rounded-2xl border-2 text-left transition-all flex flex-col justify-between ${
-                  isSelected
-                    ? 'border-[#0F1E1B] bg-white editorial-shadow scale-[1.02]'
-                    : 'border-[#0F1E1B]/20 bg-[#FDFBF3] hover:border-[#0F1E1B] hover:bg-white'
-                }`}
-              >
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <span
-                      className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-xs ${
-                        comp.logoBadge
-                      }`}
-                    >
-                      {comp.name.substring(0, 3)}
-                    </span>
-                    {verifiedCount > 0 ? (
-                      <span className="bg-emerald-100 text-emerald-800 border border-emerald-400 text-[10px] font-black uppercase px-2 py-0.5 rounded-full flex items-center space-x-1">
-                        <CheckCircle2 className="w-3 h-3" />
-                        <span>{verifiedCount} Verified PYQs</span>
+        <button
+          onClick={() => setActiveTab('analytics')}
+          className={`flex items-center space-x-2 py-3 px-6 text-xs sm:text-sm font-black border-b-4 -mb-[3px] transition-all ${
+            activeTab === 'analytics'
+              ? 'border-[#C1440E] text-[#0F1E1B] bg-white rounded-t-xl'
+              : 'border-transparent text-[#0F1E1B]/60 hover:text-[#0F1E1B]'
+          }`}
+        >
+          <BarChart3 className="w-4 h-4 text-emerald-600" />
+          <span>3. Performance Analytics</span>
+        </button>
+      </div>
+
+      {/* TAB 1: COMPANY-WISE PREPARATION */}
+      {activeTab === 'company_prep' && (
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="font-serif-headline text-lg font-black text-[#0F1E1B]">
+                Target Campus Hiring Assessments
+              </h3>
+              <p className="text-xs text-[#0F1E1B]/60">
+                Choose a company to view verified exam patterns, practice quick drills, or launch a full timed mock test.
+              </p>
+            </div>
+            <button
+              onClick={() => setShowCustomCompanyModal(true)}
+              className="flex items-center space-x-1.5 bg-[#0F1E1B] hover:bg-[#1A332E] text-[#FDFBF3] px-3.5 py-2 rounded-xl text-xs font-bold border-2 border-[#0F1E1B] editorial-shadow-sm transition-transform hover:scale-102"
+            >
+              <PlusCircle className="w-3.5 h-3.5 text-[#F5D90A]" />
+              <span>Configure Other Company</span>
+            </button>
+          </div>
+
+          {/* 9 Supported Companies Cards Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {availableCompaniesData.map((comp) => {
+              const isVerified = comp.isVerifiedPattern !== false;
+
+              return (
+                <div
+                  key={comp.company}
+                  className="bg-white rounded-2xl border-2 border-[#0F1E1B] editorial-shadow p-5 flex flex-col justify-between hover:border-[#C1440E] transition-all group"
+                >
+                  {/* Card Header */}
+                  <div>
+                    <div className="flex items-start justify-between gap-2 mb-3">
+                      <span
+                        className={`w-11 h-11 rounded-xl flex items-center justify-center font-black text-sm shrink-0 shadow-xs ${
+                          comp.logoBadge || 'bg-[#0F1E1B] text-white'
+                        }`}
+                      >
+                        {comp.company.substring(0, 3)}
                       </span>
-                    ) : (
-                      <span className="bg-amber-100 text-amber-800 border border-amber-300 text-[10px] font-bold uppercase px-2 py-0.5 rounded-full">
-                        Pending Import
-                      </span>
-                    )}
+
+                      {isVerified ? (
+                        <span className="bg-emerald-50 text-emerald-800 border border-emerald-300 text-[10px] font-black uppercase px-2 py-0.5 rounded-full flex items-center space-x-1">
+                          <ShieldCheck className="w-3 h-3 text-emerald-600" />
+                          <span>Verified Pattern</span>
+                        </span>
+                      ) : (
+                        <span className="bg-amber-50 text-amber-900 border border-amber-300 text-[10px] font-bold uppercase px-2 py-0.5 rounded-full flex items-center space-x-1">
+                          <Sparkles className="w-3 h-3 text-amber-600" />
+                          <span>Practice Simulation</span>
+                        </span>
+                      )}
+                    </div>
+
+                    <h4 className="font-serif-headline text-xl font-black text-[#0F1E1B] group-hover:text-[#C1440E] transition-colors">
+                      {comp.company}
+                    </h4>
+                    <p className="text-xs font-bold text-[#C1440E] mt-0.5 line-clamp-1">
+                      {comp.examTitle}
+                    </p>
+                    <p className="text-[11px] text-[#0F1E1B]/60 mt-1 line-clamp-2">
+                      {comp.intro || comp.tagline}
+                    </p>
+
+                    {/* Metadata Badges Bar */}
+                    <div className="mt-3.5 pt-3 border-t border-[#0F1E1B]/10 grid grid-cols-3 gap-2 text-center text-[10px] font-bold">
+                      <div className="bg-[#FDFBF3] p-1.5 rounded-lg border border-[#0F1E1B]/10">
+                        <span className="text-[#0F1E1B]/60 block uppercase">Duration</span>
+                        <span className="text-xs font-black text-[#0F1E1B]">
+                          {comp.expectedDurationMinutes}m
+                        </span>
+                      </div>
+                      <div className="bg-[#FDFBF3] p-1.5 rounded-lg border border-[#0F1E1B]/10">
+                        <span className="text-[#0F1E1B]/60 block uppercase">Cutoff</span>
+                        <span className="text-xs font-black text-[#0F1E1B]">
+                          {comp.passCutoffPercentage}%
+                        </span>
+                      </div>
+                      <div className="bg-[#FDFBF3] p-1.5 rounded-lg border border-[#0F1E1B]/10">
+                        <span className="text-[#0F1E1B]/60 block uppercase">Questions</span>
+                        <span className="text-xs font-black text-emerald-700">
+                          {comp.totalQuestions || 15} Qs
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Difficulty Distribution Bar */}
+                    <div className="mt-3">
+                      <div className="flex items-center justify-between text-[10px] font-bold text-[#0F1E1B]/60 mb-1">
+                        <span>Difficulty Mix:</span>
+                        <span>
+                          E: {comp.difficultyDistribution?.Easy || '30%'} | M:{' '}
+                          {comp.difficultyDistribution?.Medium || '50%'} | H:{' '}
+                          {comp.difficultyDistribution?.Hard || '20%'}
+                        </span>
+                      </div>
+                      <div className="w-full h-1.5 bg-neutral-200 rounded-full flex overflow-hidden">
+                        <div className="bg-emerald-400 h-full w-[30%]" />
+                        <div className="bg-amber-400 h-full w-[50%]" />
+                        <div className="bg-rose-400 h-full w-[20%]" />
+                      </div>
+                    </div>
                   </div>
 
-                  <h3 className="font-serif-headline text-lg font-black text-[#0F1E1B]">{comp.name}</h3>
-                  <p className="text-xs font-bold text-[#C1440E] mt-0.5">{comp.examTitle}</p>
-                  <p className="text-[11px] text-[#0F1E1B]/60 mt-1">{comp.tagline}</p>
+                  {/* Card Action Buttons */}
+                  <div className="mt-5 pt-3 border-t border-[#0F1E1B]/15 space-y-2">
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        onClick={() => handleStartQuickPractice(comp)}
+                        disabled={actionLoading}
+                        className="w-full bg-white hover:bg-[#F5F2E6] text-[#0F1E1B] py-2 px-2.5 rounded-xl text-xs font-bold border-2 border-[#0F1E1B] transition-transform hover:scale-102 flex items-center justify-center space-x-1"
+                      >
+                        <Play className="w-3 h-3 fill-current text-[#C1440E]" />
+                        <span>Practice (10 Qs)</span>
+                      </button>
+
+                      <button
+                        onClick={() => handleStartFullMock(comp)}
+                        disabled={actionLoading}
+                        className="w-full bg-[#0F1E1B] hover:bg-[#1A332E] text-white py-2 px-2.5 rounded-xl text-xs font-bold border-2 border-[#0F1E1B] transition-transform hover:scale-102 flex items-center justify-center space-x-1"
+                      >
+                        <Award className="w-3 h-3 text-[#F5D90A]" />
+                        <span>Full Mock ({comp.fullMockQuestionCount || 20} Qs)</span>
+                      </button>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-1 text-[11px] font-bold">
+                      <button
+                        onClick={() => handleOpenPattern(comp)}
+                        className="text-[#C1440E] hover:underline flex items-center space-x-1"
+                      >
+                        <Info className="w-3 h-3" />
+                        <span>View Exam Pattern & Syllabus</span>
+                      </button>
+
+                      <button
+                        onClick={() => setDrawerCompany(comp)}
+                        className="text-[#0F1E1B]/60 hover:text-[#0F1E1B] hover:underline flex items-center space-x-1"
+                      >
+                        <SlidersHorizontal className="w-3 h-3" />
+                        <span>Custom Setup</span>
+                      </button>
+                    </div>
+                  </div>
                 </div>
+              );
+            })}
 
-                <div className="mt-4 pt-3 border-t border-[#0F1E1B]/10 flex items-center justify-between text-[11px] font-bold text-[#0F1E1B]/70">
-                  <span>Available Years:</span>
-                  <span className="text-[#0F1E1B]">
-                    {years.length > 0 ? years.join(', ') : 'None yet'}
-                  </span>
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* 2. CONFIGURE TEST PARAMETERS */}
-      <div className="bg-[#FDFBF3] p-6 sm:p-8 rounded-3xl border-2 border-[#0F1E1B] editorial-shadow space-y-6">
-        <div className="flex items-center space-x-2 border-b-2 border-[#0F1E1B]/15 pb-3">
-          <SlidersHorizontal className="w-4 h-4 text-[#C1440E]" />
-          <h3 className="font-serif-headline text-xl font-black text-[#0F1E1B]">
-            2. Configure Assessment Parameters for {selectedCompany}
-          </h3>
-        </div>
-
-        {/* Empty State Guard if company has no verified questions */}
-        {!hasVerifiedData ? (
-          <div className="p-6 rounded-2xl bg-amber-50 border-2 border-amber-400 text-amber-950 space-y-3">
-            <div className="flex items-center space-x-2.5">
-              <AlertCircle className="w-5 h-5 text-amber-700" />
-              <h4 className="font-serif-headline text-lg font-black">
-                No Verified PYQs Currently Available for {selectedCompany}
-              </h4>
-            </div>
-            <p className="text-xs sm:text-sm text-amber-900 leading-relaxed">
-              In accordance with our strict data authenticity policy, questions are only presented after verified previous-year papers have been authorized and imported into MongoDB. Mock or hardcoded placeholders are never substituted.
-            </p>
-            <div className="flex items-center space-x-3 pt-2">
-              <button
-                onClick={onOpenAdminStudio}
-                className="bg-[#0F1E1B] text-[#FDFBF3] px-4 py-2 rounded-xl text-xs font-bold border-2 border-[#0F1E1B] hover:bg-[#1A332E]"
-              >
-                Open Admin Import to Upload {selectedCompany} PYQs
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-            {/* Exam Year Filter */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-[#0F1E1B]/70 uppercase">
-                Exam Year (Verified)
-              </label>
-              <select
-                value={selectedYear}
-                onChange={(e) => setSelectedYear(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-xl border-2 border-[#0F1E1B] bg-white text-xs font-bold text-[#0F1E1B] focus:outline-hidden"
-              >
-                <option value="all">All Verified Years ({availableYears.join(', ')})</option>
-                {availableYears.map((yr) => (
-                  <option key={yr} value={yr}>
-                    {yr} Examination Paper
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Topic Filter */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-[#0F1E1B]/70 uppercase">Topic Focus</label>
-              <select
-                value={selectedTopic}
-                onChange={(e) => setSelectedTopic(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-xl border-2 border-[#0F1E1B] bg-white text-xs font-bold text-[#0F1E1B] focus:outline-hidden"
-              >
-                <option value="All Topics">All Topics (Full Comprehensive)</option>
-                <option value="Quantitative Aptitude">Quantitative Aptitude</option>
-                <option value="Logical Reasoning">Logical Reasoning</option>
-                <option value="Verbal Ability">Verbal Ability</option>
-              </select>
-            </div>
-
-            {/* Difficulty Level */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-[#0F1E1B]/70 uppercase">Difficulty</label>
-              <select
-                value={selectedDifficulty}
-                onChange={(e) => setSelectedDifficulty(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-xl border-2 border-[#0F1E1B] bg-white text-xs font-bold text-[#0F1E1B] focus:outline-hidden"
-              >
-                <option value="All Difficulties">All Difficulties</option>
-                <option value="Easy">Easy</option>
-                <option value="Medium">Medium (Standard Qualifier)</option>
-                <option value="Hard">Hard (Advanced Section)</option>
-              </select>
-            </div>
-
-            {/* Test Mode */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-[#0F1E1B]/70 uppercase">Test Mode</label>
-              <select
-                value={testMode}
-                onChange={(e) => setTestMode(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-xl border-2 border-[#0F1E1B] bg-white text-xs font-bold text-[#0F1E1B] focus:outline-hidden"
-              >
-                <option value="full_mock">Full Mock Test (Timed Simulation)</option>
-                <option value="topic_practice">Topic Practice (Targeted Drills)</option>
-              </select>
-            </div>
-          </div>
-        )}
-
-        {/* Negative marking & Question count bar */}
-        {hasVerifiedData && (
-          <div className="pt-4 border-t border-[#0F1E1B]/15 flex flex-wrap items-center justify-between gap-4">
-            <div className="flex flex-wrap items-center gap-4 text-xs font-bold">
-              {/* Question Count */}
-              <div className="flex items-center space-x-2">
-                <span className="text-[#0F1E1B]/70">Question Count:</span>
-                {[5, 10, 15].map((cnt) => (
-                  <button
-                    key={cnt}
-                    onClick={() => setQuestionCount(cnt)}
-                    className={`px-3 py-1 rounded-lg border-2 transition-all ${
-                      questionCount === cnt
-                        ? 'bg-[#0F1E1B] text-[#FDFBF3] border-[#0F1E1B]'
-                        : 'bg-white text-[#0F1E1B] border-[#0F1E1B]/20 hover:border-[#0F1E1B]'
-                    }`}
-                  >
-                    {cnt} Qs
-                  </button>
-                ))}
+            {/* 10th Card: Configure Custom Company */}
+            <div className="bg-[#FDFBF3] rounded-2xl border-2 border-dashed border-[#0F1E1B]/30 p-6 flex flex-col justify-between hover:border-[#0F1E1B] transition-all text-center">
+              <div>
+                <span className="w-12 h-12 mx-auto rounded-2xl bg-white border border-[#0F1E1B]/20 flex items-center justify-center shadow-xs text-[#0F1E1B] mb-3">
+                  <PlusCircle className="w-6 h-6 text-[#C1440E]" />
+                </span>
+                <h4 className="font-serif-headline text-lg font-black text-[#0F1E1B]">
+                  10. Other Tech Companies
+                </h4>
+                <p className="text-xs font-bold text-[#C1440E] mt-0.5">
+                  Configurable Question-Bank Management
+                </p>
+                <p className="text-[11px] text-[#0F1E1B]/60 mt-1 leading-relaxed">
+                  Targeting Amazon, Cisco, Oracle, or Mindtree? Configure a custom simulated placement test with tailored timers, questions, and section weightages.
+                </p>
               </div>
 
-              {/* Negative Marking */}
-              <div className="flex items-center space-x-2 pl-4 border-l border-[#0F1E1B]/20">
-                <span className="text-[#0F1E1B]/70">Negative Marking:</span>
+              <div className="mt-6 pt-3 border-t border-[#0F1E1B]/15">
                 <button
-                  onClick={() => setNegativeMarking(negativeMarking === 0.25 ? 0 : 0.25)}
-                  className={`px-3 py-1 rounded-lg border-2 transition-all ${
-                    negativeMarking > 0
-                      ? 'bg-rose-600 text-white border-rose-800'
-                      : 'bg-white text-[#0F1E1B] border-[#0F1E1B]/20'
-                  }`}
+                  onClick={() => setShowCustomCompanyModal(true)}
+                  className="w-full bg-[#0F1E1B] hover:bg-[#1A332E] text-[#FDFBF3] py-2.5 px-4 rounded-xl text-xs font-bold border-2 border-[#0F1E1B] editorial-shadow-sm flex items-center justify-center space-x-1.5 transition-transform hover:scale-102"
                 >
-                  {negativeMarking > 0 ? '-0.25 Marks per Wrong Answer' : 'No Negative Marking'}
+                  <Sparkles className="w-3.5 h-3.5 text-[#F5D90A]" />
+                  <span>Configure Custom Assessment</span>
                 </button>
               </div>
             </div>
-
-            {/* Launch CTA */}
-            <button
-              onClick={handleLaunch}
-              disabled={actionLoading || !hasVerifiedData}
-              className="bg-[#C1440E] hover:bg-[#A3370B] text-white px-6 py-3 rounded-2xl text-xs font-bold border-2 border-[#0F1E1B] editorial-shadow-sm flex items-center space-x-2 transition-transform hover:scale-105 disabled:opacity-40"
-            >
-              <span>{actionLoading ? 'Loading Questions...' : `Launch ${selectedCompany} Aptitude Test`}</span>
-              <ArrowRight className="w-4 h-4 text-[#F5D90A]" />
-            </button>
           </div>
-        )}
-      </div>
+        </div>
+      )}
+
+      {/* TAB 2: TOPIC-WISE PRACTICE */}
+      {activeTab === 'topic_practice' && (
+        <TopicPracticeTab onStartDrill={onStartTest} actionLoading={actionLoading} />
+      )}
+
+      {/* TAB 3: PERFORMANCE ANALYTICS */}
+      {activeTab === 'analytics' && (
+        <AptitudeAnalyticsTab onViewAttemptResult={onOpenHistory} />
+      )}
+
+      {/* CUSTOM SETUP MODAL / DRAWER */}
+      {drawerCompany && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0F1E1B]/60 backdrop-blur-xs animate-fadeIn">
+          <div className="bg-[#FDFBF3] w-full max-w-md rounded-3xl border-2 border-[#0F1E1B] editorial-shadow-lg p-6 space-y-4">
+            <div className="flex items-center justify-between border-b-2 border-[#0F1E1B]/15 pb-3">
+              <h3 className="font-serif-headline text-lg font-black text-[#0F1E1B]">
+                Configure Test for {drawerCompany.company}
+              </h3>
+              <button
+                onClick={() => setDrawerCompany(null)}
+                className="text-xs font-black text-[#0F1E1B]/60 hover:text-[#0F1E1B]"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs font-bold">
+              <div>
+                <label className="text-[#0F1E1B]/70 uppercase block mb-1">Target Category</label>
+                <select
+                  value={selectedTopic}
+                  onChange={(e) => setSelectedTopic(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border-2 border-[#0F1E1B] bg-white font-bold"
+                >
+                  <option value="All Topics">All Comprehensive Topics</option>
+                  <option value="Quantitative Aptitude">Quantitative Aptitude</option>
+                  <option value="Logical Reasoning">Logical Reasoning</option>
+                  <option value="Verbal Ability">Verbal Ability</option>
+                  <option value="Pseudocode">Pseudocode</option>
+                  <option value="Programming">Programming</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-[#0F1E1B]/70 uppercase block mb-1">Difficulty Level</label>
+                <select
+                  value={selectedDifficulty}
+                  onChange={(e) => setSelectedDifficulty(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border-2 border-[#0F1E1B] bg-white font-bold"
+                >
+                  <option value="All Difficulties">All Levels</option>
+                  <option value="Easy">Easy</option>
+                  <option value="Medium">Medium</option>
+                  <option value="Hard">Hard</option>
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[#0F1E1B]/70 uppercase block mb-1">Questions</label>
+                  <select
+                    value={questionCount}
+                    onChange={(e) => setQuestionCount(Number(e.target.value))}
+                    className="w-full px-3 py-2 rounded-xl border-2 border-[#0F1E1B] bg-white font-bold"
+                  >
+                    <option value={5}>5 Qs</option>
+                    <option value={10}>10 Qs</option>
+                    <option value={15}>15 Qs</option>
+                    <option value={20}>20 Qs</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-[#0F1E1B]/70 uppercase block mb-1">Negative Mark</label>
+                  <select
+                    value={negativeMarking}
+                    onChange={(e) => setNegativeMarking(Number(e.target.value))}
+                    className="w-full px-3 py-2 rounded-xl border-2 border-[#0F1E1B] bg-white font-bold"
+                  >
+                    <option value={0}>0 (None)</option>
+                    <option value={0.25}>-0.25</option>
+                    <option value={0.33}>-0.33</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-3 border-t border-[#0F1E1B]/15 flex items-center justify-end space-x-2">
+              <button
+                onClick={() => setDrawerCompany(null)}
+                className="px-3.5 py-2 rounded-xl text-xs font-bold text-[#0F1E1B]/70 hover:bg-[#F5F2E6]"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleLaunchCustomConfigured}
+                disabled={actionLoading}
+                className="bg-[#C1440E] text-white px-4 py-2 rounded-xl text-xs font-bold border-2 border-[#0F1E1B] editorial-shadow-sm"
+              >
+                Launch Test
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modals */}
+      <CompanyPatternModal
+        isOpen={showPatternModal}
+        onClose={() => setShowPatternModal(false)}
+        company={patternModalCompany}
+        onStartPractice={handleStartQuickPractice}
+        onStartFullMock={handleStartFullMock}
+      />
+
+      <CustomCompanyModal
+        isOpen={showCustomCompanyModal}
+        onClose={() => setShowCustomCompanyModal(false)}
+        onLaunchCustomTest={onStartTest}
+      />
     </div>
   );
 };

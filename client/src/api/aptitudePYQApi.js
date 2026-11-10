@@ -6,6 +6,21 @@ export const getAvailableCompanies = async () => {
   return response.data;
 };
 
+export const getCompanyPattern = async (company) => {
+  const response = await axiosClient.get(`/aptitude/companies/${encodeURIComponent(company)}/pattern`);
+  return response.data;
+};
+
+export const getAptitudeCategories = async () => {
+  const response = await axiosClient.get('/aptitude/categories');
+  return response.data;
+};
+
+export const getAptitudeAnalytics = async () => {
+  const response = await axiosClient.get('/aptitude/analytics');
+  return response.data;
+};
+
 export const getFilteredQuestionsInfo = async (params = {}) => {
   const response = await axiosClient.get('/aptitude/questions', { params });
   return response.data;

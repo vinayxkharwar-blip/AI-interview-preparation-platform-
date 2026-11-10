@@ -5,15 +5,107 @@ export const VALID_COMPANIES = [
   'TCS',
   'Infosys',
   'Accenture',
+  'Wipro',
   'Capgemini',
   'Cognizant',
-  'Wipro',
+  'HCLTech',
+  'Tech Mahindra',
+  'Deloitte',
 ];
 
 export const VALID_TOPICS = [
   'Quantitative Aptitude',
   'Logical Reasoning',
   'Verbal Ability',
+  'Pseudocode',
+  'Programming',
+];
+
+export const QUANTITATIVE_SUBTOPICS = [
+  'Number System',
+  'HCF and LCM',
+  'Simplification',
+  'Percentage',
+  'Profit and Loss',
+  'Simple Interest',
+  'Compound Interest',
+  'Ratio and Proportion',
+  'Average',
+  'Mixture and Alligation',
+  'Time and Work',
+  'Pipes and Cisterns',
+  'Time, Speed and Distance',
+  'Trains',
+  'Boats and Streams',
+  'Problems on Ages',
+  'Partnership',
+  'Probability',
+  'Permutation and Combination',
+  'Mensuration',
+  'Geometry',
+  'Algebra',
+  'Data Interpretation',
+  'Data Sufficiency',
+];
+
+export const LOGICAL_SUBTOPICS = [
+  'Number Series',
+  'Alphabet Series',
+  'Coding and Decoding',
+  'Blood Relations',
+  'Direction Sense',
+  'Seating Arrangement',
+  'Linear Arrangement',
+  'Circular Arrangement',
+  'Puzzles',
+  'Syllogism',
+  'Statement and Conclusion',
+  'Statement and Assumption',
+  'Analogy',
+  'Classification',
+  'Odd One Out',
+  'Ranking and Ordering',
+  'Venn Diagrams',
+  'Clocks',
+  'Calendars',
+  'Data Sufficiency',
+];
+
+export const VERBAL_SUBTOPICS = [
+  'Reading Comprehension',
+  'Synonyms',
+  'Antonyms',
+  'Sentence Correction',
+  'Error Detection',
+  'Fill in the Blanks',
+  'Para Jumbles',
+  'Sentence Completion',
+  'Vocabulary',
+  'Idioms and Phrases',
+  'Active and Passive Voice',
+  'Direct and Indirect Speech',
+  'Subject-Verb Agreement',
+  'Prepositions',
+  'Grammar',
+  'Critical Reasoning',
+];
+
+export const PSEUDOCODE_SUBTOPICS = [
+  'Bitwise Operations',
+  'Loop Logic and Iterations',
+  'Recursion and Call Stacks',
+  'Conditional Logic and Branching',
+  'Array and String Manipulations',
+  'Dry Run and Trace Tables',
+];
+
+export const PROGRAMMING_SUBTOPICS = [
+  'Data Structures (Arrays, Stacks, Queues, Trees)',
+  'Algorithm Complexity and Big-O',
+  'Object-Oriented Programming (OOP)',
+  'SQL and Database Queries',
+  'Language Fundamentals (C, Java, Python)',
+  'Code Output Tracing and Debugging',
 ];
 
 export const VALID_DIFFICULTIES = ['Easy', 'Medium', 'Hard'];
