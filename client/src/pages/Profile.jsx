@@ -603,7 +603,7 @@ export default function Profile() {
                 key={item.id}
                 type="button"
                 onClick={() => handleSelectTab(item.id)}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all border-2 whitespace-nowrap shrink-0 cursor-pointer ${
+                className={`inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all border-2 whitespace-nowrap shrink-0 min-h-[44px] touch-manipulation cursor-pointer ${
                   isActive
                     ? 'bg-[#10221D] text-[#FAF8F0] border-[#10221D] shadow-xs'
                     : 'bg-[#FDFBF3] text-[#10221D]/80 border-[#10221D]/15 hover:border-[#10221D]/40'

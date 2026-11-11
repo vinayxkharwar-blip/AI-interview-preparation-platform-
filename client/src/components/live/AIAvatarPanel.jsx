@@ -12,17 +12,17 @@ export default function AIAvatarPanel({
   const isConnecting = interviewState === STATES.IDLE && liveCaption.includes('...');
 
   return (
-    <div className="lg:col-span-7 bg-[#12211A] text-[#FBF9F3] rounded-3xl border-3 border-[#12211A] p-6 sm:p-8 flex flex-col justify-between relative overflow-hidden editorial-shadow-lg min-h-[460px]">
+    <div className="lg:col-span-7 bg-[#12211A] text-[#FBF9F3] rounded-3xl border-3 border-[#12211A] p-4 sm:p-6 lg:p-8 flex flex-col justify-between relative overflow-hidden editorial-shadow-lg min-h-[260px] sm:min-h-[360px] lg:min-h-[460px]">
 
       {/* Header inside AI Panel */}
-      <div className="flex items-center justify-between z-10">
-        <div className="flex items-center space-x-2 bg-[#1D3327] px-3.5 py-1.5 rounded-full border border-[#E7B92E]/40 text-xs text-[#FBF9F3]">
+      <div className="flex flex-wrap items-center justify-between gap-2 z-10">
+        <div className="flex items-center space-x-2 bg-[#1D3327] px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-full border border-[#E7B92E]/40 text-xs text-[#FBF9F3]">
           <span className={`w-2.5 h-2.5 rounded-full ${isSpeaking ? 'bg-[#E7B92E] animate-ping' : 'bg-emerald-400'}`}></span>
-          <span className="font-bold">Alex (AI Technical Interviewer)</span>
+          <span className="font-bold text-[11px] sm:text-xs">Alex (AI Technical Interviewer)</span>
         </div>
 
         {/* Dynamic Status Pill */}
-        <div className="px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider border flex items-center space-x-1.5 bg-[#12211A]/90 border-[#E7B92E] text-[#E7B92E]">
+        <div className="px-2.5 py-1 sm:px-3 sm:py-1 rounded-full text-[10px] sm:text-xs font-black uppercase tracking-wider border flex items-center space-x-1.5 bg-[#12211A]/90 border-[#E7B92E] text-[#E7B92E]">
           {isSpeaking && (
             <>
               <span className="w-2 h-2 rounded-full bg-[#E7B92E] animate-ping"></span>
@@ -55,10 +55,10 @@ export default function AIAvatarPanel({
       </div>
 
       {/* AI AVATAR ORB VISUALIZER */}
-      <div className="my-auto text-center space-y-5 z-10 py-6 flex flex-col items-center justify-center">
+      <div className="my-auto text-center space-y-3 sm:space-y-5 z-10 py-2 sm:py-6 flex flex-col items-center justify-center">
         <div className="relative inline-block">
           {/* Glowing Circular AI Orb */}
-          <div className={`w-36 h-36 sm:w-44 sm:h-44 rounded-full bg-gradient-to-br from-[#1D3327] via-[#12211A] to-[#254233] border-4 ${
+          <div className={`w-24 h-24 sm:w-36 sm:h-36 lg:w-44 lg:h-44 rounded-full bg-gradient-to-br from-[#1D3327] via-[#12211A] to-[#254233] border-4 ${
             isSpeaking
               ? 'border-[#E7B92E] shadow-[0_0_35px_rgba(231,185,46,0.6)] scale-105'
               : (isEvaluating || isConnecting)
@@ -66,7 +66,7 @@ export default function AIAvatarPanel({
               : 'border-[#E4DDC9]/30'
           } flex items-center justify-center mx-auto transition-all duration-300`}>
             {isEvaluating || isConnecting ? (
-              <Loader2 className="w-16 h-16 text-[#E7B92E] animate-spin" />
+              <Loader2 className="w-10 h-10 sm:w-16 sm:h-16 text-[#E7B92E] animate-spin" />
             ) : (
               <Volume2 className={`w-16 h-16 ${isSpeaking ? 'text-[#E7B92E] scale-110' : 'text-[#DCEEDF]/60'} transition-transform duration-300`} />
             )}

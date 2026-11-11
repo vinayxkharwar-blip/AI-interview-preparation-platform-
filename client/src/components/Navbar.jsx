@@ -246,7 +246,7 @@ export default function Navbar() {
                   {/* Mobile / Tablet Hamburger Toggle (Visible on screens < 1280px) */}
                   <button
                     onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                    className="xl:hidden flex items-center gap-1.5 p-2 text-[#0F1E1B] rounded-xl border-2 border-[#0F1E1B] bg-[#F5F2E6] hover:bg-[#E6E4DC] editorial-shadow-sm transition-all shrink-0 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[#0F1E1B] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FDFBF3]"
+                    className="xl:hidden flex items-center justify-center gap-1.5 p-2 text-[#0F1E1B] rounded-xl border-2 border-[#0F1E1B] bg-[#F5F2E6] hover:bg-[#E6E4DC] editorial-shadow-sm transition-all shrink-0 min-h-[44px] min-w-[44px] touch-manipulation cursor-pointer focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[#0F1E1B] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FDFBF3]"
                     aria-expanded={mobileMenuOpen}
                     aria-controls="mobile-navigation-drawer"
                     aria-label={mobileMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}

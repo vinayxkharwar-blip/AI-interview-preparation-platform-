@@ -62,22 +62,24 @@ export default function LiveControlBar({
         <button
           type="button"
           onClick={toggleMic}
-          className={`px-3 sm:px-4 py-2 sm:py-2.5 rounded-2xl border-2 border-[#12211A] font-bold text-xs flex items-center space-x-1.5 transition-all min-h-[40px] ${
+          aria-label={isMicMuted ? 'Unmute microphone' : 'Mute microphone'}
+          className={`px-3 sm:px-4 py-2 sm:py-2.5 rounded-2xl border-2 border-[#12211A] font-bold text-xs flex items-center space-x-1.5 transition-all min-h-[44px] touch-manipulation cursor-pointer ${
             isMicMuted ? 'bg-rose-100 text-rose-700' : 'bg-[#E7B92E] text-[#12211A]'
           }`}
         >
-          {isMicMuted ? <MicOff className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5" />}
+          {isMicMuted ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
           <span>{isMicMuted ? 'Unmute' : 'Mute'}</span>
         </button>
 
         <button
           type="button"
           onClick={toggleCamera}
-          className={`px-3 sm:px-4 py-2 sm:py-2.5 rounded-2xl border-2 border-[#12211A] font-bold text-xs flex items-center space-x-1.5 transition-all min-h-[40px] ${
+          aria-label={isCameraOff ? 'Turn camera on' : 'Turn camera off'}
+          className={`px-3 sm:px-4 py-2 sm:py-2.5 rounded-2xl border-2 border-[#12211A] font-bold text-xs flex items-center space-x-1.5 transition-all min-h-[44px] touch-manipulation cursor-pointer ${
             isCameraOff ? 'bg-rose-100 text-rose-700' : 'bg-[#F5F1E7] text-[#12211A]'
           }`}
         >
-          {isCameraOff ? <VideoOff className="w-3.5 h-3.5" /> : <Video className="w-3.5 h-3.5" />}
+          {isCameraOff ? <VideoOff className="w-4 h-4" /> : <Video className="w-4 h-4" />}
           <span>{isCameraOff ? 'Camera Off' : 'Camera On'}</span>
         </button>
 
@@ -85,9 +87,10 @@ export default function LiveControlBar({
           type="button"
           onClick={handleRepeatQuestion}
           disabled={isBusyProcessing}
-          className="px-3 sm:px-4 py-2 sm:py-2.5 bg-[#DCEEDF] text-[#12211A] border-2 border-[#12211A] rounded-2xl text-xs font-bold hover:bg-[#B7D8BE] transition-all flex items-center space-x-1.5 disabled:opacity-50 min-h-[40px]"
+          aria-label="Repeat current question"
+          className="px-3 sm:px-4 py-2 sm:py-2.5 bg-[#DCEEDF] text-[#12211A] border-2 border-[#12211A] rounded-2xl text-xs font-bold hover:bg-[#B7D8BE] transition-all flex items-center space-x-1.5 disabled:opacity-50 min-h-[44px] touch-manipulation cursor-pointer"
         >
-          <RotateCcw className="w-3.5 h-3.5" />
+          <RotateCcw className="w-4 h-4" />
           <span>Repeat</span>
         </button>
       </div>
@@ -97,18 +100,20 @@ export default function LiveControlBar({
         <button
           type="button"
           onClick={handleSwitchToTextMode}
-          className="px-3 sm:px-3.5 py-2 sm:py-2.5 bg-[#F5F1E7] text-[#12211A] border-2 border-[#12211A] rounded-2xl text-xs font-bold hover:bg-[#E4DDC9] transition-all flex items-center space-x-1.5 min-h-[40px]"
+          aria-label="Switch to text mode interview"
+          className="px-3 sm:px-3.5 py-2 sm:py-2.5 bg-[#F5F1E7] text-[#12211A] border-2 border-[#12211A] rounded-2xl text-xs font-bold hover:bg-[#E4DDC9] transition-all flex items-center space-x-1.5 min-h-[44px] touch-manipulation cursor-pointer"
         >
-          <Type className="w-3.5 h-3.5" />
+          <Type className="w-4 h-4" />
           <span className="hidden xs:inline sm:hidden md:inline">Text Mode</span>
         </button>
 
         <button
           type="button"
           onClick={() => setIsDrawerOpen(true)}
-          className="px-3 sm:px-3.5 py-2 sm:py-2.5 bg-[#DCEEDF] text-[#12211A] border-2 border-[#12211A] rounded-2xl text-xs font-bold hover:bg-[#B7D8BE] transition-all flex items-center space-x-1.5 min-h-[40px]"
+          aria-label={`Open transcript drawer, ${liveTurnsCount} turns recorded`}
+          className="px-3 sm:px-3.5 py-2 sm:py-2.5 bg-[#DCEEDF] text-[#12211A] border-2 border-[#12211A] rounded-2xl text-xs font-bold hover:bg-[#B7D8BE] transition-all flex items-center space-x-1.5 min-h-[44px] touch-manipulation cursor-pointer"
         >
-          <MessageSquare className="w-3.5 h-3.5 text-[#1D3327]" />
+          <MessageSquare className="w-4 h-4 text-[#1D3327]" />
           <span>Chat ({liveTurnsCount})</span>
         </button>
 
@@ -116,9 +121,10 @@ export default function LiveControlBar({
           type="button"
           onClick={handleEndInterview}
           disabled={isEndingCall}
-          className="px-4 sm:px-5 py-2 sm:py-2.5 bg-rose-700 text-white border-2 border-[#12211A] rounded-2xl text-xs font-bold hover:bg-rose-800 transition-all editorial-shadow flex items-center space-x-1.5 min-h-[40px]"
+          aria-label="End live interview session"
+          className="px-4 sm:px-5 py-2 sm:py-2.5 bg-rose-700 text-white border-2 border-[#12211A] rounded-2xl text-xs font-bold hover:bg-rose-800 transition-all editorial-shadow flex items-center space-x-1.5 min-h-[44px] touch-manipulation cursor-pointer"
         >
-          <PhoneOff className="w-3.5 h-3.5" />
+          <PhoneOff className="w-4 h-4" />
           <span>{isEndingCall ? 'Ending...' : 'End'}</span>
         </button>
       </div>

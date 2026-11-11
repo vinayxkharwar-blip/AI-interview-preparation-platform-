@@ -676,10 +676,11 @@ export default function Resumes() {
                         <button
                           onClick={() => handleDeleteResume(res._id, res.fileName)}
                           disabled={deletingId === res._id}
-                          className="text-rose-700 hover:text-rose-900 disabled:opacity-50 cursor-pointer"
+                          className="text-rose-700 hover:text-rose-900 disabled:opacity-50 cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center p-2 rounded-lg touch-manipulation"
                           title="Delete resume"
+                          aria-label={`Delete resume ${res.fileName}`}
                         >
-                          <Trash2 className="w-3.5 h-3.5" />
+                          <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
                     </div>
@@ -772,10 +773,11 @@ export default function Resumes() {
                           <button
                             onClick={() => handleDeleteResume(res._id, res.fileName)}
                             disabled={deletingId === res._id}
-                            className="text-[11px] font-bold text-rose-700 hover:text-rose-900 disabled:opacity-50"
+                            className="text-[11px] font-bold text-rose-700 hover:text-rose-900 disabled:opacity-50 min-h-[36px] min-w-[36px] inline-flex items-center justify-center p-1.5 rounded-lg touch-manipulation"
                             title="Delete resume"
+                            aria-label={`Delete resume ${res.fileName}`}
                           >
-                            <Trash2 className="w-3.5 h-3.5 inline-block -mt-0.5" />
+                            <Trash2 className="w-4 h-4" />
                           </button>
                         </td>
                       </tr>

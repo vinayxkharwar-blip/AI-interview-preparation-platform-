@@ -367,15 +367,15 @@ export const AptitudeTestView = ({ driveId, testData, onComplete, onCancel }) =>
         /* ACTIVE TEST VIEW */
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* Main Question Column */}
-          <div className="lg:col-span-8 space-y-5">
+          <div className="lg:col-span-8 space-y-4 sm:space-y-5">
             {/* Section tabs & Progress */}
-            <div className="flex items-center justify-between bg-[#F5F2E6] p-2 rounded-xl border border-[#0F1E1B]/15">
-              <div className="flex space-x-1">
+            <div className="flex flex-wrap items-center justify-between gap-2 bg-[#F5F2E6] p-2 sm:p-2.5 rounded-xl border border-[#0F1E1B]/15">
+              <div className="flex space-x-1 overflow-x-auto max-w-full">
                 {['all', 'quantitative', 'logical', 'verbal'].map((sec) => (
                   <button
                     key={sec}
                     onClick={() => setSelectedSection(sec)}
-                    className={`px-3 py-1 rounded-lg text-xs font-bold capitalize transition-all ${
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold capitalize transition-all min-h-[36px] sm:min-h-[32px] shrink-0 touch-manipulation ${
                       selectedSection === sec
                         ? 'bg-[#0F1E1B] text-[#FDFBF3] shadow-xs'
                         : 'text-[#0F1E1B]/70 hover:text-[#0F1E1B]'
@@ -385,14 +385,39 @@ export const AptitudeTestView = ({ driveId, testData, onComplete, onCancel }) =>
                   </button>
                 ))}
               </div>
-              <span className="text-xs font-bold text-[#0F1E1B]/70 px-2">
+              <span className="text-xs font-bold text-[#0F1E1B]/70 px-2 shrink-0">
                 Answered: <b className="text-[#0F1E1B]">{answeredCount}</b> / {questions.length}
               </span>
             </div>
 
+            {/* Mobile Question Quick Bar (Visible on mobile/tablet < 1024px) */}
+            <div className="lg:hidden flex items-center space-x-1.5 overflow-x-auto p-1.5 bg-[#F5F2E6] rounded-xl border border-[#0F1E1B]/15 no-scrollbar">
+              {questions.map((q, idx) => {
+                const isAnswered = Boolean(answers[q.questionId]);
+                const isCurrent = idx === currentIdx;
+                return (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => setCurrentIdx(idx)}
+                    aria-label={`Jump to question ${idx + 1}`}
+                    className={`shrink-0 w-9 h-9 rounded-lg text-xs font-bold border-2 transition-all touch-manipulation flex items-center justify-center ${
+                      isCurrent
+                        ? 'border-[#0F1E1B] bg-[#F5D90A] text-[#0F1E1B] font-black scale-105'
+                        : isAnswered
+                        ? 'border-emerald-700 bg-emerald-600 text-white'
+                        : 'border-[#0F1E1B]/30 bg-white text-[#0F1E1B]/70'
+                    }`}
+                  >
+                    {idx + 1}
+                  </button>
+                );
+              })}
+            </div>
+
             {/* Current Question Display */}
             {currentQuestion ? (
-              <div className="p-6 rounded-2xl bg-white border-2 border-[#0F1E1B] editorial-shadow-sm">
+              <div className="p-4 sm:p-6 rounded-2xl bg-white border-2 border-[#0F1E1B] editorial-shadow-sm">
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center space-x-2">
                     <span className="w-7 h-7 rounded-lg bg-[#0F1E1B] text-[#FDFBF3] font-bold text-xs flex items-center justify-center">
@@ -405,12 +430,12 @@ export const AptitudeTestView = ({ driveId, testData, onComplete, onCancel }) =>
                   <span className="text-xs font-semibold text-[#0F1E1B]/60">Single Choice</span>
                 </div>
 
-                <h3 className="font-bold text-base sm:text-lg text-[#0F1E1B] leading-relaxed my-4">
+                <h3 className="font-bold text-base sm:text-lg text-[#0F1E1B] leading-relaxed my-3 sm:my-4 break-words">
                   {currentQuestion.questionText}
                 </h3>
 
                 {/* Options List */}
-                <div className="space-y-2.5 my-6">
+                <div className="space-y-2.5 my-5 sm:my-6">
                   {currentQuestion.options?.map((option, oIdx) => {
                     const isSelected = answers[currentQuestion.questionId] === option;
                     const letter = String.fromCharCode(65 + oIdx);
@@ -419,31 +444,31 @@ export const AptitudeTestView = ({ driveId, testData, onComplete, onCancel }) =>
                       <button
                         key={oIdx}
                         onClick={() => handleSelectOption(option)}
-                        className={`w-full text-left p-3.5 rounded-xl border-2 transition-all flex items-center space-x-3 ${
+                        className={`w-full text-left p-3.5 sm:p-4 rounded-xl border-2 transition-all flex items-center space-x-3 min-h-[48px] touch-manipulation cursor-pointer ${
                           isSelected
                             ? 'bg-[#0F1E1B] text-[#FDFBF3] border-[#0F1E1B] editorial-shadow-sm font-bold scale-[1.01]'
                             : 'bg-[#FDFBF3] hover:bg-[#F5F2E6] border-[#0F1E1B]/20 text-[#0F1E1B]'
                         }`}
                       >
                         <span
-                          className={`w-6 h-6 rounded-md flex items-center justify-center text-xs font-bold ${
+                          className={`w-6 h-6 rounded-md flex items-center justify-center text-xs font-bold shrink-0 ${
                             isSelected ? 'bg-[#F5D90A] text-[#0F1E1B]' : 'bg-[#E6E4DC] text-[#0F1E1B]'
                           }`}
                         >
                           {letter}
                         </span>
-                        <span className="text-sm">{option}</span>
+                        <span className="text-xs sm:text-sm leading-snug break-words">{option}</span>
                       </button>
                     );
                   })}
                 </div>
 
                 {/* Question Navigation Footer */}
-                <div className="flex items-center justify-between pt-4 border-t border-[#0F1E1B]/15">
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-4 border-t border-[#0F1E1B]/15">
                   <button
                     onClick={() => setCurrentIdx((prev) => Math.max(0, prev - 1))}
                     disabled={currentIdx === 0}
-                    className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border border-[#0F1E1B]/30 hover:bg-[#F5F2E6] disabled:opacity-40"
+                    className="flex items-center space-x-1.5 px-3.5 py-2.5 rounded-xl text-xs font-bold border border-[#0F1E1B]/30 hover:bg-[#F5F2E6] disabled:opacity-40 min-h-[44px] touch-manipulation cursor-pointer"
                   >
                     <ArrowLeft className="w-3.5 h-3.5" />
                     <span>Previous</span>
@@ -451,19 +476,32 @@ export const AptitudeTestView = ({ driveId, testData, onComplete, onCancel }) =>
 
                   <button
                     onClick={handleClearCurrent}
-                    className="text-xs font-semibold text-[#C1440E] hover:underline"
+                    className="text-xs font-semibold text-[#C1440E] hover:underline min-h-[44px] px-2 flex items-center touch-manipulation cursor-pointer"
                   >
                     Clear Choice
                   </button>
 
-                  <button
-                    onClick={() => setCurrentIdx((prev) => Math.min(questions.length - 1, prev + 1))}
-                    disabled={currentIdx === questions.length - 1}
-                    className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-[#0F1E1B] text-[#FDFBF3] hover:bg-[#1A332E] disabled:opacity-40"
-                  >
-                    <span>Next</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </button>
+                  <div className="flex items-center space-x-2">
+                    {/* Submit quick button on mobile when near end or done */}
+                    {(currentIdx === questions.length - 1 || answeredCount === questions.length) && (
+                      <button
+                        onClick={() => handleSubmit(false)}
+                        disabled={isSubmitting}
+                        className="lg:hidden flex items-center space-x-1 px-3.5 py-2.5 rounded-xl text-xs font-bold bg-[#C1440E] text-white hover:bg-[#A3370B] min-h-[44px] touch-manipulation disabled:opacity-50 cursor-pointer"
+                      >
+                        <span>{isSubmitting ? 'Submitting...' : 'Submit'}</span>
+                      </button>
+                    )}
+
+                    <button
+                      onClick={() => setCurrentIdx((prev) => Math.min(questions.length - 1, prev + 1))}
+                      disabled={currentIdx === questions.length - 1}
+                      className="flex items-center space-x-1.5 px-3.5 py-2.5 rounded-xl text-xs font-bold bg-[#0F1E1B] text-[#FDFBF3] hover:bg-[#1A332E] disabled:opacity-40 min-h-[44px] touch-manipulation cursor-pointer"
+                    >
+                      <span>Next</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
               </div>
             ) : null}
@@ -487,7 +525,7 @@ export const AptitudeTestView = ({ driveId, testData, onComplete, onCancel }) =>
                     <button
                       key={idx}
                       onClick={() => setCurrentIdx(idx)}
-                      className={`h-9 rounded-lg text-xs font-bold border-2 transition-all ${
+                      className={`h-11 rounded-lg text-xs font-bold border-2 transition-all touch-manipulation min-h-[44px] flex items-center justify-center cursor-pointer ${
                         isCurrent
                           ? 'border-[#0F1E1B] bg-[#F5D90A] text-[#0F1E1B] editorial-shadow-sm scale-105'
                           : isAnswered
@@ -522,7 +560,7 @@ export const AptitudeTestView = ({ driveId, testData, onComplete, onCancel }) =>
                 <button
                   onClick={() => handleSubmit(false)}
                   disabled={isSubmitting}
-                  className="w-full bg-[#C1440E] hover:bg-[#A3370B] text-white py-2.5 rounded-xl text-xs font-bold border-2 border-[#0F1E1B] editorial-shadow-sm transition-all disabled:opacity-50"
+                  className="w-full bg-[#C1440E] hover:bg-[#A3370B] text-white py-3 rounded-xl text-xs font-bold border-2 border-[#0F1E1B] editorial-shadow-sm transition-all disabled:opacity-50 min-h-[44px] touch-manipulation cursor-pointer"
                 >
                   {isSubmitting ? 'Evaluating...' : 'Complete & Submit Round 1'}
                 </button>
