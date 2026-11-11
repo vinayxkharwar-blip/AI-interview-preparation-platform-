@@ -5,6 +5,18 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import User from '../models/User.js';
+import Session from '../models/Session.js';
+import Question from '../models/Question.js';
+import Answer from '../models/Answer.js';
+import Feedback from '../models/Feedback.js';
+import ImprovementPlan from '../models/ImprovementPlan.js';
+import Resume from '../models/Resume.js';
+import Application from '../models/Application.js';
+import PlacementDrive from '../models/PlacementDrive.js';
+import AnalyticsSnapshot from '../models/AnalyticsSnapshot.js';
+import AptitudeAttempt from '../models/AptitudeAttempt.js';
+import CoverLetter from '../models/CoverLetter.js';
+import SavedJob from '../models/SavedJob.js';
 import validator from 'validator';
 import { sanitizeRole } from '../utils/roleSanitizer.js';
 
@@ -140,7 +152,7 @@ export const registerUser = async (req, res) => {
       email: cleanEmail,
       password: hashedPassword,
       targetRole: sanitizeRole(targetRole),
-      role: req.body.role === 'admin' ? 'admin' : 'user',
+      role: 'user', // Public registration is strictly restricted to regular users
     });
 
     const formattedUser = formatUser(user);
@@ -413,23 +425,51 @@ export const deleteAccount = async (req, res) => {
       return res.status(404).json({ message: 'User not found.' });
     }
 
-    if (req.body.password) {
-      const isMatch = await bcrypt.compare(req.body.password, user.password);
-      if (!isMatch) {
-        return res.status(400).json({ message: 'Incorrect password. Account deletion aborted.' });
-      }
+    const { password } = req.body || {};
+    if (!password || typeof password !== 'string' || !password.trim()) {
+      return res.status(400).json({ message: 'Password confirmation is required to delete your account.' });
     }
 
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res.status(400).json({ message: 'Incorrect password. Account deletion aborted.' });
+    }
+
+    // 1. Gather linked session IDs for nested deletion
+    const userSessions = await Session.find({ user: userId }).select('_id');
+    const sessionIds = userSessions.map((s) => s._id);
+
+    // 2. Cascade delete nested interview artifacts
+    if (sessionIds.length > 0) {
+      await Question.deleteMany({ session: { $in: sessionIds } });
+      await Answer.deleteMany({ session: { $in: sessionIds } });
+      await Feedback.deleteMany({ session: { $in: sessionIds } });
+      await ImprovementPlan.deleteMany({ session: { $in: sessionIds } });
+      await Session.deleteMany({ _id: { $in: sessionIds } });
+    }
+
+    // 3. Cascade delete direct user-linked models
+    await Promise.allSettled([
+      Answer.deleteMany({ user: userId }),
+      Feedback.deleteMany({ user: userId }),
+      ImprovementPlan.deleteMany({ user: userId }),
+      Resume.deleteMany({ user: userId }),
+      Application.deleteMany({ user: userId }),
+      PlacementDrive.deleteMany({ user: userId }),
+      AnalyticsSnapshot.deleteMany({ user: userId }),
+      AptitudeAttempt.deleteMany({ user: userId }),
+      CoverLetter.deleteMany({ user: userId }),
+      SavedJob.deleteMany({ user: userId }),
+    ]);
+
+    // 4. Delete the User record
     await User.findByIdAndDelete(userId);
 
-    try {
-      const Resume = mongoose.model('Resume');
-      if (Resume) await Resume.deleteMany({ user: userId });
-    } catch (e) {}
-    try {
-      const Application = mongoose.model('Application');
-      if (Application) await Application.deleteMany({ user: userId });
-    } catch (e) {}
+    // 5. Clean up memoryUsers cache
+    const memIdx = memoryUsers.findIndex((u) => String(u._id) === String(userId) || String(u.id) === String(userId));
+    if (memIdx !== -1) {
+      memoryUsers.splice(memIdx, 1);
+    }
 
     return res.json({ message: 'Account and associated records successfully deleted.' });
   } catch (error) {

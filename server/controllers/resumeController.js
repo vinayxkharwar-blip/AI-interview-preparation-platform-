@@ -19,8 +19,8 @@ export const uploadResume = async (req, res) => {
 
     const fileExt = path.extname(req.file.originalname).toLowerCase().replace('.', '');
     if (!['pdf', 'docx', 'doc'].includes(fileExt)) {
-      if (req.file.path && fs.existsSync(req.file.path)) {
-        try { fs.unlinkSync(req.file.path); } catch (e) {}
+      if (req.file.path) {
+        fs.promises.unlink(req.file.path).catch(() => {});
       }
       return res.status(400).json({ message: 'Invalid file type. Only PDF and DOCX documents are allowed.' });
     }
@@ -90,6 +90,9 @@ export const uploadResume = async (req, res) => {
       };
     }
 
+    if (memoryResumes.length >= 100) {
+      memoryResumes.pop();
+    }
     memoryResumes.unshift(newResume);
 
     res.status(201).json({
@@ -97,8 +100,8 @@ export const uploadResume = async (req, res) => {
       resume: newResume,
     });
   } catch (error) {
-    if (req.file && req.file.path && fs.existsSync(req.file.path)) {
-      try { fs.unlinkSync(req.file.path); } catch (e) {}
+    if (req.file && req.file.path) {
+      fs.promises.unlink(req.file.path).catch(() => {});
     }
     console.error('[Resume Upload Error]', error);
     res.status(500).json({ message: error.message || 'Error processing resume file.' });

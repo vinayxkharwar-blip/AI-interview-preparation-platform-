@@ -11,29 +11,30 @@ import fs from 'fs';
 // @desc Transcribe audio before user confirmation
 // @route POST /api/answers/transcribe
 export const transcribeAnswerAudio = async (req, res) => {
+  const tempPath = req.file?.path;
   try {
-    if (!req.file) {
+    if (!req.file || !tempPath) {
       return res.status(400).json({ message: 'No audio file provided for transcription.' });
     }
 
-    const transcript = await transcribeAudio(req.file.path);
+    const transcript = await transcribeAudio(tempPath);
 
-    res.json({
+    // Audio file is ephemeral and deleted after transcription to protect candidate privacy.
+    // We explicitly return audioUrl: null rather than a dead/404 URL.
+    return res.json({
       transcript,
-      audioUrl: `/uploads/${req.file.filename}`,
+      audioUrl: null,
     });
   } catch (error) {
     console.error('[Transcribe Error]', error);
-    res.status(500).json({ message: error.message || 'Failed to transcribe audio file.' });
+    return res.status(500).json({ message: error.message || 'Failed to transcribe audio file.' });
   } finally {
-    if (req.file?.path && fs.existsSync(req.file.path)) {
-      try {
-        fs.unlinkSync(req.file.path);
-      } catch (cleanupErr) {
+    if (tempPath) {
+      fs.promises.unlink(tempPath).catch((cleanupErr) => {
         if (cleanupErr.code !== 'ENOENT') {
           console.warn('[Audio Cleanup Warning]', cleanupErr.message);
         }
-      }
+      });
     }
   }
 };
@@ -42,10 +43,19 @@ export const transcribeAnswerAudio = async (req, res) => {
 // @route POST /api/answers/submit
 export const submitAnswer = async (req, res) => {
   try {
-    const { sessionId, questionId, transcript, answerType = 'text', audioUrl = '' } = req.body;
+    const { sessionId, questionId, transcript, answerType = 'text', audioUrl = null } = req.body;
 
-    if (!sessionId || !questionId || !transcript) {
+    if (!sessionId || !questionId || transcript == null) {
       return res.status(400).json({ message: 'Session ID, Question ID, and transcript text are required.' });
+    }
+
+    if (typeof transcript !== 'string' || !transcript.trim()) {
+      return res.status(400).json({ message: 'Transcript cannot be empty.' });
+    }
+
+    const trimmedTranscript = transcript.trim();
+    if (trimmedTranscript.length > 8000) {
+      return res.status(400).json({ message: 'Transcript exceeds maximum allowed length of 8000 characters.' });
     }
 
     // Verify session ownership
@@ -54,7 +64,7 @@ export const submitAnswer = async (req, res) => {
       return res.status(ownership.status).json({ message: ownership.message });
     }
 
-    // 1. Fetch Question details
+    // 1. Fetch Question details and verify existence
     let question = null;
     try {
       question = await Question.findById(questionId);
@@ -66,13 +76,17 @@ export const submitAnswer = async (req, res) => {
       question = memoryQuestions.find((q) => String(q._id) === String(questionId) || String(q.id) === String(questionId));
     }
 
-    if (question && question.session && String(question.session) !== String(sessionId)) {
+    if (!question) {
+      return res.status(404).json({ message: 'Question not found.' });
+    }
+
+    if (question.session && String(question.session) !== String(sessionId)) {
       return res.status(400).json({ message: 'Question does not belong to this session.' });
     }
 
-    const questionText = question ? question.questionText : 'Interview Question';
-    const category = question ? question.category : 'General';
-    const expectedKeyPoints = question ? question.expectedKeyPoints : [];
+    const questionText = question.questionText || 'Interview Question';
+    const category = question.category || 'General';
+    const expectedKeyPoints = question.expectedKeyPoints || [];
 
     // 2. Save Answer
     let savedAnswer;
@@ -81,9 +95,9 @@ export const submitAnswer = async (req, res) => {
         session: sessionId,
         question: questionId,
         user: req.user._id,
-        transcript,
+        transcript: trimmedTranscript,
         answerType,
-        audioUrl,
+        audioUrl: audioUrl || null,
       });
     } catch (e) {
       savedAnswer = {
@@ -91,13 +105,16 @@ export const submitAnswer = async (req, res) => {
         session: sessionId,
         question: questionId,
         user: req.user._id,
-        transcript,
+        transcript: trimmedTranscript,
         answerType,
-        audioUrl,
+        audioUrl: audioUrl || null,
         createdAt: new Date(),
       };
     }
 
+    if (memoryAnswers.length >= 200) {
+      memoryAnswers.shift();
+    }
     memoryAnswers.push(savedAnswer);
 
     // 3. Call LLM for 1-10 scoring & feedback evaluation
@@ -177,6 +194,9 @@ export const submitAnswer = async (req, res) => {
       };
     }
 
+    if (memoryFeedback.length >= 200) {
+      memoryFeedback.shift();
+    }
     memoryFeedback.push(savedFeedback);
 
     res.status(201).json({

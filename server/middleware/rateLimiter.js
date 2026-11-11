@@ -1,17 +1,29 @@
 import rateLimit from 'express-rate-limit';
 
 /**
+ * Determine whether rate limiting should be skipped.
+ * Strictly restricted to genuine server-side test environments.
+ * Client request headers are NEVER permitted to bypass rate limiting in production.
+ */
+export const shouldSkipRateLimit = (req) => {
+  if (process.env.NODE_ENV === 'production') {
+    return false;
+  }
+  return (
+    process.env.NODE_ENV === 'test' ||
+    Boolean(process.env.TEST_MODE) ||
+    process.env.DISABLE_RATE_LIMIT === 'true'
+  );
+};
+
+/**
  * Global API Rate Limiter
  * Approximately 100 requests per minute
  */
 export const globalApiLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 100,
-  skip: (req) =>
-    process.env.NODE_ENV === 'test' ||
-    Boolean(process.env.TEST_MODE) ||
-    process.env.DISABLE_RATE_LIMIT === 'true' ||
-    req.headers['x-test-mode'] === 'true',
+  skip: shouldSkipRateLimit,
   standardHeaders: true,
   legacyHeaders: false,
   statusCode: 429,
@@ -27,11 +39,7 @@ export const globalApiLimiter = rateLimit({
 export const authLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 10,
-  skip: (req) =>
-    process.env.NODE_ENV === 'test' ||
-    Boolean(process.env.TEST_MODE) ||
-    process.env.DISABLE_RATE_LIMIT === 'true' ||
-    req.headers['x-test-mode'] === 'true',
+  skip: shouldSkipRateLimit,
   standardHeaders: true,
   legacyHeaders: false,
   statusCode: 429,
@@ -47,11 +55,7 @@ export const authLimiter = rateLimit({
 export const aiLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 15,
-  skip: (req) =>
-    process.env.NODE_ENV === 'test' ||
-    Boolean(process.env.TEST_MODE) ||
-    process.env.DISABLE_RATE_LIMIT === 'true' ||
-    req.headers['x-test-mode'] === 'true',
+  skip: shouldSkipRateLimit,
   standardHeaders: true,
   legacyHeaders: false,
   statusCode: 429,

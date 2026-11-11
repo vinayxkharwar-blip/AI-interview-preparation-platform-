@@ -302,31 +302,45 @@ export const completeLiveSession = async (req, res) => {
     if (!checkOwnership(session, req.user)) {
       return res.status(403).json({ message: 'Forbidden: You do not have access to this session' });
     }
+    if (session.status === 'completed') {
+      return res.status(400).json({ message: 'Session is already completed.' });
+    }
     if (questions.length === 0) {
       questions = memoryQuestions.filter((q) => String(q.session) === String(sessionId));
     }
+
+    const safeTurns = Array.isArray(liveTurns) ? liveTurns.slice(0, 15) : [];
 
     // Process and store answers & feedback from live turns
     let totalScoreSum = 0;
     let turnCount = 0;
 
-    for (let i = 0; i < liveTurns.length; i++) {
-      const turn = liveTurns[i];
+    for (let i = 0; i < safeTurns.length; i++) {
+      const turn = safeTurns[i];
+      if (!turn || typeof turn !== 'object') continue;
+
       const matchingQ = questions[turn.questionIndex] || questions[i] || { _id: new mongoose.Types.ObjectId().toString(), category: 'General' };
       const qId = matchingQ._id || matchingQ.id;
 
-      const score = turn.turnScore || 8;
+      // Validate turn score strictly (1 - 10)
+      let score = 7;
+      if (typeof turn.turnScore === 'number' && Number.isFinite(turn.turnScore)) {
+        score = Math.min(10, Math.max(1, Math.round(turn.turnScore * 10) / 10));
+      }
       totalScoreSum += score;
       turnCount++;
 
       const ansId = new mongoose.Types.ObjectId().toString();
       const fbId = new mongoose.Types.ObjectId().toString();
 
+      const rawTranscript = typeof turn.userTranscript === 'string' ? turn.userTranscript.trim() : '';
+      const safeTranscript = rawTranscript.slice(0, 4000) || 'Live audio turn completed';
+
       const answerDoc = {
         _id: ansId,
         session: sessionId,
         question: qId,
-        transcript: turn.userTranscript || 'Live audio turn completed',
+        transcript: safeTranscript,
         answerType: 'audio',
         audioUrl: '',
         user: req.user?._id,
@@ -339,9 +353,9 @@ export const completeLiveSession = async (req, res) => {
         answer: ansId,
         score,
         evaluationStatus: 'COMPLETED',
-        evaluationSource: 'openai',
-        strengths: turn.keyPointsCovered?.length ? turn.keyPointsCovered : ['Active live verbal communication'],
-        weaknesses: turn.keyPointsCovered?.length < (matchingQ.expectedKeyPoints?.length || 2) ? ['Could expand on advanced edge cases'] : [],
+        evaluationSource: 'heuristic',
+        strengths: Array.isArray(turn.keyPointsCovered) && turn.keyPointsCovered.length ? turn.keyPointsCovered.slice(0, 5) : ['Active live verbal communication'],
+        weaknesses: Array.isArray(turn.keyPointsCovered) && turn.keyPointsCovered.length < (matchingQ.expectedKeyPoints?.length || 2) ? ['Could expand on advanced edge cases'] : [],
         suggestion: 'Focus on structured STAR framework during live verbal delivery.',
         category: matchingQ.category || 'Technical',
         user: req.user?._id,
@@ -355,7 +369,9 @@ export const completeLiveSession = async (req, res) => {
           console.log('[Live DB Save Notice]', e.message);
         }
       }
+      if (memoryAnswers.length >= 200) memoryAnswers.shift();
       memoryAnswers.push(answerDoc);
+      if (memoryFeedback.length >= 200) memoryFeedback.shift();
       memoryFeedback.push(feedbackDoc);
     }
 

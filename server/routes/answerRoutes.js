@@ -9,6 +9,6 @@ const router = express.Router();
 router.use(protect);
 
 router.post('/transcribe', aiLimiter, upload.single('audio'), transcribeAnswerAudio);
-router.post('/submit', upload.single('audio'), submitAnswer);
+router.post('/submit', aiLimiter, upload.single('audio'), submitAnswer);
 
 export default router;

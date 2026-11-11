@@ -32,14 +32,54 @@ const resumeFileFilter = (req, file, cb) => {
   ];
 
   const ext = path.extname(file.originalname).toLowerCase();
-  const mime = file.mimetype.toLowerCase();
+  const mime = (file.mimetype || '').toLowerCase();
 
-  if (allowedExts.includes(ext) && (allowedMimes.includes(mime) || mime === 'application/octet-stream' || mime.includes('document') || mime.includes('pdf'))) {
+  if (allowedExts.includes(ext) && (allowedMimes.includes(mime) || mime.includes('document') || mime.includes('pdf'))) {
     cb(null, true);
   } else {
     const err = new Error('Invalid file type. Only PDF and DOCX documents are allowed.');
     err.code = 'INVALID_FILE_TYPE';
     cb(err, false);
+  }
+};
+
+/**
+ * Inspect document magic bytes to verify genuine file signature.
+ * Prevents disguised executables or scripts from passing extension-only filters.
+ */
+export const verifyDocumentMagicBytes = async (filePath, ext) => {
+  let fileHandle;
+  try {
+    fileHandle = await fs.promises.open(filePath, 'r');
+    const buffer = Buffer.alloc(8);
+    const { bytesRead } = await fileHandle.read(buffer, 0, 8, 0);
+    if (bytesRead < 4) return false;
+
+    // PDF magic bytes: %PDF (0x25 0x50 0x44 0x46)
+    if (ext === '.pdf') {
+      return buffer[0] === 0x25 && buffer[1] === 0x50 && buffer[2] === 0x44 && buffer[3] === 0x46;
+    }
+
+    // DOCX (ZIP archive) magic bytes: PK\x03\x04 (0x50 0x4B 0x03 0x04)
+    if (ext === '.docx') {
+      return buffer[0] === 0x50 && buffer[1] === 0x4b && buffer[2] === 0x03 && buffer[3] === 0x04;
+    }
+
+    // DOC (OLE2 compound file) magic bytes: 0xD0 0xCF 0x11 0xE0 or ZIP PK\x03\x04
+    if (ext === '.doc') {
+      return (
+        (buffer[0] === 0xd0 && buffer[1] === 0xcf && buffer[2] === 0x11 && buffer[3] === 0xe0) ||
+        (buffer[0] === 0x50 && buffer[1] === 0x4b && buffer[2] === 0x03 && buffer[3] === 0x04)
+      );
+    }
+
+    return false;
+  } catch (err) {
+    return false;
+  } finally {
+    if (fileHandle) {
+      await fileHandle.close().catch(() => {});
+    }
   }
 };
 
@@ -49,15 +89,27 @@ export const uploadResumeMiddleware = multer({
   fileFilter: resumeFileFilter,
 }).single('resume');
 
-// Wrapper middleware to handle Multer errors cleanly and return 400
+// Wrapper middleware to handle Multer errors and verify magic-byte signatures
 export const handleResumeUpload = (req, res, next) => {
-  uploadResumeMiddleware(req, res, (err) => {
+  uploadResumeMiddleware(req, res, async (err) => {
     if (err) {
       if (err.code === 'LIMIT_FILE_SIZE') {
         return res.status(400).json({ message: 'File size exceeds 15MB limit.' });
       }
       return res.status(400).json({ message: err.message || 'Error uploading resume file.' });
     }
+
+    if (req.file && req.file.path) {
+      const ext = path.extname(req.file.originalname).toLowerCase();
+      const isValidMagic = await verifyDocumentMagicBytes(req.file.path, ext);
+      if (!isValidMagic) {
+        fs.promises.unlink(req.file.path).catch(() => {});
+        return res.status(400).json({
+          message: 'Invalid document signature. File content does not match genuine PDF or DOCX format.',
+        });
+      }
+    }
+
     next();
   });
 };

@@ -121,6 +121,9 @@ export const startSession = async (req, res) => {
         createdAt: new Date(),
       };
     }
+    if (memorySessions.length >= 100) {
+      memorySessions.shift();
+    }
     memorySessions.push(session);
     const t_sessionDbEnd = Date.now();
     console.log(`⏱️ [START SESSION TRACE] 2. MongoDB Session creation: ${t_sessionDbEnd - t_sessionDbStart}ms`);
@@ -172,6 +175,9 @@ export const startSession = async (req, res) => {
 
     questionsToSave.forEach((q) => {
       if (!memoryQuestions.some((mq) => String(mq._id) === String(q._id))) {
+        if (memoryQuestions.length >= 500) {
+          memoryQuestions.shift();
+        }
         memoryQuestions.push(q);
       }
     });
@@ -323,25 +329,6 @@ export const completeSession = async (req, res) => {
       return res.status(403).json({ message: 'Forbidden: You do not have access to this session' });
     }
 
-    // Safety check: Prevent failed AI evaluations from unlocking placement rounds or saving mock scores
-    const failedEvaluations = feedbackList.filter(
-      (fb) => fb.evaluationStatus === 'FAILED' || fb.score === null || fb.score === undefined
-    );
-
-    if (failedEvaluations.length > 0) {
-      if (session) {
-        session.evaluationStatus = 'FAILED';
-        if (typeof session.save === 'function') await session.save();
-      }
-      return res.status(422).json({
-        message: `${failedEvaluations.length} answer(s) have failed AI evaluation. Genuine scores cannot be awarded until evaluation succeeds. Please use the retry evaluation endpoint.`,
-        evaluationStatus: 'FAILED',
-        failedCount: failedEvaluations.length,
-        session,
-        feedback: feedbackList,
-      });
-    }
-
     // Calculate aggregated overall score & category breakdown
     let totalScoreSum = 0;
     const categoryScores = {};
@@ -367,7 +354,6 @@ export const completeSession = async (req, res) => {
     // Update Session status & score
     if (session) {
       session.status = 'completed';
-      session.evaluationStatus = 'COMPLETED';
       session.overallScore = overallScore;
       session.categoryBreakdown = categoryBreakdown;
       if (typeof session.save === 'function') {
@@ -392,7 +378,7 @@ export const completeSession = async (req, res) => {
         drive = memoryPlacementDrives.find(
           (d) => String(d.user) === String(req.user._id) &&
             (String(d.rounds?.round2_technical?.sessionId) === String(id) ||
-             String(d.rounds?.round4_resume?.sessionId) === String(id))
+              String(d.rounds?.round4_resume?.sessionId) === String(id))
         );
       }
       if (drive) {
@@ -487,21 +473,20 @@ export const completeSession = async (req, res) => {
 export const retrySessionEvaluation = async (req, res) => {
   try {
     const { id } = req.params;
+
     let session = null;
-    let feedbackList = [];
-    let answers = [];
     let questions = [];
+    let answers = [];
+    let feedbackList = [];
 
     if (mongoose.connection.readyState === 1 && mongoose.Types.ObjectId.isValid(id)) {
       try {
         session = await Session.findById(id);
-        if (session) {
-          feedbackList = await Feedback.find({ session: id });
-          answers = await Answer.find({ session: id });
-          questions = await Question.find({ session: id });
-        }
+        questions = await Question.find({ session: id });
+        answers = await Answer.find({ session: id });
+        feedbackList = await Feedback.find({ session: id });
       } catch (e) {
-        console.log('[Retry Evaluation DB Notice]', e.message);
+        console.log('[Retry Session DB Lookup]', e.message);
       }
     }
 
@@ -511,91 +496,105 @@ export const retrySessionEvaluation = async (req, res) => {
     if (!session) {
       return res.status(404).json({ message: 'Session not found.' });
     }
+
     if (!checkOwnership(session, req.user)) {
       return res.status(403).json({ message: 'Forbidden: You do not have access to this session' });
     }
 
-    if (feedbackList.length === 0) {
-      feedbackList = memoryFeedback.filter((f) => String(f.session) === String(id));
+    if (questions.length === 0) {
+      questions = memoryQuestions.filter((q) => String(q.session) === String(id));
     }
     if (answers.length === 0) {
       answers = memoryAnswers.filter((a) => String(a.session) === String(id));
     }
-    if (questions.length === 0) {
-      questions = memoryQuestions.filter((q) => String(q.session) === String(id));
+    if (feedbackList.length === 0) {
+      feedbackList = memoryFeedback.filter((f) => String(f.session) === String(id));
     }
 
-    const failedFeedbacks = feedbackList.filter(
-      (fb) => fb.evaluationStatus === 'FAILED' || fb.score === null || fb.score === undefined
-    );
+    let retryCount = 0;
+    for (const ans of answers) {
+      let fb = feedbackList.find((f) => String(f.answer) === String(ans._id));
+      if (!fb || fb.evaluationStatus === 'FAILED' || fb.score == null) {
+        const question = questions.find((q) => String(q._id) === String(ans.question));
+        const feedbackPrompt = buildAnswerFeedbackPrompt({
+          questionText: question ? question.questionText : 'Technical Question',
+          category: question ? question.category : 'General',
+          expectedKeyPoints: question ? question.expectedKeyPoints : [],
+          candidateAnswer: ans.transcript,
+        });
 
-    if (failedFeedbacks.length === 0) {
-      return res.json({
-        message: 'All answers in this session have already been successfully evaluated by AI.',
-        evaluationStatus: 'COMPLETED',
-        feedback: feedbackList,
-      });
-    }
+        const fbLLMResult = await generateLLMJson(feedbackPrompt, 'You are an AI interview grading assistant.');
+        const isAiSuccess = Boolean(fbLLMResult && fbLLMResult._meta?.source === 'openai');
+        const evaluationStatus = isAiSuccess ? 'COMPLETED' : 'FAILED';
+        const evaluationSource = isAiSuccess ? 'openai' : (fbLLMResult?._meta?.source || 'mock');
+        const evaluationError = isAiSuccess ? '' : (fbLLMResult?._meta?.reason || 'AI evaluation service temporarily unavailable');
+        const scoreToSave = isAiSuccess && typeof fbLLMResult?.score === 'number'
+          ? Math.min(10, Math.max(1, fbLLMResult.score))
+          : null;
 
-    let recoveredCount = 0;
-    for (const fb of failedFeedbacks) {
-      const ans = answers.find((a) => String(a._id) === String(fb.answer) || String(a.id) === String(fb.answer));
-      if (!ans) continue;
-      const q = questions.find((item) => String(item._id) === String(ans.question) || String(item.id) === String(ans.question));
-      
-      const prompt = buildAnswerFeedbackPrompt({
-        questionText: q?.questionText || 'Interview Question',
-        category: q?.category || 'General',
-        expectedKeyPoints: q?.expectedKeyPoints || [],
-        candidateAnswer: ans.transcript || '',
-      });
-
-      const result = await generateLLMJson(prompt, 'You are an AI interview grading assistant.');
-      if (result && result._meta?.source === 'openai' && typeof result.score === 'number') {
-        fb.evaluationStatus = 'COMPLETED';
-        fb.evaluationSource = 'openai';
-        fb.evaluationError = '';
-        fb.score = Math.min(10, Math.max(1, result.score));
-        fb.strengths = Array.isArray(result.strengths) && result.strengths.length > 0 ? result.strengths : ['Clear articulation'];
-        fb.weaknesses = Array.isArray(result.weaknesses) ? result.weaknesses : [];
-        fb.suggestion = result.suggestion || 'Continue practicing structured communication.';
-        
-        if (mongoose.connection.readyState === 1 && typeof fb.save === 'function') {
-          await fb.save();
-        } else if (mongoose.connection.readyState === 1 && fb._id) {
-          await Feedback.findByIdAndUpdate(fb._id, { $set: fb });
+        if (mongoose.connection.readyState === 1 && ans._id) {
+          try {
+            await Answer.findByIdAndUpdate(ans._id, { evaluationStatus });
+          } catch (e) {}
         }
+        ans.evaluationStatus = evaluationStatus;
 
-        ans.evaluationStatus = 'COMPLETED';
-        if (mongoose.connection.readyState === 1 && typeof ans.save === 'function') {
-          await ans.save();
-        } else if (mongoose.connection.readyState === 1 && ans._id) {
-          await Answer.findByIdAndUpdate(ans._id, { $set: { evaluationStatus: 'COMPLETED' } });
+        if (fb) {
+          fb.score = scoreToSave;
+          fb.evaluationStatus = evaluationStatus;
+          fb.evaluationSource = evaluationSource;
+          fb.evaluationError = evaluationError;
+          if (isAiSuccess) {
+            fb.strengths = Array.isArray(fbLLMResult.strengths) ? fbLLMResult.strengths : fb.strengths;
+            fb.weaknesses = Array.isArray(fbLLMResult.weaknesses) ? fbLLMResult.weaknesses : fb.weaknesses;
+            fb.suggestion = fbLLMResult.suggestion || fb.suggestion;
+          }
+          if (mongoose.connection.readyState === 1 && fb._id) {
+            try {
+              await Feedback.findByIdAndUpdate(fb._id, {
+                score: fb.score,
+                evaluationStatus: fb.evaluationStatus,
+                evaluationSource: fb.evaluationSource,
+                evaluationError: fb.evaluationError,
+                strengths: fb.strengths,
+                weaknesses: fb.weaknesses,
+                suggestion: fb.suggestion,
+              });
+            } catch (e) {}
+          }
+        } else {
+          const newFb = {
+            _id: new mongoose.Types.ObjectId().toString(),
+            answer: ans._id,
+            session: id,
+            score: scoreToSave,
+            evaluationStatus,
+            evaluationSource,
+            evaluationError,
+            strengths: isAiSuccess && Array.isArray(fbLLMResult.strengths) ? fbLLMResult.strengths : [],
+            weaknesses: isAiSuccess && Array.isArray(fbLLMResult.weaknesses) ? fbLLMResult.weaknesses : [],
+            suggestion: isAiSuccess ? (fbLLMResult.suggestion || '') : 'AI grading preserved for retry.',
+            category: question ? question.category : 'General',
+          };
+          if (mongoose.connection.readyState === 1) {
+            try {
+              await Feedback.create(newFb);
+            } catch (e) {}
+          }
+          feedbackList.push(newFb);
         }
-
-        recoveredCount++;
+        retryCount++;
       }
     }
 
-    const remainingFailed = feedbackList.filter((fb) => fb.evaluationStatus === 'FAILED' || fb.score === null);
-    const overallStatus = remainingFailed.length === 0 ? 'COMPLETED' : 'FAILED';
-
-    if (session) {
-      session.evaluationStatus = overallStatus;
-      if (typeof session.save === 'function') await session.save();
-    }
-
-    res.json({
-      message: overallStatus === 'COMPLETED'
-        ? `Successfully evaluated ${recoveredCount} answer(s) with AI engine.`
-        : `Recovered ${recoveredCount} answer(s); ${remainingFailed.length} still pending AI availability.`,
-      evaluationStatus: overallStatus,
-      recoveredCount,
-      remainingFailedCount: remainingFailed.length,
+    return res.json({
+      message: retryCount > 0 ? `Successfully retried evaluation for ${retryCount} answer(s).` : 'All answers in this session are already evaluated.',
+      session,
+      answers,
       feedback: feedbackList,
     });
   } catch (error) {
     console.error('[Retry Session Evaluation Error]', error);
-    res.status(500).json({ message: error.message || 'Failed to retry evaluation' });
+    return res.status(500).json({ message: error.message || 'Failed to retry session evaluation.' });
   }
 };
