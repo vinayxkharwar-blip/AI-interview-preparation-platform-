@@ -154,7 +154,7 @@ export const saveJob = async (req, res) => {
 // @route GET /api/jobs/saved
 export const getSavedJobs = async (req, res) => {
   try {
-    let savedJobs = [];
+    let savedJobs = null;
     if (mongoose.connection.readyState === 1) {
       try {
         savedJobs = await SavedJob.find({ user: req.user._id }).sort({ createdAt: -1 }).lean();
@@ -163,11 +163,11 @@ export const getSavedJobs = async (req, res) => {
       }
     }
 
-    if (savedJobs.length === 0) {
+    if (savedJobs === null) {
       savedJobs = memorySavedJobs.filter((sj) => String(sj.user) === String(req.user._id));
     }
 
-    res.json(savedJobs);
+    res.json(savedJobs || []);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

@@ -140,7 +140,14 @@ export default function Resumes() {
   // Determine active resume
   const activeResume = resumes.find((r) => String(r._id) === String(activeResumeId)) || (resumes.length > 0 ? resumes[0] : null);
   const parsed = activeResume?.parsedData || {};
-  const atsScore = typeof parsed.atsScore === 'number' ? parsed.atsScore : 82;
+  const atsScore = typeof parsed.atsScore === 'number'
+    ? parsed.atsScore
+    : (parsed.atsBreakdown
+      ? (Number(parsed.atsBreakdown.keywordDepth) || 0) +
+        (Number(parsed.atsBreakdown.quantifiableImpact) || 0) +
+        (Number(parsed.atsBreakdown.formattingStructure) || 0) +
+        (Number(parsed.atsBreakdown.roleAlignment) || 0)
+      : null);
 
   // 1. Detected Target Role: purely inferred from active resume
   const rawDetectedRole = parsed.targetRole;
@@ -309,15 +316,31 @@ export default function Resumes() {
             <div className="bg-[#FAF8F0] border-2 border-[#10221D] rounded-xl p-4 space-y-1">
               <div className="flex items-center justify-between text-[#F47721]">
                 <span className="text-[10px] font-black uppercase tracking-wider">ATS Score</span>
-                <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 px-1.5 py-0.5 rounded border border-emerald-300">
-                  {atsScore >= 80 ? 'Strong' : atsScore >= 60 ? 'Moderate' : 'Needs Work'}
-                </span>
+                {typeof atsScore === 'number' && (
+                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${
+                    atsScore >= 80 ? 'text-emerald-800 bg-emerald-100 border-emerald-300' :
+                    atsScore >= 60 ? 'text-amber-800 bg-amber-100 border-amber-300' :
+                    'text-rose-800 bg-rose-100 border-rose-300'
+                  }`}>
+                    {atsScore >= 80 ? 'Strong' : atsScore >= 60 ? 'Moderate' : 'Needs Work'}
+                  </span>
+                )}
               </div>
               <div className="text-3xl font-black font-serif-headline text-[#10221D]">
-                {atsScore}<span className="text-xs font-bold text-[#10221D]/50">/100</span>
+                {typeof atsScore === 'number' ? (
+                  <>
+                    {atsScore}<span className="text-xs font-bold text-[#10221D]/50">/100</span>
+                  </>
+                ) : (
+                  <span className="text-2xl text-[#10221D]/40">—</span>
+                )}
               </div>
               <p className="text-[10px] text-[#10221D]/60 font-medium">
-                Keyword density & formatting score.
+                {parsed.atsBreakdown ? (
+                  `Keywords: ${parsed.atsBreakdown.keywordDepth ?? '—'}/25 • Impact: ${parsed.atsBreakdown.quantifiableImpact ?? '—'}/25`
+                ) : (
+                  'AI-evaluated keyword density & impact score.'
+                )}
               </p>
             </div>
 

@@ -376,6 +376,69 @@ export const getCurrentDrive = async (req, res) => {
       }
     }
 
+    // Auto-reconcile Round 2 Technical Interview from linked session
+    if (!drive.rounds.round2_technical.passed && drive.rounds.round2_technical.sessionId) {
+      const sessId2 = drive.rounds.round2_technical.sessionId;
+      let sess2 = null;
+      if (mongoose.connection.readyState === 1 && mongoose.Types.ObjectId.isValid(sessId2)) {
+        try {
+          sess2 = await Session.findById(sessId2);
+        } catch (e) {}
+      }
+      if (!sess2) {
+        sess2 = memorySessions.find((s) => String(s._id) === String(sessId2) || String(s.id) === String(sessId2));
+      }
+      if (sess2 && sess2.status === 'completed' && sess2.evaluationStatus !== 'FAILED') {
+        let s2Score = Number(sess2.overallScore) || 0;
+        if (s2Score <= 10 && s2Score > 0) s2Score = Math.round(s2Score * 10);
+        if (s2Score >= (drive.rounds.round2_technical.passThreshold || 60)) {
+          drive.rounds.round2_technical.passed = true;
+          drive.rounds.round2_technical.evaluationStatus = 'COMPLETED';
+          drive.rounds.round2_technical.evaluationSource = 'openai';
+          drive.rounds.round2_technical.status = 'completed';
+          drive.rounds.round2_technical.score = s2Score;
+          drive.rounds.round2_technical.categoryBreakdown = sess2.categoryBreakdown || [];
+          drive.rounds.round2_technical.completedAt = sess2.updatedAt || new Date();
+          if (drive.rounds.round3_gd.status === 'locked') {
+            drive.rounds.round3_gd.status = 'unlocked';
+          }
+          drive.currentRound = Math.max(drive.currentRound || 1, 3);
+          needsSave = true;
+        }
+      }
+    }
+
+    // Auto-reconcile Round 4 Resume-Based Interview from linked session
+    if (!drive.rounds.round4_resume.passed && drive.rounds.round4_resume.sessionId) {
+      const sessId4 = drive.rounds.round4_resume.sessionId;
+      let sess4 = null;
+      if (mongoose.connection.readyState === 1 && mongoose.Types.ObjectId.isValid(sessId4)) {
+        try {
+          sess4 = await Session.findById(sessId4);
+        } catch (e) {}
+      }
+      if (!sess4) {
+        sess4 = memorySessions.find((s) => String(s._id) === String(sessId4) || String(s.id) === String(sessId4));
+      }
+      if (sess4 && sess4.status === 'completed' && sess4.evaluationStatus !== 'FAILED') {
+        let s4Score = Number(sess4.overallScore) || 0;
+        if (s4Score <= 10 && s4Score > 0) s4Score = Math.round(s4Score * 10);
+        if (s4Score >= (drive.rounds.round4_resume.passThreshold || 60)) {
+          drive.rounds.round4_resume.passed = true;
+          drive.rounds.round4_resume.evaluationStatus = 'COMPLETED';
+          drive.rounds.round4_resume.evaluationSource = 'openai';
+          drive.rounds.round4_resume.status = 'completed';
+          drive.rounds.round4_resume.score = s4Score;
+          drive.rounds.round4_resume.categoryBreakdown = sess4.categoryBreakdown || [];
+          drive.rounds.round4_resume.completedAt = sess4.updatedAt || new Date();
+          drive.currentRound = 5;
+          drive.status = 'completed';
+          await generateFinalReportHelper(drive);
+          needsSave = true;
+        }
+      }
+    }
+
     // Ensure Round 2 is unlocked if Round 1 is passed
     if (drive.rounds.round1_aptitude.passed) {
       if (drive.rounds.round2_technical.status === 'locked') {
@@ -891,6 +954,17 @@ export const syncTechnicalRound = async (req, res) => {
       return res.status(404).json({ message: 'Linked technical interview session not found.' });
     }
 
+    if (session.evaluationStatus === 'FAILED') {
+      round2.evaluationStatus = 'FAILED';
+      round2.passed = false;
+      await saveDrive(drive);
+      return res.status(422).json({
+        message: 'Linked technical interview session contains failed AI evaluations. Please retry evaluation before syncing with Placement Drive.',
+        evaluationStatus: 'FAILED',
+        drive,
+      });
+    }
+
     // Convert session score (1-10 or 0-100) to 0-100 scale
     let score = Number(session.overallScore) || 0;
     if (score <= 10 && score > 0) {
@@ -901,6 +975,8 @@ export const syncTechnicalRound = async (req, res) => {
     round2.attempts += 1;
     round2.score = score;
     round2.passed = passed;
+    round2.evaluationStatus = 'COMPLETED';
+    round2.evaluationSource = 'openai';
     round2.categoryBreakdown = session.categoryBreakdown || [];
     round2.completedAt = new Date();
 
@@ -1054,9 +1130,28 @@ export const evaluateGDRound = async (req, res) => {
     const round3 = drive.rounds.round3_gd;
     const evaluation = await evaluateGDPerformance(round3.transcript, round3.topic);
 
+    if (evaluation.evaluationStatus === 'FAILED') {
+      round3.passed = false;
+      round3.evaluationStatus = 'FAILED';
+      round3.evaluationSource = evaluation.evaluationSource || 'heuristic';
+      round3.evaluationError = evaluation.evaluationError || 'AI evaluation service temporarily unavailable';
+      round3.status = 'in_progress';
+      round3.feedback = evaluation.feedback;
+      await saveDrive(drive);
+      return res.status(422).json({
+        message: 'AI evaluation service temporarily unavailable. Group Discussion cannot be verified or passed without genuine AI evaluation. Please use the retry endpoint.',
+        evaluationStatus: 'FAILED',
+        evaluation,
+        drive,
+      });
+    }
+
     round3.attempts += 1;
     round3.score = evaluation.score;
     round3.passed = evaluation.passed;
+    round3.evaluationStatus = 'COMPLETED';
+    round3.evaluationSource = 'openai';
+    round3.evaluationError = '';
     round3.rubrics = evaluation.rubrics;
     round3.feedback = evaluation.feedback;
     round3.completedAt = new Date();
@@ -1080,6 +1175,67 @@ export const evaluateGDRound = async (req, res) => {
 
     res.json({
       message: evaluation.passed ? 'Group Discussion passed!' : 'Group Discussion communication cutoff not met.',
+      evaluation,
+      drive,
+    });
+  } catch (error) {
+    console.error('[evaluateGDRound Error]', error);
+    res.status(500).json({ message: error.message || 'Failed to evaluate GD' });
+  }
+};
+
+/**
+ * @desc Retry failed AI evaluation for Round 3 Group Discussion
+ * @route POST /api/placement/:id/gd/retry
+ */
+export const retryGDRound = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const drive = await findDrive({ _id: id });
+    if (!drive) return res.status(404).json({ message: 'Placement drive not found' });
+    if (!checkOwnership(drive, req.user)) {
+      return res.status(403).json({ message: 'Forbidden: You do not have access to this drive' });
+    }
+
+    const round3 = drive.rounds.round3_gd;
+    const evaluation = await evaluateGDPerformance(round3.transcript, round3.topic);
+
+    if (evaluation.evaluationStatus === 'FAILED') {
+      round3.evaluationStatus = 'FAILED';
+      round3.evaluationError = evaluation.evaluationError || 'AI evaluation service still unavailable';
+      await saveDrive(drive);
+      return res.status(422).json({
+        message: 'AI evaluation service is still unreachable. Please retry in a few moments.',
+        evaluationStatus: 'FAILED',
+        evaluation,
+        drive,
+      });
+    }
+
+    round3.score = evaluation.score;
+    round3.passed = evaluation.passed;
+    round3.evaluationStatus = 'COMPLETED';
+    round3.evaluationSource = 'openai';
+    round3.evaluationError = '';
+    round3.rubrics = evaluation.rubrics;
+    round3.feedback = evaluation.feedback;
+    round3.completedAt = new Date();
+
+    if (evaluation.passed) {
+      round3.status = 'completed';
+      drive.currentRound = 4;
+      if (drive.rounds.round4_resume.status === 'locked') {
+        drive.rounds.round4_resume.status = 'unlocked';
+      }
+    } else {
+      round3.status = round3.attempts >= round3.maxAttempts ? 'failed' : 'unlocked';
+    }
+
+    await saveDrive(drive);
+
+    res.json({
+      message: evaluation.passed ? 'Group Discussion passed via AI re-evaluation!' : 'Group Discussion communication cutoff not met.',
+      evaluationStatus: 'COMPLETED',
       evaluation,
       drive,
     });
@@ -1335,6 +1491,17 @@ export const syncResumeRound = async (req, res) => {
       return res.status(404).json({ message: 'Linked resume session not found.' });
     }
 
+    if (session.evaluationStatus === 'FAILED') {
+      round4.evaluationStatus = 'FAILED';
+      round4.passed = false;
+      await saveDrive(drive);
+      return res.status(422).json({
+        message: 'Linked resume interview session contains failed AI evaluations. Please retry evaluation before syncing with Placement Drive.',
+        evaluationStatus: 'FAILED',
+        drive,
+      });
+    }
+
     let score = Number(session.overallScore) || 0;
     if (score <= 10 && score > 0) {
       score = Math.round(score * 10);
@@ -1344,6 +1511,8 @@ export const syncResumeRound = async (req, res) => {
     round4.attempts += 1;
     round4.score = score;
     round4.passed = passed;
+    round4.evaluationStatus = 'COMPLETED';
+    round4.evaluationSource = 'openai';
     round4.categoryBreakdown = session.categoryBreakdown || [];
     round4.completedAt = new Date();
 

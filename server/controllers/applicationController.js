@@ -64,7 +64,7 @@ export const createApplication = async (req, res) => {
 // @route GET /api/applications
 export const getUserApplications = async (req, res) => {
   try {
-    let applications = [];
+    let applications = null;
     if (mongoose.connection.readyState === 1) {
       try {
         applications = await Application.find({ user: req.user._id }).sort({ appliedDate: -1 }).lean();
@@ -73,11 +73,11 @@ export const getUserApplications = async (req, res) => {
       }
     }
 
-    if (applications.length === 0) {
+    if (applications === null) {
       applications = memoryApplications.filter((app) => String(app.user) === String(req.user._id));
     }
 
-    res.json(applications);
+    res.json(applications || []);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

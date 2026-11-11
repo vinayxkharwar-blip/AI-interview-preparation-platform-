@@ -6,13 +6,16 @@ import Answer from '../models/Answer.js';
 import Feedback from '../models/Feedback.js';
 import ImprovementPlan from '../models/ImprovementPlan.js';
 import AnalyticsSnapshot from '../models/AnalyticsSnapshot.js';
+import PlacementDrive from '../models/PlacementDrive.js';
 import { generateLLMJson } from '../services/llmService.js';
 import { buildQuestionGenerationPrompt } from '../prompts/questionPrompts.js';
 import { buildImprovementPlanPrompt } from '../prompts/improvementPrompts.js';
+import { buildAnswerFeedbackPrompt } from '../prompts/feedbackPrompts.js';
 import { checkOwnership } from '../utils/authz.js';
 import { memoryResumes } from './resumeController.js';
 import { sanitizeRole } from '../utils/roleSanitizer.js';
 import { selectTechnicalQuestions } from '../services/technicalQuestionService.js';
+import { memoryPlacementDrives } from './placementController.js';
 
 // In-memory fallback stores when MongoDB is offline/reconnecting
 export const memorySessions = [];
@@ -192,7 +195,7 @@ export const startSession = async (req, res) => {
 // @route GET /api/sessions
 export const getUserSessions = async (req, res) => {
   try {
-    let sessions = [];
+    let sessions = null;
     if (mongoose.connection.readyState === 1) {
       try {
         sessions = await Session.find({ user: req.user._id }).sort({ createdAt: -1 }).lean();
@@ -200,10 +203,10 @@ export const getUserSessions = async (req, res) => {
         console.log('[Sessions List Fallback]', e.message);
       }
     }
-    if (sessions.length === 0) {
+    if (sessions === null) {
       sessions = memorySessions.filter((s) => String(s.user) === String(req.user._id));
     }
-    res.json(sessions);
+    res.json(sessions || []);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -320,6 +323,25 @@ export const completeSession = async (req, res) => {
       return res.status(403).json({ message: 'Forbidden: You do not have access to this session' });
     }
 
+    // Safety check: Prevent failed AI evaluations from unlocking placement rounds or saving mock scores
+    const failedEvaluations = feedbackList.filter(
+      (fb) => fb.evaluationStatus === 'FAILED' || fb.score === null || fb.score === undefined
+    );
+
+    if (failedEvaluations.length > 0) {
+      if (session) {
+        session.evaluationStatus = 'FAILED';
+        if (typeof session.save === 'function') await session.save();
+      }
+      return res.status(422).json({
+        message: `${failedEvaluations.length} answer(s) have failed AI evaluation. Genuine scores cannot be awarded until evaluation succeeds. Please use the retry evaluation endpoint.`,
+        evaluationStatus: 'FAILED',
+        failedCount: failedEvaluations.length,
+        session,
+        feedback: feedbackList,
+      });
+    }
+
     // Calculate aggregated overall score & category breakdown
     let totalScoreSum = 0;
     const categoryScores = {};
@@ -345,11 +367,66 @@ export const completeSession = async (req, res) => {
     // Update Session status & score
     if (session) {
       session.status = 'completed';
+      session.evaluationStatus = 'COMPLETED';
       session.overallScore = overallScore;
       session.categoryBreakdown = categoryBreakdown;
       if (typeof session.save === 'function') {
         await session.save();
       }
+    }
+
+    // Auto-sync completed session with any active PlacementDrive
+    try {
+      const scaledScore = overallScore <= 10 && overallScore > 0 ? Math.round(overallScore * 10) : overallScore;
+      let drive = null;
+      if (mongoose.connection.readyState === 1) {
+        drive = await PlacementDrive.findOne({
+          user: req.user._id,
+          $or: [
+            { 'rounds.round2_technical.sessionId': id },
+            { 'rounds.round4_resume.sessionId': id }
+          ]
+        });
+      }
+      if (!drive) {
+        drive = memoryPlacementDrives.find(
+          (d) => String(d.user) === String(req.user._id) &&
+            (String(d.rounds?.round2_technical?.sessionId) === String(id) ||
+             String(d.rounds?.round4_resume?.sessionId) === String(id))
+        );
+      }
+      if (drive) {
+        if (String(drive.rounds?.round2_technical?.sessionId) === String(id)) {
+          const passThresh = drive.rounds.round2_technical.passThreshold || 60;
+          drive.rounds.round2_technical.score = scaledScore;
+          drive.rounds.round2_technical.categoryBreakdown = categoryBreakdown;
+          drive.rounds.round2_technical.completedAt = new Date();
+          if (scaledScore >= passThresh) {
+            drive.rounds.round2_technical.passed = true;
+            drive.rounds.round2_technical.status = 'completed';
+            if (drive.rounds.round3_gd.status === 'locked') {
+              drive.rounds.round3_gd.status = 'unlocked';
+            }
+            drive.currentRound = Math.max(drive.currentRound || 1, 3);
+          }
+        } else if (String(drive.rounds?.round4_resume?.sessionId) === String(id)) {
+          const passThresh = drive.rounds.round4_resume.passThreshold || 60;
+          drive.rounds.round4_resume.score = scaledScore;
+          drive.rounds.round4_resume.categoryBreakdown = categoryBreakdown;
+          drive.rounds.round4_resume.completedAt = new Date();
+          if (scaledScore >= passThresh) {
+            drive.rounds.round4_resume.passed = true;
+            drive.rounds.round4_resume.status = 'completed';
+            drive.currentRound = 5;
+            drive.status = 'completed';
+          }
+        }
+        if (typeof drive.save === 'function') {
+          await drive.save();
+        }
+      }
+    } catch (syncErr) {
+      console.warn('[Session Complete Notice] Auto-sync with placement drive:', syncErr.message);
     }
 
     // Build Q&A transcript history for Improvement Plan LLM Synthesis
@@ -402,5 +479,123 @@ export const completeSession = async (req, res) => {
   } catch (error) {
     console.error('[Complete Session Error]', error);
     res.status(500).json({ message: error.message || 'Failed to complete session.' });
+  }
+};
+
+// @desc Retry failed AI evaluation for an interview session
+// @route POST /api/sessions/:id/retry-evaluation
+export const retrySessionEvaluation = async (req, res) => {
+  try {
+    const { id } = req.params;
+    let session = null;
+    let feedbackList = [];
+    let answers = [];
+    let questions = [];
+
+    if (mongoose.connection.readyState === 1 && mongoose.Types.ObjectId.isValid(id)) {
+      try {
+        session = await Session.findById(id);
+        if (session) {
+          feedbackList = await Feedback.find({ session: id });
+          answers = await Answer.find({ session: id });
+          questions = await Question.find({ session: id });
+        }
+      } catch (e) {
+        console.log('[Retry Evaluation DB Notice]', e.message);
+      }
+    }
+
+    if (!session) {
+      session = memorySessions.find((s) => String(s._id) === String(id) || String(s.id) === String(id));
+    }
+    if (!session) {
+      return res.status(404).json({ message: 'Session not found.' });
+    }
+    if (!checkOwnership(session, req.user)) {
+      return res.status(403).json({ message: 'Forbidden: You do not have access to this session' });
+    }
+
+    if (feedbackList.length === 0) {
+      feedbackList = memoryFeedback.filter((f) => String(f.session) === String(id));
+    }
+    if (answers.length === 0) {
+      answers = memoryAnswers.filter((a) => String(a.session) === String(id));
+    }
+    if (questions.length === 0) {
+      questions = memoryQuestions.filter((q) => String(q.session) === String(id));
+    }
+
+    const failedFeedbacks = feedbackList.filter(
+      (fb) => fb.evaluationStatus === 'FAILED' || fb.score === null || fb.score === undefined
+    );
+
+    if (failedFeedbacks.length === 0) {
+      return res.json({
+        message: 'All answers in this session have already been successfully evaluated by AI.',
+        evaluationStatus: 'COMPLETED',
+        feedback: feedbackList,
+      });
+    }
+
+    let recoveredCount = 0;
+    for (const fb of failedFeedbacks) {
+      const ans = answers.find((a) => String(a._id) === String(fb.answer) || String(a.id) === String(fb.answer));
+      if (!ans) continue;
+      const q = questions.find((item) => String(item._id) === String(ans.question) || String(item.id) === String(ans.question));
+      
+      const prompt = buildAnswerFeedbackPrompt({
+        questionText: q?.questionText || 'Interview Question',
+        category: q?.category || 'General',
+        expectedKeyPoints: q?.expectedKeyPoints || [],
+        candidateAnswer: ans.transcript || '',
+      });
+
+      const result = await generateLLMJson(prompt, 'You are an AI interview grading assistant.');
+      if (result && result._meta?.source === 'openai' && typeof result.score === 'number') {
+        fb.evaluationStatus = 'COMPLETED';
+        fb.evaluationSource = 'openai';
+        fb.evaluationError = '';
+        fb.score = Math.min(10, Math.max(1, result.score));
+        fb.strengths = Array.isArray(result.strengths) && result.strengths.length > 0 ? result.strengths : ['Clear articulation'];
+        fb.weaknesses = Array.isArray(result.weaknesses) ? result.weaknesses : [];
+        fb.suggestion = result.suggestion || 'Continue practicing structured communication.';
+        
+        if (mongoose.connection.readyState === 1 && typeof fb.save === 'function') {
+          await fb.save();
+        } else if (mongoose.connection.readyState === 1 && fb._id) {
+          await Feedback.findByIdAndUpdate(fb._id, { $set: fb });
+        }
+
+        ans.evaluationStatus = 'COMPLETED';
+        if (mongoose.connection.readyState === 1 && typeof ans.save === 'function') {
+          await ans.save();
+        } else if (mongoose.connection.readyState === 1 && ans._id) {
+          await Answer.findByIdAndUpdate(ans._id, { $set: { evaluationStatus: 'COMPLETED' } });
+        }
+
+        recoveredCount++;
+      }
+    }
+
+    const remainingFailed = feedbackList.filter((fb) => fb.evaluationStatus === 'FAILED' || fb.score === null);
+    const overallStatus = remainingFailed.length === 0 ? 'COMPLETED' : 'FAILED';
+
+    if (session) {
+      session.evaluationStatus = overallStatus;
+      if (typeof session.save === 'function') await session.save();
+    }
+
+    res.json({
+      message: overallStatus === 'COMPLETED'
+        ? `Successfully evaluated ${recoveredCount} answer(s) with AI engine.`
+        : `Recovered ${recoveredCount} answer(s); ${remainingFailed.length} still pending AI availability.`,
+      evaluationStatus: overallStatus,
+      recoveredCount,
+      remainingFailedCount: remainingFailed.length,
+      feedback: feedbackList,
+    });
+  } catch (error) {
+    console.error('[Retry Session Evaluation Error]', error);
+    res.status(500).json({ message: error.message || 'Failed to retry evaluation' });
   }
 };

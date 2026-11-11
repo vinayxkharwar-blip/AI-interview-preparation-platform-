@@ -14,9 +14,24 @@ const feedbackSchema = new mongoose.Schema(
     },
     score: {
       type: Number,
-      required: true,
       min: 1,
       max: 10,
+      default: null,
+    },
+    evaluationStatus: {
+      type: String,
+      enum: ['PENDING', 'COMPLETED', 'FAILED'],
+      default: 'COMPLETED',
+      index: true,
+    },
+    evaluationSource: {
+      type: String,
+      enum: ['openai', 'mock', 'heuristic', 'none'],
+      default: 'openai',
+    },
+    evaluationError: {
+      type: String,
+      default: '',
     },
     strengths: [{ type: String }],
     weaknesses: [{ type: String }],
@@ -31,5 +46,8 @@ const feedbackSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+feedbackSchema.index({ session: 1 });
+feedbackSchema.index({ answer: 1 });
 
 export default mongoose.model('Feedback', feedbackSchema);

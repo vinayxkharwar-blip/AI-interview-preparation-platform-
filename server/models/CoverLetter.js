@@ -27,4 +27,6 @@ const coverLetterSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+coverLetterSchema.index({ user: 1, createdAt: -1 });
+
 export default mongoose.model('CoverLetter', coverLetterSchema);

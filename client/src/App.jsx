@@ -129,6 +129,10 @@ function MainLayout() {
             }
           />
           <Route
+            path="/placement"
+            element={<Navigate to="/placement-drive" replace />}
+          />
+          <Route
             path="/profile"
             element={
               <ProtectedRoute>

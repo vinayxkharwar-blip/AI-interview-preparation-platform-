@@ -110,15 +110,41 @@ export const submitAnswer = async (req, res) => {
 
     const fbLLMResult = await generateLLMJson(feedbackPrompt, 'You are an AI interview grading assistant.');
 
-    const scoreToSave = typeof fbLLMResult?.score === 'number' ? fbLLMResult.score : 7;
-    const strengthsToSave = Array.isArray(fbLLMResult?.strengths) && fbLLMResult.strengths.length > 0
+    const isAiSuccess = Boolean(fbLLMResult && fbLLMResult._meta?.source === 'openai');
+    const evaluationStatus = isAiSuccess ? 'COMPLETED' : 'FAILED';
+    const evaluationSource = isAiSuccess ? 'openai' : (fbLLMResult?._meta?.source || 'mock');
+    const evaluationError = isAiSuccess ? '' : (fbLLMResult?._meta?.reason || 'AI evaluation service temporarily unavailable');
+
+    // MOCK RESPONSE SAFETY: Mock scores must NEVER be stored or presented as genuine student scores
+    const scoreToSave = isAiSuccess && typeof fbLLMResult?.score === 'number'
+      ? Math.min(10, Math.max(1, fbLLMResult.score))
+      : null;
+
+    const strengthsToSave = isAiSuccess && Array.isArray(fbLLMResult?.strengths) && fbLLMResult.strengths.length > 0
       ? fbLLMResult.strengths
-      : ['Demonstrated clear effort in structuring response'];
-    const weaknessesToSave = Array.isArray(fbLLMResult?.weaknesses) && fbLLMResult.weaknesses.length > 0
+      : (isAiSuccess ? ['Clear technical articulation'] : []);
+
+    const weaknessesToSave = isAiSuccess && Array.isArray(fbLLMResult?.weaknesses)
       ? fbLLMResult.weaknesses
-      : ['Could expand on technical trade-offs and edge-case handling'];
-    const suggestionToSave = fbLLMResult?.suggestion || fbLLMResult?.actionableFeedback || 'Practice structured communication using concrete examples.';
+      : (isAiSuccess ? [] : ['AI evaluation service was temporarily unavailable. Answer preserved for retry.']);
+
+    const suggestionToSave = isAiSuccess
+      ? (fbLLMResult?.suggestion || fbLLMResult?.actionableFeedback || 'Practice structured communication using concrete examples.')
+      : 'AI grading could not be completed. Your answer is safely saved. Please click "Retry Evaluation" to re-evaluate with the AI grading engine.';
+
     const categoryToSave = fbLLMResult?.category || category;
+
+    // Update answer evaluationStatus
+    try {
+      if (savedAnswer && savedAnswer._id) {
+        await Answer.findByIdAndUpdate(savedAnswer._id, { evaluationStatus });
+      }
+    } catch (e) {
+      // Memory fallback
+    }
+    if (savedAnswer) {
+      savedAnswer.evaluationStatus = evaluationStatus;
+    }
 
     // 4. Save Feedback
     let savedFeedback;
@@ -127,6 +153,9 @@ export const submitAnswer = async (req, res) => {
         answer: savedAnswer._id,
         session: sessionId,
         score: scoreToSave,
+        evaluationStatus,
+        evaluationSource,
+        evaluationError,
         strengths: strengthsToSave,
         weaknesses: weaknessesToSave,
         suggestion: suggestionToSave,
@@ -138,6 +167,9 @@ export const submitAnswer = async (req, res) => {
         answer: savedAnswer._id,
         session: sessionId,
         score: scoreToSave,
+        evaluationStatus,
+        evaluationSource,
+        evaluationError,
         strengths: strengthsToSave,
         weaknesses: weaknessesToSave,
         suggestion: suggestionToSave,
@@ -150,6 +182,7 @@ export const submitAnswer = async (req, res) => {
     res.status(201).json({
       answer: savedAnswer,
       feedback: savedFeedback,
+      evaluationStatus,
     });
   } catch (error) {
     console.error('[Submit Answer Error]', error);

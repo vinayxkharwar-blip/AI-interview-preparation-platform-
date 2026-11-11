@@ -30,8 +30,16 @@ const answerSchema = new mongoose.Schema(
       enum: ['text', 'audio'],
       default: 'text',
     },
+    evaluationStatus: {
+      type: String,
+      enum: ['PENDING', 'COMPLETED', 'FAILED'],
+      default: 'PENDING',
+    },
   },
   { timestamps: true }
 );
+
+answerSchema.index({ session: 1, question: 1 });
+answerSchema.index({ user: 1, createdAt: -1 });
 
 export default mongoose.model('Answer', answerSchema);

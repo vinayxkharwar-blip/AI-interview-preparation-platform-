@@ -19,96 +19,71 @@ export const getDashboardAnalytics = async (req, res) => {
     let totalAnswers = 0;
 
     try {
-      // 1. Total Completed Sessions & Avg Overall Score Pipeline
-      const sessionStats = await Session.aggregate([
-        { $match: { user: objectUserId, status: 'completed' } },
-        {
-          $group: {
-            _id: null,
-            count: { $sum: 1 },
-            avgScore: { $avg: '$overallScore' },
-          },
-        },
-      ]);
+      // 1. Fetch user sessions efficiently
+      const userSessions = await Session.find({ user: objectUserId })
+        .select('_id status overallScore targetRole interviewType createdAt')
+        .lean();
 
-      if (sessionStats.length > 0) {
-        totalSessions = sessionStats[0].count;
-        avgScore = Number(sessionStats[0].avgScore.toFixed(1));
+      const completedSessions = userSessions.filter((s) => s.status === 'completed');
+      totalSessions = completedSessions.length;
+      if (totalSessions > 0) {
+        const sum = completedSessions.reduce((acc, s) => acc + (s.overallScore || 0), 0);
+        avgScore = Number((sum / totalSessions).toFixed(1));
       }
 
-      // 2. Score Trend Line Across Sessions Pipeline
-      scoreTrend = await Session.aggregate([
-        { $match: { user: objectUserId, status: 'completed' } },
-        { $sort: { createdAt: 1 } },
-        {
-          $project: {
-            date: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
-            score: '$overallScore',
-            role: '$targetRole',
-            type: '$interviewType',
-          },
-        },
-      ]);
+      // 2. Score Trend Line Across Sessions
+      scoreTrend = completedSessions
+        .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
+        .map((s) => ({
+          date: s.createdAt ? new Date(s.createdAt).toISOString().split('T')[0] : 'N/A',
+          score: s.overallScore,
+          role: s.targetRole,
+          type: s.interviewType,
+        }));
 
-      // 3. Skill Category Radar Chart Aggregation Pipeline
-      const categoryAggregation = await Feedback.aggregate([
-        {
-          $lookup: {
-            from: 'sessions',
-            localField: 'session',
-            foreignField: '_id',
-            as: 'sessionData',
+      // 3. Category & Weakness Aggregations using direct index match
+      const sessionIds = userSessions.map((s) => s._id);
+      if (sessionIds.length > 0) {
+        const categoryAggregation = await Feedback.aggregate([
+          { $match: { session: { $in: sessionIds } } },
+          {
+            $group: {
+              _id: '$category',
+              avgCategoryScore: { $avg: '$score' },
+              count: { $sum: 1 },
+            },
           },
-        },
-        { $unwind: '$sessionData' },
-        { $match: { 'sessionData.user': objectUserId } },
-        {
-          $group: {
-            _id: '$category',
-            avgCategoryScore: { $avg: '$score' },
-            count: { $sum: 1 },
+          { $sort: { avgCategoryScore: -1 } },
+        ]);
+
+        skillScores = categoryAggregation.map((item) => ({
+          skill: item._id || 'General',
+          score: Number(item.avgCategoryScore.toFixed(1)),
+          fullMark: 10,
+        }));
+
+        const weaknessAggregation = await Feedback.aggregate([
+          { $match: { session: { $in: sessionIds } } },
+          { $unwind: '$weaknesses' },
+          {
+            $group: {
+              _id: '$weaknesses',
+              frequency: { $sum: 1 },
+              avgScore: { $avg: '$score' },
+            },
           },
-        },
-        { $sort: { avgCategoryScore: -1 } },
-      ]);
+          { $sort: { frequency: -1 } },
+          { $limit: 6 },
+        ]);
 
-      skillScores = categoryAggregation.map((item) => ({
-        skill: item._id || 'General',
-        score: Number(item.avgCategoryScore.toFixed(1)),
-        fullMark: 10,
-      }));
+        weakTopics = weaknessAggregation.map((item) => ({
+          topic: item._id,
+          frequency: item.frequency,
+          avgScore: Number(item.avgScore.toFixed(1)),
+        }));
+      }
 
-      // 4. Weak Topics Breakdown Pipeline (Unwind weaknesses array)
-      const weaknessAggregation = await Feedback.aggregate([
-        {
-          $lookup: {
-            from: 'sessions',
-            localField: 'session',
-            foreignField: '_id',
-            as: 'sessionData',
-          },
-        },
-        { $unwind: '$sessionData' },
-        { $match: { 'sessionData.user': objectUserId } },
-        { $unwind: '$weaknesses' },
-        {
-          $group: {
-            _id: '$weaknesses',
-            frequency: { $sum: 1 },
-            avgScore: { $avg: '$score' },
-          },
-        },
-        { $sort: { frequency: -1 } },
-        { $limit: 6 },
-      ]);
-
-      weakTopics = weaknessAggregation.map((item) => ({
-        topic: item._id,
-        frequency: item.frequency,
-        avgScore: Number(item.avgScore.toFixed(1)),
-      }));
-
-      // 5. Total Answers Count
+      // 4. Total Answers Count
       totalAnswers = await Answer.countDocuments({ user: objectUserId });
     } catch (dbErr) {
       console.log('[Analytics Aggregation DB Fallback]', dbErr.message);

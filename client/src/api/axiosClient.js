@@ -18,6 +18,20 @@ const axiosClient = axios.create({
   },
 });
 
+let isRedirecting = false;
+
+const triggerAuthRedirect = (reason = 'Your session has expired. Please log in again.') => {
+  if (isRedirecting) return;
+  isRedirecting = true;
+  clearAuthSession();
+  if (!window.location.pathname.includes('/login') && !window.location.pathname.includes('/register')) {
+    sessionStorage.setItem('preppilot_auth_redirect_reason', reason);
+    window.dispatchEvent(new Event('auth:unauthorized'));
+    const currentPath = window.location.pathname + window.location.search;
+    window.location.href = `/login?redirect=${encodeURIComponent(currentPath)}`;
+  }
+};
+
 axiosClient.interceptors.request.use(
   (config) => {
     const url = config.url || '';
@@ -28,6 +42,7 @@ axiosClient.interceptors.request.use(
 
     // Never attach Authorization header or cancel requests on public authentication entrypoints
     if (isPublicAuthRoute) {
+      isRedirecting = false;
       if (config.headers) {
         delete config.headers.Authorization;
       }
@@ -37,13 +52,7 @@ axiosClient.interceptors.request.use(
     const rawToken = localStorage.getItem('token');
     if (rawToken) {
       if (isTokenExpired(rawToken)) {
-        clearAuthSession();
-        if (!window.location.pathname.includes('/login') && !window.location.pathname.includes('/register')) {
-          sessionStorage.setItem('preppilot_auth_redirect_reason', 'Your session has expired. Please log in again.');
-          window.dispatchEvent(new Event('auth:unauthorized'));
-          const currentPath = window.location.pathname + window.location.search;
-          window.location.href = `/login?redirect=${encodeURIComponent(currentPath)}`;
-        }
+        triggerAuthRedirect('Your session has expired. Please log in again.');
         return Promise.reject(new axios.Cancel('Session expired. Redirecting to login.'));
       }
       config.headers.Authorization = `Bearer ${rawToken}`;
@@ -54,7 +63,10 @@ axiosClient.interceptors.request.use(
 );
 
 axiosClient.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    isRedirecting = false;
+    return response;
+  },
   (error) => {
     // If request was cancelled intentionally due to expired token, suppress redundant notifications
     if (axios.isCancel(error)) {
@@ -71,15 +83,8 @@ axiosClient.interceptors.response.use(
     error.userMessage = userMessage;
 
     if (error.response && error.response.status === 401) {
-      // Don't trigger unauthorized logout if we're on login or register page already
-      if (!window.location.pathname.includes('/login') && !window.location.pathname.includes('/register')) {
-        clearAuthSession();
-        const reason = error.response?.data?.message || 'Your session has expired. Please log in again.';
-        sessionStorage.setItem('preppilot_auth_redirect_reason', reason);
-        window.dispatchEvent(new Event('auth:unauthorized'));
-        const currentPath = window.location.pathname + window.location.search;
-        window.location.href = `/login?redirect=${encodeURIComponent(currentPath)}`;
-      }
+      const reason = error.response?.data?.message || 'Your session has expired. Please log in again.';
+      triggerAuthRedirect(reason);
     }
     return Promise.reject(error);
   }

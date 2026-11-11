@@ -330,6 +330,7 @@ export const completeLiveSession = async (req, res) => {
         answerType: 'audio',
         audioUrl: '',
         user: req.user?._id,
+        evaluationStatus: 'COMPLETED',
       };
 
       const feedbackDoc = {
@@ -337,6 +338,8 @@ export const completeLiveSession = async (req, res) => {
         session: sessionId,
         answer: ansId,
         score,
+        evaluationStatus: 'COMPLETED',
+        evaluationSource: 'openai',
         strengths: turn.keyPointsCovered?.length ? turn.keyPointsCovered : ['Active live verbal communication'],
         weaknesses: turn.keyPointsCovered?.length < (matchingQ.expectedKeyPoints?.length || 2) ? ['Could expand on advanced edge cases'] : [],
         suggestion: 'Focus on structured STAR framework during live verbal delivery.',

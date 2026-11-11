@@ -118,11 +118,13 @@ export default function Dashboard() {
           setApplications(Array.isArray(appsRes.value.data) ? appsRes.value.data : []);
         }
 
-        if (driveRes.status === 'fulfilled' && driveRes.value?.data) {
-          const driveData = driveRes.value.data;
-          setPlacementDrive(driveData);
-          if (driveData.currentRound > 1 || driveData.status === 'completed') {
-            setGoals((prev) => prev.map((g) => (g.id === 4 ? { ...g, completed: true } : g)));
+        if (driveRes.status === 'fulfilled') {
+          const driveData = driveRes.value?.drive || driveRes.value?.data || driveRes.value;
+          if (driveData && typeof driveData === 'object' && driveData.rounds) {
+            setPlacementDrive(driveData);
+            if (driveData.currentRound > 1 || driveData.status === 'completed') {
+              setGoals((prev) => prev.map((g) => (g.id === 4 ? { ...g, completed: true } : g)));
+            }
           }
         }
       } catch (err) {

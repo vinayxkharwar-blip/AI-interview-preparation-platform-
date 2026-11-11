@@ -74,6 +74,17 @@ const placementDriveSchema = new mongoose.Schema(
         passThreshold: { type: Number, default: 60 }, // 60%
         score: { type: Number, default: 0 },
         passed: { type: Boolean, default: false },
+        evaluationStatus: {
+          type: String,
+          enum: ['PENDING', 'COMPLETED', 'FAILED'],
+          default: 'PENDING',
+        },
+        evaluationSource: {
+          type: String,
+          enum: ['openai', 'mock', 'heuristic', 'none'],
+          default: 'none',
+        },
+        evaluationError: { type: String, default: '' },
         timeSpentSeconds: { type: Number, default: 0 },
         breakdown: {
           quantitative: {
@@ -110,6 +121,17 @@ const placementDriveSchema = new mongoose.Schema(
         },
         score: { type: Number, default: 0 },
         passed: { type: Boolean, default: false },
+        evaluationStatus: {
+          type: String,
+          enum: ['PENDING', 'COMPLETED', 'FAILED'],
+          default: 'PENDING',
+        },
+        evaluationSource: {
+          type: String,
+          enum: ['openai', 'mock', 'heuristic', 'none'],
+          default: 'none',
+        },
+        evaluationError: { type: String, default: '' },
         categoryBreakdown: [
           {
             category: String,
@@ -138,6 +160,17 @@ const placementDriveSchema = new mongoose.Schema(
         transcript: [gdMessageSchema],
         score: { type: Number, default: 0 },
         passed: { type: Boolean, default: false },
+        evaluationStatus: {
+          type: String,
+          enum: ['PENDING', 'COMPLETED', 'FAILED'],
+          default: 'PENDING',
+        },
+        evaluationSource: {
+          type: String,
+          enum: ['openai', 'mock', 'heuristic', 'none'],
+          default: 'none',
+        },
+        evaluationError: { type: String, default: '' },
         rubrics: {
           clarityAndArticulation: { type: Number, default: 0 },
           problemSolvingAndIdeas: { type: Number, default: 0 },
@@ -173,6 +206,17 @@ const placementDriveSchema = new mongoose.Schema(
         },
         score: { type: Number, default: 0 },
         passed: { type: Boolean, default: false },
+        evaluationStatus: {
+          type: String,
+          enum: ['PENDING', 'COMPLETED', 'FAILED'],
+          default: 'PENDING',
+        },
+        evaluationSource: {
+          type: String,
+          enum: ['openai', 'mock', 'heuristic', 'none'],
+          default: 'none',
+        },
+        evaluationError: { type: String, default: '' },
         categoryBreakdown: [
           {
             category: String,

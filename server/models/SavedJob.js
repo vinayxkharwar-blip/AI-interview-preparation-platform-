@@ -70,4 +70,7 @@ const savedJobSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+savedJobSchema.index({ user: 1, jobId: 1 }, { unique: true });
+savedJobSchema.index({ user: 1, createdAt: -1 });
+
 export default mongoose.model('SavedJob', savedJobSchema);

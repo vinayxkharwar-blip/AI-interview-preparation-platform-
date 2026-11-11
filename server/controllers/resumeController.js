@@ -109,16 +109,18 @@ export const uploadResume = async (req, res) => {
 // @route GET /api/resumes
 export const getUserResumes = async (req, res) => {
   try {
-    let resumes = [];
-    try {
-      resumes = await Resume.find({ user: req.user._id }).sort({ createdAt: -1 }).lean();
-    } catch (e) {
-      console.log('[Resume DB Notice] User resumes fallback:', e.message);
+    let resumes = null;
+    if (mongoose.connection.readyState === 1) {
+      try {
+        resumes = await Resume.find({ user: req.user._id }).sort({ createdAt: -1 }).lean();
+      } catch (e) {
+        console.log('[Resume DB Notice] User resumes fallback:', e.message);
+      }
     }
-    if (resumes.length === 0) {
+    if (resumes === null) {
       resumes = memoryResumes.filter((r) => String(r.user) === String(req.user._id));
     }
-    res.json(resumes);
+    res.json(resumes || []);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

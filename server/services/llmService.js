@@ -72,22 +72,39 @@ const extractResumeFallback = (rawText = '') => {
     ? summaryMatch[1].trim().replace(/\s+/g, ' ').substring(0, 300)
     : (targetRole ? `${targetRole} with dedicated experience and practical project implementation.` : 'Technical professional with verified project and engineering experience.');
 
-  const dynamicAtsScore = (() => {
-    let score = 55;
-    score += Math.min(25, fallbackSkills.length * 3);
+  const atsBreakdown = (() => {
+    // 1. Keyword Depth (0-25)
+    const keywordDepth = Math.min(25, Math.max(5, fallbackSkills.length * 3));
+    
+    // 2. Quantifiable Impact (0-25): count metrics in text
+    const metricMatches = resumeContent.match(/\b(?:\d+%(?: reduction| increase| growth)?|\$\d+|\b\d+x\b|\b\d{2,}\+?\s*(?:users|clients|rps|ms|seconds|minutes|hours))\b/gi) || [];
+    const quantifiableImpact = Math.min(25, Math.max(8, metricMatches.length * 4 + 8));
+
+    // 3. Formatting & Section Structure (0-25)
+    let formattingStructure = 10;
     const lowerText = resumeContent.toLowerCase();
-    if (lowerText.includes('experience') || lowerText.includes('work history') || lowerText.includes('employment')) score += 5;
-    if (lowerText.includes('education') || lowerText.includes('university') || lowerText.includes('degree') || lowerText.includes('bachelor')) score += 5;
-    if (lowerText.includes('project')) score += 5;
-    score += Math.min(6, projects.length * 2);
-    const wordCount = resumeContent.split(/\s+/).filter(Boolean).length;
-    if (wordCount > 300) score += 2;
-    if (wordCount > 600) score += 2;
-    return Math.min(98, Math.max(55, score));
+    if (lowerText.includes('experience') || lowerText.includes('work history')) formattingStructure += 5;
+    if (lowerText.includes('education') || lowerText.includes('university') || lowerText.includes('degree')) formattingStructure += 4;
+    if (lowerText.includes('project')) formattingStructure += 3;
+    if (lowerText.includes('skill')) formattingStructure += 3;
+    formattingStructure = Math.min(25, formattingStructure);
+
+    // 4. Role Alignment (0-25)
+    const roleAlignment = targetRole ? 20 : 12;
+
+    return {
+      keywordDepth,
+      quantifiableImpact,
+      formattingStructure,
+      roleAlignment,
+    };
   })();
+
+  const dynamicAtsScore = atsBreakdown.keywordDepth + atsBreakdown.quantifiableImpact + atsBreakdown.formattingStructure + atsBreakdown.roleAlignment;
 
   return {
     atsScore: dynamicAtsScore,
+    atsBreakdown,
     targetRole, // null if not detected from content
     skills: fallbackSkills,
     experience: [
@@ -325,10 +342,29 @@ export const generateLLMJson = async (prompt, systemMessage = "You are a helpful
         const extractedScore = extractNumericScore(parsed);
         if (extractedScore !== null) {
           parsed.atsScore = Math.min(100, Math.max(0, extractedScore));
+        } else if (parsed.atsBreakdown && typeof parsed.atsBreakdown === 'object') {
+          const sum = (Number(parsed.atsBreakdown.keywordDepth) || 0) +
+                      (Number(parsed.atsBreakdown.quantifiableImpact) || 0) +
+                      (Number(parsed.atsBreakdown.formattingStructure) || 0) +
+                      (Number(parsed.atsBreakdown.roleAlignment) || 0);
+          parsed.atsScore = Math.min(100, Math.max(0, sum));
         } else if (prompt.toLowerCase().includes('resume')) {
           console.warn('[OpenAI API Warning] Response missing numeric atsScore. Computing dynamic score.');
           const fallbackObj = extractResumeFallback(prompt);
           parsed.atsScore = fallbackObj.atsScore;
+          parsed.atsBreakdown = fallbackObj.atsBreakdown;
+        }
+
+        // If atsBreakdown is missing on a resume parse, construct based on atsScore
+        if (prompt.toLowerCase().includes('resume') && parsed.atsScore && !parsed.atsBreakdown) {
+          const baseQuarter = Math.floor(parsed.atsScore / 4);
+          const remainder = parsed.atsScore % 4;
+          parsed.atsBreakdown = {
+            keywordDepth: baseQuarter + (remainder > 0 ? 1 : 0),
+            quantifiableImpact: baseQuarter + (remainder > 1 ? 1 : 0),
+            formattingStructure: baseQuarter + (remainder > 2 ? 1 : 0),
+            roleAlignment: baseQuarter,
+          };
         }
 
         if (

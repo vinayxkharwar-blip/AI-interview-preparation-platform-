@@ -56,4 +56,7 @@ const sessionSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+sessionSchema.index({ user: 1, createdAt: -1 });
+sessionSchema.index({ user: 1, status: 1 });
+
 export default mongoose.model('Session', sessionSchema);

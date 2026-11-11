@@ -1,5 +1,5 @@
 import React from 'react';
-import { CheckCircle2, TrendingUp, RotateCcw, AlertCircle, Sparkles, BookOpen } from 'lucide-react';
+import { CheckCircle2, TrendingUp, RotateCcw, AlertCircle, Sparkles, BookOpen, Trophy } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { toHundredScale } from '../utils/score';
 import EmptyState from './common/EmptyState';
@@ -124,6 +124,13 @@ export default function SessionSummary({ session, overallScore, categoryBreakdow
 
       {/* Next Action Buttons */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3 sm:gap-4 pt-3 sm:pt-4 border-t-2 border-[#0F1E1B]/15">
+        <Link
+          to="/placement-drive"
+          className="w-full sm:w-auto px-5 sm:px-6 py-3 sm:py-3.5 rounded-2xl font-bold text-white bg-[#F47721] hover:bg-[#e06714] border-2 border-[#0F1E1B] transition-all flex items-center justify-center space-x-2 editorial-shadow text-xs sm:text-sm min-h-[44px]"
+        >
+          <Trophy className="w-4 h-4 sm:w-5 sm:h-5 text-white shrink-0" />
+          <span>Placement Journey</span>
+        </Link>
         <a
           href="#recommended-learning"
           className="w-full sm:w-auto px-5 sm:px-6 py-3 sm:py-3.5 rounded-2xl font-black text-[#0F1E1B] bg-[#F5D90A] hover:bg-[#e5ca07] border-2 border-[#0F1E1B] transition-all flex items-center justify-center space-x-2 text-xs sm:text-sm editorial-shadow min-h-[44px]"

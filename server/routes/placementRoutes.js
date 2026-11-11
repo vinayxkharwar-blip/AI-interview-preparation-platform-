@@ -11,6 +11,7 @@ import {
   startGDRound,
   sendGDMessage,
   evaluateGDRound,
+  retryGDRound,
   startResumeRound,
   syncResumeRound,
   getFinalReport,
@@ -42,6 +43,7 @@ router.post('/:id/technical/sync', syncTechnicalRound);
 router.post('/:id/gd/start', startGDRound);
 router.post('/:id/gd/message', sendGDMessage);
 router.post('/:id/gd/evaluate', aiLimiter, evaluateGDRound);
+router.post('/:id/gd/retry', aiLimiter, retryGDRound);
 
 // Round 4: Resume-Based Interview Integration
 router.post('/:id/resume-round/start', aiLimiter, startResumeRound);

@@ -25,4 +25,6 @@ const questionSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+questionSchema.index({ session: 1, questionNumber: 1 });
+
 export default mongoose.model('Question', questionSchema);

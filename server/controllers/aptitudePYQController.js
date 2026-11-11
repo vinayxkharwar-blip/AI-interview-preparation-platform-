@@ -245,7 +245,7 @@ export const startAptitudeTest = async (req, res) => {
  */
 export const submitAptitudeTest = async (req, res) => {
   try {
-    const { testId } = req.params;
+    const testId = req.params?.testId || req.body?.testId;
     const { answers = {}, timeSpentSeconds = 0 } = req.body;
     const userId = req.user._id || req.user.id;
 
@@ -334,6 +334,9 @@ export const submitAptitudeTest = async (req, res) => {
     res.json({
       message: evaluation.passed ? 'Test submitted successfully! Cutoff benchmark cleared.' : 'Test submitted. Review weak areas for improvement.',
       drive: updatedDrive,
+      percentage: evaluation.percentage,
+      scorePercentage: evaluation.percentage,
+      passed: evaluation.passed,
       result: {
         testId: attempt._id,
         company: attempt.company,

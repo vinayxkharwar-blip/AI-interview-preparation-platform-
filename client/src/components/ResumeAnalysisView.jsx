@@ -25,7 +25,8 @@ export default function ResumeAnalysisView({ resume }) {
   }
 
   const {
-    atsScore = 85,
+    atsScore: rawAtsScore,
+    atsBreakdown = null,
     targetRole = null,
     skills = [],
     experience = [],
@@ -36,6 +37,15 @@ export default function ResumeAnalysisView({ resume }) {
     weaknesses = [],
     summary = '',
   } = resume.parsedData;
+
+  const atsScore = typeof rawAtsScore === 'number'
+    ? rawAtsScore
+    : (atsBreakdown
+      ? (Number(atsBreakdown.keywordDepth) || 0) +
+        (Number(atsBreakdown.quantifiableImpact) || 0) +
+        (Number(atsBreakdown.formattingStructure) || 0) +
+        (Number(atsBreakdown.roleAlignment) || 0)
+      : 70);
 
   const displayRole = targetRole && targetRole.trim() ? targetRole.trim() : 'Role not detected';
 
@@ -56,6 +66,27 @@ export default function ResumeAnalysisView({ resume }) {
           <p className="text-xs text-[#0F1E1B]/80 max-w-xl leading-relaxed">
             {summary || 'Analyzed resume profile highlighting ATS keyword compatibility, experience density, and skill alignment.'}
           </p>
+
+          {atsBreakdown && (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 text-[10px] font-bold">
+              <div className="bg-[#F5F2E6] border border-[#0F1E1B]/15 px-2 py-1 rounded-lg">
+                <span className="text-[#0F1E1B]/60 block font-medium">Keywords</span>
+                <span className="text-[#0F1E1B] font-black">{atsBreakdown.keywordDepth ?? 18}/25</span>
+              </div>
+              <div className="bg-[#F5F2E6] border border-[#0F1E1B]/15 px-2 py-1 rounded-lg">
+                <span className="text-[#0F1E1B]/60 block font-medium">Impact & Metrics</span>
+                <span className="text-[#0F1E1B] font-black">{atsBreakdown.quantifiableImpact ?? 16}/25</span>
+              </div>
+              <div className="bg-[#F5F2E6] border border-[#0F1E1B]/15 px-2 py-1 rounded-lg">
+                <span className="text-[#0F1E1B]/60 block font-medium">Structure</span>
+                <span className="text-[#0F1E1B] font-black">{atsBreakdown.formattingStructure ?? 18}/25</span>
+              </div>
+              <div className="bg-[#F5F2E6] border border-[#0F1E1B]/15 px-2 py-1 rounded-lg">
+                <span className="text-[#0F1E1B]/60 block font-medium">Role Fit</span>
+                <span className="text-[#0F1E1B] font-black">{atsBreakdown.roleAlignment ?? 18}/25</span>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* ATS Score Gauge Badge */}

@@ -299,8 +299,9 @@ const startServer = async (portToTry = PORT) => {
 
     server.on('error', (err) => {
       if (err.code === 'EADDRINUSE') {
-        console.warn(`[Port Notice] Port ${portToTry} is already in use. Retrying on port ${portToTry + 1}...`);
-        startServer(portToTry + 1).then(resolve).catch(reject);
+        console.error(`❌ [Port Error] Port ${portToTry} is already in use by another process.`);
+        console.error(`[Port Help] PrePilot AI requires port ${portToTry} for frontend proxy communication. Retrying port ${portToTry}...`);
+        reject(err);
       } else {
         console.error('[Server Error]', err);
         reject(err);

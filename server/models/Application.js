@@ -48,4 +48,7 @@ const applicationSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+applicationSchema.index({ user: 1, appliedDate: -1 });
+applicationSchema.index({ user: 1, jobId: 1 });
+
 export default mongoose.model('Application', applicationSchema);

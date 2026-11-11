@@ -1,5 +1,5 @@
 import express from 'express';
-import { startSession, getUserSessions, getSessionById, completeSession } from '../controllers/sessionController.js';
+import { startSession, getUserSessions, getSessionById, completeSession, retrySessionEvaluation } from '../controllers/sessionController.js';
 import liveInterviewRoutes from './liveInterviewRoutes.js';
 import { protect } from '../middleware/authMiddleware.js';
 import { aiLimiter } from '../middleware/rateLimiter.js';
@@ -12,6 +12,7 @@ router.post('/start', aiLimiter, startSession);
 router.get('/', getUserSessions);
 router.get('/:id', getSessionById);
 router.post('/:id/complete', completeSession);
+router.post('/:id/retry-evaluation', aiLimiter, retrySessionEvaluation);
 
 // Live Video Call Interview Mode Endpoints
 router.use('/:id/live', liveInterviewRoutes);

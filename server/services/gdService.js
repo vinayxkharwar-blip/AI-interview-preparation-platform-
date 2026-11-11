@@ -254,7 +254,7 @@ Respond strictly in JSON format:
 
   try {
     const result = await generateLLMJson(prompt, 'You are an expert communication and placement interviewer.');
-    if (result && typeof result.clarityAndArticulation === 'number') {
+    if (result && result._meta?.source === 'openai' && typeof result.clarityAndArticulation === 'number') {
       const clarity = Math.min(25, Math.max(0, result.clarityAndArticulation));
       const problemSolving = Math.min(25, Math.max(0, result.problemSolvingAndIdeas));
       const collaboration = Math.min(25, Math.max(0, result.collaborationAndListening));
@@ -262,6 +262,9 @@ Respond strictly in JSON format:
       const totalScore = clarity + problemSolving + collaboration + persuasion;
 
       return {
+        evaluationStatus: 'COMPLETED',
+        evaluationSource: 'openai',
+        evaluationError: '',
         score: totalScore,
         passed: totalScore >= 60,
         rubrics: {
@@ -281,52 +284,26 @@ Respond strictly in JSON format:
     console.warn('[GD Service Notice] LLM evaluation fallback:', err.message);
   }
 
-  // Heuristic evaluation fallback
-  let clarity = 15;
-  let problemSolving = 15;
-  let collaboration = 15;
-  let persuasion = 15;
-
-  if (wordCount > 60) {
-    clarity += 5;
-    problemSolving += 4;
-  }
-  if (contributionCount >= 2) {
-    collaboration += 5;
-    persuasion += 4;
-  }
-  if (fullCandidateText.toLowerCase().includes('agree') || fullCandidateText.toLowerCase().includes('point') || fullCandidateText.toLowerCase().includes('however')) {
-    collaboration += 3;
-    persuasion += 3;
-  }
-
-  clarity = Math.min(25, clarity);
-  problemSolving = Math.min(25, problemSolving);
-  collaboration = Math.min(25, collaboration);
-  persuasion = Math.min(25, persuasion);
-
-  const totalScore = clarity + problemSolving + collaboration + persuasion;
-
+  // SAFETY ENFORCED: Heuristic fallback CANNOT award genuine pass or unlock rounds
   return {
-    score: totalScore,
-    passed: totalScore >= 60,
+    evaluationStatus: 'FAILED',
+    evaluationSource: 'heuristic',
+    evaluationError: 'AI evaluation service unavailable. Offline heuristics cannot award verified passing score.',
+    score: null,
+    passed: false,
     rubrics: {
-      clarityAndArticulation: clarity,
-      problemSolvingAndIdeas: problemSolving,
-      collaborationAndListening: collaboration,
-      persuasionAndConfidence: persuasion,
+      clarityAndArticulation: 0,
+      problemSolvingAndIdeas: 0,
+      collaborationAndListening: 0,
+      persuasionAndConfidence: 0,
     },
     feedback: {
-      strengths: [
-        'Articulated points clearly with appropriate technical vocabulary.',
-        'Acknowledged peer viewpoints and framed constructive responses.',
-      ],
+      strengths: [],
       weaknesses: [
-        'Could include more quantitative case studies and real-world engineering metrics.',
+        'AI evaluation service was temporarily unavailable.',
+        'Official scores cannot be awarded via offline fallback.',
       ],
-      summary: totalScore >= 60
-        ? 'Well-rounded group discussion performance. Cleared the communication benchmark.'
-        : 'Needs greater assertiveness and structured argument delivery to pass the benchmark.',
+      summary: 'AI evaluation could not be completed for this Group Discussion. Genuine scores cannot be awarded via offline fallback. Please use the "Retry Evaluation" option when connectivity is restored.',
     },
   };
 };
