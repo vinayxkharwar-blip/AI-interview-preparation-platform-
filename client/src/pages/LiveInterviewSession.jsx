@@ -100,6 +100,8 @@ export default function LiveInterviewSession() {
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const isStoppingRef = useRef(false);
+  const recognitionRef = useRef(null);
+  const isSubmittingTurnRef = useRef(false);
 
   // When true, the next recorder.onstop should discard audio instead of processing it
   // (used when we cancel a recording ourselves — repeat question, teardown, etc.)
@@ -181,10 +183,20 @@ export default function LiveInterviewSession() {
   }, [isInterviewActive]);
 
   // --------------------------------------------------------------------------
-  // Cleanup all audio pipeline resources (recorder, analyser, timers)
+  // Cleanup all audio pipeline resources (recorder, speech recognition, analyser, timers)
   // --------------------------------------------------------------------------
   const cleanupRecordingPipeline = useCallback(() => {
     cleanupMonitoring();
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.onresult = null;
+        recognitionRef.current.onerror = null;
+        recognitionRef.current.onspeechend = null;
+        recognitionRef.current.onend = null;
+        recognitionRef.current.stop();
+      } catch (e) {}
+      recognitionRef.current = null;
+    }
   }, [cleanupMonitoring]);
 
   // --------------------------------------------------------------------------
@@ -198,8 +210,6 @@ export default function LiveInterviewSession() {
     setRetryAction(() => onRetry);
     setInterviewState(STATES.ERROR);
   }, [cleanupRecordingPipeline]);
-
-
 
   // ============================================================================
   // STT pipeline: start listening with live silence detection via Web Audio API
@@ -229,6 +239,7 @@ export default function LiveInterviewSession() {
     try {
       audioChunksRef.current = [];
       isStoppingRef.current = false;
+      isSubmittingTurnRef.current = false;
 
       const audioOnlyStream = new MediaStream(audioTracks);
 
@@ -265,6 +276,42 @@ export default function LiveInterviewSession() {
         }
       }
 
+      // Initialize browser SpeechRecognition if supported (Chrome, Edge) for live interim feedback
+      if (typeof window !== 'undefined' && ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
+        try {
+          const SpeechRecognitionClass = window.SpeechRecognition || window.webkitSpeechRecognition;
+          const recognition = new SpeechRecognitionClass();
+          recognition.continuous = true;
+          recognition.interimResults = true;
+          recognition.lang = 'en-US';
+
+          recognition.onresult = (event) => {
+            let finalTranscript = '';
+            let interimTranscript = '';
+            for (let i = event.resultIndex; i < event.results.length; ++i) {
+              if (event.results[i].isFinal) {
+                finalTranscript += event.results[i][0].transcript;
+              } else {
+                interimTranscript += event.results[i][0].transcript;
+              }
+            }
+            const currentTranscript = (finalTranscript || interimTranscript).trim();
+            if (currentTranscript) {
+              setLiveTranscriptPreview(currentTranscript);
+            }
+          };
+
+          recognition.onerror = (e) => {
+            console.warn('[SpeechRecognition Notice]', e.error);
+          };
+
+          recognition.start();
+          recognitionRef.current = recognition;
+        } catch (srErr) {
+          console.warn('[SpeechRecognition Init Notice]', srErr.message);
+        }
+      }
+
       console.log('[DIAGNOSTIC-STEP 15] Transitioning state: SPEAKING -> LISTENING');
       setInterviewState(STATES.LISTENING);
       setLiveCaption('Listening for your answer...');
@@ -272,7 +319,11 @@ export default function LiveInterviewSession() {
 
       // Silence detection via analyser volume monitoring (using audioOnlyStream)
       startMonitoring(audioOnlyStream, {
+        onSpeechStarted: () => {
+          console.log('[VOICE DEBUG] Speech started');
+        },
         onSilenceDetected: () => {
+          console.log('[VOICE DEBUG] Speech ended');
           stopListening();
         },
       });
@@ -292,6 +343,10 @@ export default function LiveInterviewSession() {
       console.log('[SUBMIT DEBUG] Call ended or processing suppressed — discarding answer.');
       return;
     }
+    if (isSubmittingTurnRef.current) {
+      console.log('[SUBMIT DEBUG] Turn submission already in flight — suppressing duplicate process.');
+      return;
+    }
     console.log('[SUBMIT DEBUG] Answer processing started');
     if (audioChunksRef.current && audioChunksRef.current.length > 0) {
       const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
@@ -301,11 +356,11 @@ export default function LiveInterviewSession() {
     } else if (liveTranscriptPreview && liveTranscriptPreview.trim()) {
       console.log('[SUBMIT DEBUG] Answer available: transcript preview');
       console.log('[SUBMIT DEBUG] Calling submit handler');
-      submitTurn(liveTranscriptPreview.trim());
+      handleRecordedAnswer(null);
     } else {
       console.log('[SUBMIT DEBUG] Answer available: fallback empty turn');
       console.log('[SUBMIT DEBUG] Calling submit handler');
-      submitTurn('');
+      handleRecordedAnswer(null);
     }
   };
 
@@ -313,6 +368,10 @@ export default function LiveInterviewSession() {
     if (isStoppingRef.current) return;
     isStoppingRef.current = true;
     stopMonitoring();
+
+    if (recognitionRef.current) {
+      try { recognitionRef.current.stop(); } catch (e) {}
+    }
 
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
       try {
@@ -329,54 +388,80 @@ export default function LiveInterviewSession() {
 
   // ============================================================================
   // Handle recorded answer: transcribe -> evaluate -> speak next question
+  // State machine: LISTENING -> TRANSCRIBING -> SUBMITTING_ANSWER -> EVALUATING
   // ============================================================================
   const handleRecordedAnswer = async (blob) => {
-    if (isCallEndedRef.current) return;
-    setInterviewState(STATES.PROCESSING);
+    if (isCallEndedRef.current || isSubmittingTurnRef.current) return;
+    isSubmittingTurnRef.current = true;
+
+    setInterviewState(STATES.TRANSCRIBING);
     setThinkingStage('Transcribing your voice with OpenAI...');
     setLiveCaption('Transcribing your answer...');
     console.log('[VOICE DEBUG] Answer length/audio length:', blob ? blob.size : 0);
 
-    if (!blob || blob.size < 150) {
-      if (isCallEndedRef.current) return;
-      console.log('[VOICE DEBUG] Audio blob small or empty, continuing with transcript preview fallback');
-      await submitTurn(liveTranscriptPreview || '');
+    let transcript = (liveTranscriptPreview || '').trim();
+
+    if (blob && blob.size >= 150) {
+      const formData = new FormData();
+      formData.append('audio', blob, 'answer.webm');
+
+      try {
+        const res = await axiosClient.post('/answers/transcribe', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+          timeout: 30000,
+        });
+        if (isCallEndedRef.current) {
+          isSubmittingTurnRef.current = false;
+          return;
+        }
+        if (res.data?.transcript && res.data.transcript.trim()) {
+          transcript = res.data.transcript.trim();
+        }
+      } catch (err) {
+        if (isCallEndedRef.current) {
+          isSubmittingTurnRef.current = false;
+          return;
+        }
+        console.error('[Transcription Error]', err);
+        console.log('[VOICE DEBUG] Transcription error fallback, proceeding to submit turn');
+      }
+    }
+
+    console.log('[VOICE DEBUG] Final transcript received:', transcript);
+    setLiveTranscriptPreview(transcript);
+
+    // If candidate answer is completely silent/missing, prompt politely without discarding
+    if (!transcript) {
+      isSubmittingTurnRef.current = false;
+      const retryLine = "I didn't quite catch that. Could you please repeat your answer into the microphone?";
+      setInterviewState(STATES.SPEAKING);
+      speakLine(retryLine, () => {
+        if (!isCallEndedRef.current && !isMicMutedRef.current) {
+          startListening();
+        }
+      });
       return;
     }
 
-    const formData = new FormData();
-    formData.append('audio', blob, 'answer.webm');
-
-    try {
-      const res = await axiosClient.post('/answers/transcribe', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-        timeout: 30000,
-      });
-      if (isCallEndedRef.current) return;
-      const transcript = (res.data.transcript || '').trim();
-      setLiveTranscriptPreview(transcript);
-      await submitTurn(transcript);
-    } catch (err) {
-      if (isCallEndedRef.current) return;
-      console.error('[Transcription Error]', err);
-      console.log('[VOICE DEBUG] Transcription error fallback, proceeding to submit turn');
-      await submitTurn(liveTranscriptPreview || '');
-    }
+    setInterviewState(STATES.SUBMITTING_ANSWER);
+    await submitTurn(transcript);
   };
 
   // ============================================================================
-  // Submit the turn to OpenAI for evaluation + dynamic next question
+  // Submit the turn to backend for Gemini/OpenAI evaluation + dynamic next question
+  // State machine: SUBMITTING_ANSWER -> EVALUATING -> GENERATING_NEXT_QUESTION -> SPEAKING
   // ============================================================================
   const submitTurn = async (transcriptText) => {
-    if (isCallEndedRef.current) return;
+    if (isCallEndedRef.current) {
+      isSubmittingTurnRef.current = false;
+      return;
+    }
     console.log('[SUBMIT DEBUG] submitTurn() called');
-    console.log('[VOICE DEBUG] submitTurn() called');
-    console.log('[VOICE DEBUG] Answer length/audio length:', transcriptText ? transcriptText.length : 0);
+    console.log('[VOICE DEBUG] Transcript submitted:', transcriptText);
     setInterviewState(STATES.EVALUATING);
     setThinkingStage('Alex is evaluating your answer & formulating the next question...');
     setLiveCaption('Alex is evaluating your answer...');
 
-    console.log('[VOICE DEBUG] OpenAI request started');
     try {
       const res = await axiosClient.post(`/sessions/${sessionId}/live/turn`, {
         userTranscript: transcriptText,
@@ -387,17 +472,20 @@ export default function LiveInterviewSession() {
 
       if (isCallEndedRef.current) {
         console.log('[Turn] Call ended while evaluation was in flight — aborting next question.');
+        isSubmittingTurnRef.current = false;
         return;
       }
 
-      console.log('[SUBMIT DEBUG] OpenAI response received:', res.data?.interviewerLine);
-      console.log('[VOICE DEBUG] OpenAI response received:', res.data);
-      console.log('[VOICE DEBUG] OpenAI response content:', res.data?.interviewerLine);
+      console.log('[SUBMIT DEBUG] Backend response received:', res.data?.interviewerLine);
+      console.log('[VOICE DEBUG] Backend response received:', res.data);
+      console.log('[VOICE DEBUG] Gemini evaluation completed. Turn score:', res.data?.turnScore, 'Decision:', res.data?.decision);
 
       const {
         interviewerLine, questionText, nextQuestionText, decision, turnScore,
         keyPointsCovered, category, totalQuestions: serverTotal,
       } = res.data;
+
+      console.log('[VOICE DEBUG] Next question received:', nextQuestionText || interviewerLine);
 
       if (serverTotal) setTotalQuestions(serverTotal);
 
@@ -414,7 +502,9 @@ export default function LiveInterviewSession() {
       setLiveTurns((prev) => [...prev, newTurn]);
 
       if (decision === 'complete') {
-        setInterviewState(STATES.NEXT_QUESTION);
+        isSubmittingTurnRef.current = false;
+        setInterviewState(STATES.GENERATING_NEXT_QUESTION);
+        console.log('[VOICE DEBUG] Next TTS playback started:', interviewerLine);
         speakLine(interviewerLine, () => {
           if (!isCallEndedRef.current) finishInterview();
         });
@@ -429,14 +519,18 @@ export default function LiveInterviewSession() {
         setCurrentQuestionText(nextQuestionText);
         setCurrentQuestionCategory(category || currentQuestionCategory);
         console.log('[SUBMIT DEBUG] Next question triggered:', nextQuestionText);
-        console.log('[VOICE DEBUG] Next question triggered:', nextQuestionText);
       } else {
         console.log('[SUBMIT DEBUG] Next question triggered:', currentQuestionText);
-        console.log('[VOICE DEBUG] Next question triggered:', currentQuestionText);
       }
 
-      if (isCallEndedRef.current) return;
-      setInterviewState(STATES.NEXT_QUESTION);
+      if (isCallEndedRef.current) {
+        isSubmittingTurnRef.current = false;
+        return;
+      }
+      setInterviewState(STATES.GENERATING_NEXT_QUESTION);
+      isSubmittingTurnRef.current = false;
+
+      console.log('[VOICE DEBUG] Next TTS playback started:', interviewerLine);
       speakLine(interviewerLine, () => {
         if (isCallEndedRef.current) return;
         if (!isMicMutedRef.current) {
@@ -447,10 +541,12 @@ export default function LiveInterviewSession() {
         }
       });
     } catch (err) {
+      isSubmittingTurnRef.current = false;
       if (isCallEndedRef.current) return;
       console.error('[Submit Turn Error]', err);
       const fallbackLine = "Thank you for that answer. Let's move on to the next question.";
-      console.log('[VOICE DEBUG] OpenAI error fallback, speaking fallback line');
+      console.log('[VOICE DEBUG] OpenAI/Gemini error fallback, speaking fallback line');
+      console.log('[VOICE DEBUG] Next TTS playback started:', fallbackLine);
       speakLine(fallbackLine, () => {
         if (!isCallEndedRef.current && !isMicMutedRef.current) startListening();
       });

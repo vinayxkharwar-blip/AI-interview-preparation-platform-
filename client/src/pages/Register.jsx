@@ -50,7 +50,15 @@ export default function Register() {
       const serverMessage = typeof err.response?.data === 'string' 
         ? err.response.data 
         : err.response?.data?.message;
-      setError(serverMessage || err.message || 'Registration failed. Please try again.');
+      let displayError = serverMessage;
+      if (!displayError) {
+        if (err.message === 'Network Error' || !err.response) {
+          displayError = 'Server unreachable. Please verify the backend server is running on port 5000.';
+        } else {
+          displayError = err.message || 'Registration failed. Please try again.';
+        }
+      }
+      setError(displayError);
       setLoading(false);
     }
   };

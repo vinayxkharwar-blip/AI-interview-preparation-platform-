@@ -1,11 +1,10 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 
 // Silence detection tuning
-const SILENCE_THRESHOLD_MS = 2000;
-const SILENCE_VOLUME_CUTOFF = 6; // 0-100 scale amplitude considered "silence"
-const MIN_RECORDING_MS_BEFORE_AUTO_STOP = 800; // grace period, avoids instant cutoff
+const SILENCE_THRESHOLD_MS = 1800; // 1.8s continuous silence after speech to finish turn
+const MIN_RECORDING_MS_BEFORE_AUTO_STOP = 1200; // grace period, avoids instant cutoff
 const NO_SPEECH_TIMEOUT_MS = 15000; // candidate never starts speaking at all
-const MAX_ANSWER_DURATION_MS = 120000; // hard safety cap (2 minutes)
+const MAX_ANSWER_DURATION_MS = 45000; // 45 seconds safety cap (prevents candidate from being stranded)
 
 /**
  * Hook to manage real-time audio volume analysis and silence detection.
@@ -74,26 +73,56 @@ export function useLiveAudioVisualizer() {
       analyserRef.current = analyser;
 
       const dataArray = new Uint8Array(analyser.frequencyBinCount);
+      const timeArray = new Uint8Array(analyser.fftSize);
       let lastMicUpdateTime = 0;
+      let baselineNoise = 10;
+      let calibrationSamples = 0;
+      let calibrationSum = 0;
 
       const monitor = () => {
         if (!analyserRef.current || isStoppingRef.current) return;
         analyser.getByteFrequencyData(dataArray);
-        const average = dataArray.reduce((acc, v) => acc + v, 0) / dataArray.length;
-        const level = Math.min(100, Math.round((average / 128) * 100));
+        analyser.getByteTimeDomainData(timeArray);
+
+        // Frequency average
+        const freqAverage = dataArray.reduce((acc, v) => acc + v, 0) / dataArray.length;
+
+        // Time-domain RMS (immune to low frequency electrical hum/DC offset)
+        let sumSquares = 0;
+        for (let i = 0; i < timeArray.length; i++) {
+          const dev = timeArray[i] - 128;
+          sumSquares += dev * dev;
+        }
+        const rms = Math.sqrt(sumSquares / timeArray.length);
+
+        // Combined audio energy level (0 - 100 scale)
+        const currentLevel = Math.min(100, Math.round((freqAverage * 0.4) + (rms * 1.6)));
 
         const currentTime = Date.now();
-        // Throttle UI React state updates to ~15fps (66ms) to avoid re-rendering large components at 60Hz
+        const elapsedSinceStart = currentTime - recordingStartTimeRef.current;
+
+        // Calibrate ambient noise floor during first 400ms
+        if (elapsedSinceStart < 400) {
+          calibrationSum += currentLevel;
+          calibrationSamples++;
+          baselineNoise = Math.max(3, Math.round(calibrationSum / calibrationSamples));
+        }
+
+        // Throttle UI React state updates to ~15fps (66ms)
         if (currentTime - lastMicUpdateTime > 66) {
-          setMicLevel(level);
+          setMicLevel(currentLevel);
           lastMicUpdateTime = currentTime;
         }
 
-        if (level > SILENCE_VOLUME_CUTOFF) {
+        const speechThreshold = Math.max(14, baselineNoise + 8);
+        const silenceThreshold = Math.max(7, baselineNoise + 3);
+
+        if (currentLevel > speechThreshold) {
           lastLoudTimeRef.current = currentTime;
           if (!hasSpokenRef.current) {
             hasSpokenRef.current = true;
-            console.log('[VOICE DEBUG] User speech started');
+            console.log('[VOICE DEBUG] Speech started');
+            console.log(`[VOICE DEBUG] User speech started (level=${currentLevel}, baseline=${baselineNoise})`);
             if (noSpeechTimeoutRef.current) {
               clearTimeout(noSpeechTimeoutRef.current);
               noSpeechTimeoutRef.current = null;
@@ -102,16 +131,16 @@ export function useLiveAudioVisualizer() {
           }
         }
 
-        const elapsedSinceStart = currentTime - recordingStartTimeRef.current;
         const silenceDuration = currentTime - lastLoudTimeRef.current;
 
         if (
           hasSpokenRef.current &&
           elapsedSinceStart > MIN_RECORDING_MS_BEFORE_AUTO_STOP &&
-          silenceDuration > SILENCE_THRESHOLD_MS
+          silenceDuration > SILENCE_THRESHOLD_MS &&
+          currentLevel <= silenceThreshold
         ) {
-          console.log('[VOICE DEBUG] User speech ended');
-          console.log('[VOICE DEBUG] Silence detected');
+          console.log('[VOICE DEBUG] Speech ended');
+          console.log(`[VOICE DEBUG] Silence detected after ${silenceDuration}ms pause (level=${currentLevel}).`);
           if (onSilenceDetected) onSilenceDetected();
           return;
         }

@@ -18,6 +18,20 @@ export default defineConfig({
         target: 'http://127.0.0.1:5000',
         changeOrigin: true,
         secure: false,
+        configure: (proxy) => {
+          proxy.on('error', (err, _req, res) => {
+            console.error('[Vite Proxy Error] Backend server on http://127.0.0.1:5000 is unavailable:', err.message);
+            if (res && !res.headersSent && typeof res.writeHead === 'function') {
+              res.writeHead(503, { 'Content-Type': 'application/json' });
+              res.end(
+                JSON.stringify({
+                  message: 'Backend server is not running on port 5000. Please start the backend in terminal: cd server && npm run dev',
+                  code: 'BACKEND_OFFLINE',
+                })
+              );
+            }
+          });
+        },
       },
       '/uploads': {
         target: 'http://127.0.0.1:5000',

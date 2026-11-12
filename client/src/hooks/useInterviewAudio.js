@@ -1,6 +1,11 @@
 import { useRef, useCallback, useEffect } from 'react';
 import axiosClient from '../api/axiosClient';
 
+// Prominent runtime marker for browser console verification
+if (typeof window !== 'undefined') {
+  console.log('[AUDIO-RUNTIME-VERSION] PrePilot AI Audio Engine v3.0 (Hard-Latched Signal Guard + 5s Deadman Watchdog + 1.8x GainNode)');
+}
+
 /**
  * Async helper to reliably retrieve browser voices across different browsers.
  */
@@ -24,20 +29,64 @@ function getVoicesAsync() {
 }
 
 /**
+ * Calculates time-domain RMS, peak amplitude, and deviation from center (128).
+ */
+function computeAudioMetrics(analyser) {
+  if (!analyser) return { rms: 0, peak: 0, maxDev: 0 };
+  const buffer = new Uint8Array(analyser.fftSize);
+  analyser.getByteTimeDomainData(buffer);
+  let sumSquares = 0;
+  let maxDev = 0;
+  for (let i = 0; i < buffer.length; i++) {
+    const val = buffer[i];
+    const dev = Math.abs(val - 128);
+    if (dev > maxDev) maxDev = dev;
+    const normalized = (val - 128) / 128;
+    sumSquares += normalized * normalized;
+  }
+  const rms = Math.sqrt(sumSquares / buffer.length);
+  const peak = maxDev / 128;
+  return {
+    rms: Number(rms.toFixed(4)),
+    peak: Number(peak.toFixed(4)),
+    maxDev,
+  };
+}
+
+/**
  * Hook to manage Text-to-Speech playback:
  * - Primary: High-fidelity OpenAI Cloud TTS voice ("alloy")
- * - Fallback: Browser Web Speech API SpeechSynthesis
+ * - Web Audio Graph: HTMLAudioElement -> MediaElementAudioSourceNode -> DynamicsCompressorNode -> GainNode (1.8x) -> AnalyserNode -> AudioContext.destination
+ * - Fallback: Direct native HTMLAudioElement output or browser SpeechSynthesis
  * - Pre-warming: Gesture-based unlock of browser Autoplay policies
- * - Lifecycle: Safe blob URL allocation and revocation, dynamic duration timeouts, cancellation
  */
 export function useInterviewAudio({ sessionId, isCallEndedRef, onSpeechStart, onSpeechEnd }) {
   const audioPlayerRef = useRef(null);
+  const directAudioPlayerRef = useRef(null);
+  const directFallbackTriggeredRef = useRef(false);
+  const hasEverDetectedSignalRef = useRef(false);
   const synthRef = useRef(null);
   const lastSpokenLineRef = useRef('');
   const activeBlobUrlRef = useRef(null);
   const safetyTimerRef = useRef(null);
+  const sampleCheckerRef = useRef(null);
+
+  // Callbacks refs to guarantee identity stability across renders
+  const onSpeechStartRef = useRef(onSpeechStart);
+  onSpeechStartRef.current = onSpeechStart;
+  const onSpeechEndRef = useRef(onSpeechEnd);
+  onSpeechEndRef.current = onSpeechEnd;
+
+  useEffect(() => {
+    console.log('[useInterviewAudio] Hook initialized — v3.0 Deadman Watchdog active');
+  }, []);
+
+  // Web Audio Graph Node Refs
   const audioCtxRef = useRef(null);
+  const sourceNodeRef = useRef(null);
+  const compressorRef = useRef(null);
   const gainNodeRef = useRef(null);
+  const analyserRef = useRef(null);
 
   /**
    * Initializes or returns a shared AudioContext to amplify playback volume.
@@ -61,50 +110,146 @@ export function useInterviewAudio({ sessionId, isCallEndedRef, onSpeechStart, on
   }, []);
 
   /**
-   * Lazily configures HTMLAudioElement with an amplifier graph (compressor + 1.8x gain).
+   * Global unlock for AudioContext on user interaction to comply with browser autoplay policies.
+   */
+  useEffect(() => {
+    const unlockAudio = () => {
+      if (audioCtxRef.current && audioCtxRef.current.state === 'suspended') {
+        audioCtxRef.current.resume().then(() => {
+          console.log('[AudioContext] Resumed successfully via user gesture event!');
+        }).catch(() => {});
+      }
+    };
+    window.addEventListener('click', unlockAudio, { passive: true });
+    window.addEventListener('touchstart', unlockAudio, { passive: true });
+    window.addEventListener('keydown', unlockAudio, { passive: true });
+    return () => {
+      window.removeEventListener('click', unlockAudio);
+      window.removeEventListener('touchstart', unlockAudio);
+      window.removeEventListener('keydown', unlockAudio);
+    };
+  }, []);
+
+  /**
+   * Direct native HTMLAudioElement output path (bypasses Web Audio graph if persistently silent or suspended).
+   */
+  const playDirectOutput = useCallback((blobUrl, onEnd) => {
+    try {
+      if (directAudioPlayerRef.current) {
+        try {
+          directAudioPlayerRef.current.pause();
+          directAudioPlayerRef.current.onended = null;
+          directAudioPlayerRef.current.onerror = null;
+          directAudioPlayerRef.current.src = '';
+        } catch (e) {}
+        directAudioPlayerRef.current = null;
+      }
+      const directAudio = new Audio();
+      directAudio.src = blobUrl;
+      directAudio.volume = 1.0;
+      directAudio.muted = false;
+      directAudioPlayerRef.current = directAudio;
+
+      directAudio.onended = () => {
+        console.log('[Direct Output] 🔊 Native audio playback ended successfully.');
+        if (onEnd) onEnd();
+      };
+      directAudio.onerror = (e) => {
+        console.error('[Direct Output Error]', e);
+        if (onEnd) onEnd();
+      };
+      directAudio
+        .play()
+        .then(() => {
+          console.log('[Direct Output] 🔊 Direct native audio playback started successfully (bypassed Web Audio).');
+        })
+        .catch((err) => {
+          console.error('[Direct Output Play Error]', err);
+          if (onEnd) onEnd();
+        });
+    } catch (e) {
+      console.error('[Direct Output Init Error]', e);
+      if (onEnd) onEnd();
+    }
+  }, []);
+
+  /**
+   * Configures HTMLAudioElement with an amplifier graph:
+   * HTMLAudioElement -> MediaElementAudioSourceNode -> DynamicsCompressorNode -> GainNode (1.8x) -> AnalyserNode -> AudioContext.destination
+   * Guarantees MediaElementAudioSourceNode is created strictly once per audio element.
    */
   const setupAudioElement = useCallback(() => {
     let audio = audioPlayerRef.current;
     if (!audio) {
       audio = new Audio();
       audio.volume = 1.0;
+      audio.muted = false;
       audioPlayerRef.current = audio;
+    }
 
-      const ctx = getAudioContext();
-      if (ctx) {
-        try {
-          const source = ctx.createMediaElementSource(audio);
+    const ctx = getAudioContext();
+    if (ctx && audio && !sourceNodeRef.current) {
+      try {
+        const source = ctx.createMediaElementSource(audio);
+        sourceNodeRef.current = source;
 
-          // Studio dynamic compressor: brings up lower syllables and balances voice
-          const compressor = ctx.createDynamicsCompressor();
-          compressor.threshold.setValueAtTime(-20, ctx.currentTime);
-          compressor.knee.setValueAtTime(25, ctx.currentTime);
-          compressor.ratio.setValueAtTime(3.5, ctx.currentTime);
-          compressor.attack.setValueAtTime(0.003, ctx.currentTime);
-          compressor.release.setValueAtTime(0.25, ctx.currentTime);
+        // Studio dynamic compressor: balances lower syllables and vocal peaks
+        const compressor = ctx.createDynamicsCompressor();
+        compressor.threshold.setValueAtTime(-20, ctx.currentTime);
+        compressor.knee.setValueAtTime(25, ctx.currentTime);
+        compressor.ratio.setValueAtTime(3.5, ctx.currentTime);
+        compressor.attack.setValueAtTime(0.003, ctx.currentTime);
+        compressor.release.setValueAtTime(0.25, ctx.currentTime);
+        compressorRef.current = compressor;
 
-          // Audio amplifier gain node: boosts volume by 1.8x
-          const gainNode = ctx.createGain();
-          gainNode.gain.setValueAtTime(1.8, ctx.currentTime);
-          gainNodeRef.current = gainNode;
+        // Audio amplifier gain node: boosts volume by 1.8x
+        const gainNode = ctx.createGain();
+        gainNode.gain.setValueAtTime(1.8, ctx.currentTime);
+        gainNodeRef.current = gainNode;
 
-          source.connect(compressor);
-          compressor.connect(gainNode);
-          gainNode.connect(ctx.destination);
-          console.log('[Audio Amplifier] Connected studio compressor and 1.8x gain boost node.');
-        } catch (e) {
-          console.warn('[Audio Amplifier MediaElementSource notice]', e.message);
-        }
+        // AnalyserNode to inspect real-time audio waveforms and output RMS/peak
+        const analyser = ctx.createAnalyser();
+        analyser.fftSize = 512;
+        analyserRef.current = analyser;
+
+        // Connect complete audio graph: source -> compressor -> gain -> analyser -> destination
+        source.connect(compressor);
+        compressor.connect(gainNode);
+        gainNode.connect(analyser);
+        analyser.connect(ctx.destination);
+
+        console.log(`[Audio Graph] Connected: HTMLAudioElement -> MediaElementAudioSourceNode -> DynamicsCompressorNode -> GainNode(${gainNode.gain.value}x) -> AnalyserNode -> AudioContext.destination (${ctx.state})`);
+      } catch (e) {
+        console.warn('[Audio Amplifier MediaElementSource notice]', e.message);
       }
     }
-    audio.volume = 1.0;
+
+    if (audio) {
+      audio.volume = 1.0;
+      audio.muted = false;
+    }
     return audio;
   }, [getAudioContext]);
 
   const stopAudio = useCallback(() => {
+    directFallbackTriggeredRef.current = false;
+    hasEverDetectedSignalRef.current = false;
+    if (sampleCheckerRef.current) {
+      clearInterval(sampleCheckerRef.current);
+      sampleCheckerRef.current = null;
+    }
     if (safetyTimerRef.current) {
       clearTimeout(safetyTimerRef.current);
       safetyTimerRef.current = null;
+    }
+
+    if (directAudioPlayerRef.current) {
+      try {
+        directAudioPlayerRef.current.pause();
+        directAudioPlayerRef.current.onended = null;
+        directAudioPlayerRef.current.onerror = null;
+        directAudioPlayerRef.current.currentTime = 0;
+      } catch (e) {}
     }
 
     if (audioPlayerRef.current) {
@@ -114,37 +259,40 @@ export function useInterviewAudio({ sessionId, isCallEndedRef, onSpeechStart, on
         audioPlayerRef.current.onerror = null;
         audioPlayerRef.current.onloadedmetadata = null;
         audioPlayerRef.current.currentTime = 0;
-      } catch (e) {
-        // ignore pause errors
-      }
+      } catch (e) {}
     }
 
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
       try {
         window.speechSynthesis.cancel();
-      } catch (e) {
-        // ignore cancel errors
-      }
+      } catch (e) {}
     }
 
     if (activeBlobUrlRef.current) {
       try {
         URL.revokeObjectURL(activeBlobUrlRef.current);
-      } catch (e) {
-        // ignore revoke errors
-      }
+      } catch (e) {}
       activeBlobUrlRef.current = null;
     }
   }, []);
 
   const destroyAudio = useCallback(() => {
     stopAudio();
+    if (directAudioPlayerRef.current) {
+      try {
+        directAudioPlayerRef.current.src = '';
+      } catch (e) {}
+      directAudioPlayerRef.current = null;
+    }
     if (audioCtxRef.current) {
       try {
         audioCtxRef.current.close().catch(() => {});
       } catch (e) {}
       audioCtxRef.current = null;
+      sourceNodeRef.current = null;
+      compressorRef.current = null;
       gainNodeRef.current = null;
+      analyserRef.current = null;
     }
     if (audioPlayerRef.current) {
       try {
@@ -196,10 +344,10 @@ export function useInterviewAudio({ sessionId, isCallEndedRef, onSpeechStart, on
     } catch (e) {
       console.warn('[Audio Pre-warm Notice]', e);
     }
-  }, []);
+  }, [getAudioContext, setupAudioElement]);
 
   /**
-   * Speak a text string via Gemini TTS with Web Speech API fallback.
+   * Speak a text string via OpenAI TTS with Web Speech API fallback.
    */
   const speakLine = useCallback((text, onComplete, prefetchPromise = null) => {
     if (isCallEndedRef?.current || !text) {
@@ -210,10 +358,12 @@ export function useInterviewAudio({ sessionId, isCallEndedRef, onSpeechStart, on
     console.log('[VOICE DEBUG] AI question started:', text);
     console.log('[VOICE DEBUG] TTS response started:', text);
     lastSpokenLineRef.current = text;
-    if (onSpeechStart) onSpeechStart(text);
+    if (onSpeechStartRef.current) onSpeechStartRef.current(text);
 
-    // Stop any existing playback
+    // Stop any existing playback and reset session state
     stopAudio();
+    hasEverDetectedSignalRef.current = false;
+    directFallbackTriggeredRef.current = false;
 
     let hasEnded = false;
 
@@ -221,6 +371,10 @@ export function useInterviewAudio({ sessionId, isCallEndedRef, onSpeechStart, on
       if (hasEnded) return;
       hasEnded = true;
 
+      if (sampleCheckerRef.current) {
+        clearInterval(sampleCheckerRef.current);
+        sampleCheckerRef.current = null;
+      }
       if (safetyTimerRef.current) {
         clearTimeout(safetyTimerRef.current);
         safetyTimerRef.current = null;
@@ -234,7 +388,7 @@ export function useInterviewAudio({ sessionId, isCallEndedRef, onSpeechStart, on
 
       console.log('[VOICE DEBUG] AI question finished');
       console.log('[VOICE DEBUG] TTS response finished');
-      if (onSpeechEnd) onSpeechEnd();
+      if (onSpeechEndRef.current) onSpeechEndRef.current();
       if (onComplete) onComplete();
     };
 
@@ -367,12 +521,20 @@ export function useInterviewAudio({ sessionId, isCallEndedRef, onSpeechStart, on
 
             audio.onended = () => {
               if (isCallEndedRef?.current) return;
+              if (sampleCheckerRef.current) {
+                clearInterval(sampleCheckerRef.current);
+                sampleCheckerRef.current = null;
+              }
               console.log('[DIAGNOSTIC-STEP 12] audio.onended FIRED! OpenAI audio playback completed successfully.');
               finishSpeech();
             };
 
             audio.onerror = (e) => {
               if (isCallEndedRef?.current) return;
+              if (sampleCheckerRef.current) {
+                clearInterval(sampleCheckerRef.current);
+                sampleCheckerRef.current = null;
+              }
               const code = audio.error ? audio.error.code : 'unknown';
               const msg = audio.error ? audio.error.message : (e?.message || 'Decode error');
               console.error(`[DIAGNOSTIC-AUDIO-ERROR] Audio element error: code=${code}, msg=${msg}`);
@@ -408,6 +570,113 @@ export function useInterviewAudio({ sessionId, isCallEndedRef, onSpeechStart, on
                     return;
                   }
                   console.log('[DIAGNOSTIC-STEP 9b] 🔊 audio.play() promise resolved! Alex audio playback started.');
+                  console.log('[VOICE DEBUG] Next TTS playback started:', text);
+
+                  // ─────────────────────────────────────────────────────────────────────────
+                  // ANALYSER WATCHDOG v3.0 — "5-Second Deadman" strategy
+                  //
+                  // Sampling rules:
+                  //   • Poll every 250 ms, up to 60 checks (15 s max).
+                  //   • The FIRST check that detects any real signal (maxDev > 2 OR rms > 0.005)
+                  //     latches hasEverDetectedSignalRef to TRUE permanently for this utterance.
+                  //   • Fallback to playDirectOutput is ONLY allowed when ALL of:
+                  //       1. checkCount >= 20   (≥ 5 seconds have elapsed — no word gap can last that long)
+                  //       2. hasEverDetectedSignalRef.current === false   (not a single sample ever had signal)
+                  //       3. AudioContext state ≠ 'running'  (confirmed dead context, not just a natural pause)
+                  //       4. directFallbackTriggeredRef.current === false  (not already fired)
+                  //
+                  // This makes it IMPOSSIBLE to false-trigger during normal word gaps,
+                  // breath pauses, or brief silence between syllables.
+                  // ─────────────────────────────────────────────────────────────────────────
+                  if (sampleCheckerRef.current) {
+                    clearInterval(sampleCheckerRef.current);
+                    sampleCheckerRef.current = null;
+                  }
+
+                  let checkCount = 0;
+
+                  sampleCheckerRef.current = setInterval(() => {
+                    checkCount++;
+
+                    // Stop sampling if audio finished, call ended, or we've hit the 15s cap
+                    if (!audio || audio.paused || audio.ended || isCallEndedRef?.current || checkCount > 60) {
+                      if (sampleCheckerRef.current) {
+                        clearInterval(sampleCheckerRef.current);
+                        sampleCheckerRef.current = null;
+                      }
+                      return;
+                    }
+
+                    // Keep AudioContext alive if browser suspended it mid-playback
+                    if (ctx && ctx.state === 'suspended') {
+                      ctx.resume().catch(() => {});
+                    }
+
+                    const { rms, maxDev } = computeAudioMetrics(analyserRef.current);
+                    const gainVal = gainNodeRef.current?.gain?.value ?? 1.8;
+
+                    // Log every other check (every 500ms) to keep console readable
+                    if (checkCount % 2 === 1) {
+                      console.log(
+                        `[Audio Watchdog v3] check=${checkCount} | maxDev=${maxDev}/128 | rms=${rms} | ` +
+                        `ctxState=${ctx?.state} | gain=${gainVal}x | t=${audio.currentTime?.toFixed(2)}s | ` +
+                        `signalLocked=${hasEverDetectedSignalRef.current}`
+                      );
+                    }
+
+                    // ── Signal detection latch ──────────────────────────────────────────────
+                    // Once any real audio sample is observed, the latch is permanently set for
+                    // this utterance. Natural word gaps, breath pauses, or soft syllables will
+                    // never reset it.
+                    if (maxDev > 2 || rms > 0.005) {
+                      if (!hasEverDetectedSignalRef.current) {
+                        console.log(
+                          `[Audio Watchdog v3] ✅ Signal CONFIRMED on Web Audio path at check ${checkCount} ` +
+                          `(t=${audio.currentTime?.toFixed(2)}s): maxDev=${maxDev}/128, rms=${rms}. ` +
+                          `Fallback permanently locked out for this utterance.`
+                        );
+                        hasEverDetectedSignalRef.current = true;
+                      }
+                    }
+
+                    // ── 5-second deadman fallback ───────────────────────────────────────────
+                    // Fires ONLY when ALL four conditions are simultaneously true:
+                    //   1. ≥ 5 seconds have passed (20 checks × 250ms)
+                    //   2. Signal was NEVER detected (not even once)
+                    //   3. AudioContext is confirmed non-running (blocked by browser policy)
+                    //   4. Fallback has not already fired
+                    const ctxDead = ctx && ctx.state !== 'running';
+                    const isDeadman =
+                      checkCount >= 20 &&
+                      !hasEverDetectedSignalRef.current &&
+                      ctxDead &&
+                      !directFallbackTriggeredRef.current;
+
+                    if (isDeadman) {
+                      directFallbackTriggeredRef.current = true;
+                      if (sampleCheckerRef.current) {
+                        clearInterval(sampleCheckerRef.current);
+                        sampleCheckerRef.current = null;
+                      }
+
+                      console.warn(
+                        `[Audio Watchdog v3] 🚨 DEADMAN triggered at check ${checkCount} (${checkCount * 250}ms). ` +
+                        `AudioContext state="${ctx?.state}" | hasEverDetectedSignal=false | ` +
+                        `maxDev=${maxDev}/128 | rms=${rms} | t=${audio.currentTime?.toFixed(2)}s. ` +
+                        `Switching to direct native output.`
+                      );
+
+                      audio.onended = null;
+                      audio.onerror = null;
+                      audio.onloadedmetadata = null;
+                      try { audio.pause(); audio.currentTime = 0; } catch (e) {}
+
+                      playDirectOutput(blobUrl, () => {
+                        console.log('[Audio Watchdog v3] Direct output finished — advancing interview.');
+                        finishSpeech();
+                      });
+                    }
+                  }, 250);
                 })
                 .catch((playErr) => {
                   if (isCallEndedRef?.current) return;
@@ -431,7 +700,7 @@ export function useInterviewAudio({ sessionId, isCallEndedRef, onSpeechStart, on
         console.warn(`[TTS Diagnostic] Network/backend failure: ${err.message}`);
         fallbackToBrowserTTS(`Backend error: ${err.message}`);
       });
-  }, [sessionId, isCallEndedRef, onSpeechStart, onSpeechEnd, stopAudio]);
+  }, [sessionId, isCallEndedRef, stopAudio, getAudioContext, setupAudioElement, playDirectOutput]);
 
   // Stop and destroy audio on unmount
   useEffect(() => {
@@ -444,7 +713,9 @@ export function useInterviewAudio({ sessionId, isCallEndedRef, onSpeechStart, on
     speakLine,
     stopAudio,
     prewarmAudio,
+    playDirectOutput,
     lastSpokenLineRef,
     audioPlayerRef,
+    directAudioPlayerRef,
   };
 }

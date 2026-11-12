@@ -1,11 +1,15 @@
 export const STATES = {
   IDLE: 'idle',
-  ASKING: 'asking',       // preparing to speak the question
-  SPEAKING: 'speaking',   // AI TTS is playing the question aloud
-  LISTENING: 'listening', // mic is live, recording candidate's answer
-  PROCESSING: 'processing', // transcribing recorded audio
-  EVALUATING: 'evaluating',  // sending transcript to OpenAI for scoring + next question
-  NEXT_QUESTION: 'next_question', // brief transition before speaking next question
+  GENERATING_QUESTION: 'generating_question',
+  ASKING: 'asking', // alias for generating_question
+  SPEAKING: 'speaking',
+  LISTENING: 'listening',
+  TRANSCRIBING: 'transcribing',
+  PROCESSING: 'processing', // alias for transcribing
+  SUBMITTING_ANSWER: 'submitting_answer',
+  EVALUATING: 'evaluating',
+  GENERATING_NEXT_QUESTION: 'generating_next_question',
+  NEXT_QUESTION: 'next_question', // alias for generating_next_question
   COMPLETED: 'completed',
   ERROR: 'error',
 };

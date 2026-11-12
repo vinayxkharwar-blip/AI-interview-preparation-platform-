@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import mongoose from 'mongoose';
+import { execSync } from 'child_process';
 import { connectDB } from './config/db.js';
 
 import authRoutes from './routes/authRoutes.js';
@@ -267,25 +268,38 @@ app.use((err, req, res, next) => {
 let PORT = Number(process.env.PORT) || 5000;
 let activeServer = null;
 
-/**
- * Coordinated Server Startup
- * 1. Connects to MongoDB Atlas first (with graceful fallback logging)
- * 2. Binds HTTP server to port 5000 on '0.0.0.0'
- * 3. Logs startup banner strictly inside the listen callback with bound port
- * 4. Gracefully manages process lifecycle (SIGINT, SIGTERM)
- */
-const startServer = async (portToTry = PORT) => {
-  // 1. Coordinate database connection first
-  if (!process.env.TEST_MODE && mongoose.connection.readyState !== 1) {
-    try {
-      await connectDB();
-    } catch (dbErr) {
-      console.warn(`[Startup Warning] MongoDB connection encountered error: ${dbErr.message}`);
-      console.warn('[Startup Notice] Operating with in-memory fallback store.');
+const freePortOnWindows = (port) => {
+  if (process.platform !== 'win32') return;
+  try {
+    const netstatOutput = execSync('netstat -ano -p tcp', { encoding: 'utf8' });
+    const lines = netstatOutput.split('\r\n');
+    let killed = false;
+    for (const line of lines) {
+      if (line.includes(`:${port}`) && line.includes('LISTENING')) {
+        const parts = line.trim().split(/\s+/);
+        const pid = parts[parts.length - 1];
+        if (pid && pid !== String(process.pid) && pid !== '0') {
+          console.log(`[Port Helper] Port ${port} is occupied by PID ${pid}. Terminating conflicting process...`);
+          try {
+            execSync(`taskkill /F /PID ${pid}`, { stdio: 'ignore' });
+            console.log(`[Port Helper] Successfully terminated PID ${pid} to free port ${port}.`);
+            killed = true;
+          } catch (killErr) {
+            console.warn(`[Port Helper] Could not auto-terminate PID ${pid}: ${killErr.message}`);
+          }
+        }
+      }
     }
+    if (killed) {
+      const start = Date.now();
+      while (Date.now() - start < 1000) {}
+    }
+  } catch (err) {
+    // Ignore netstat errors
   }
+};
 
-  // 2. Start HTTP listener
+const attemptListen = (portToTry) => {
   return new Promise((resolve, reject) => {
     const server = app.listen(portToTry, '0.0.0.0', () => {
       activeServer = server;
@@ -298,16 +312,56 @@ const startServer = async (portToTry = PORT) => {
     });
 
     server.on('error', (err) => {
-      if (err.code === 'EADDRINUSE') {
-        console.error(`❌ [Port Error] Port ${portToTry} is already in use by another process.`);
-        console.error(`[Port Help] PrePilot AI requires port ${portToTry} for frontend proxy communication. Retrying port ${portToTry}...`);
-        reject(err);
-      } else {
-        console.error('[Server Error]', err);
-        reject(err);
-      }
+      reject(err);
     });
   });
+};
+
+/**
+ * Coordinated Server Startup
+ * 1. Automatically frees port 5000 on Windows if an old process holds it
+ * 2. Connects to MongoDB Atlas first (with graceful fallback logging)
+ * 3. Binds HTTP server to port 5000 on '0.0.0.0' with automatic retry on EADDRINUSE
+ * 4. Logs startup banner strictly inside the listen callback with bound port
+ * 5. Gracefully manages process lifecycle (SIGINT, SIGTERM)
+ */
+const startServer = async (portToTry = PORT, maxRetries = 5) => {
+  // 1. Free port on Windows if an old process holds it
+  freePortOnWindows(portToTry);
+
+  // 2. Coordinate database connection first
+  if (!process.env.TEST_MODE && mongoose.connection.readyState !== 1) {
+    try {
+      await connectDB();
+    } catch (dbErr) {
+      console.warn(`[Startup Warning] MongoDB connection encountered error: ${dbErr.message}`);
+      console.warn('[Startup Notice] Operating with in-memory fallback store.');
+    }
+  }
+
+  // 3. Start HTTP listener with retry on EADDRINUSE
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const server = await attemptListen(portToTry);
+      return server;
+    } catch (err) {
+      if (err.code === 'EADDRINUSE') {
+        if (attempt < maxRetries) {
+          console.warn(`⚠️ [Port Notice] Port ${portToTry} is busy. Retrying in 1.5s (attempt ${attempt}/${maxRetries})...`);
+          freePortOnWindows(portToTry);
+          await new Promise((resolve) => setTimeout(resolve, 1500));
+        } else {
+          console.error(`❌ [Port Error] Port ${portToTry} is occupied by another process after ${maxRetries} attempts.`);
+          console.error(`[Port Help] If an old Node process is still running, run in PowerShell:`);
+          console.error(`            Get-Process -Name node | Stop-Process -Force`);
+          throw err;
+        }
+      } else {
+        console.error('[Server Error]', err);
+        throw err;
+      }
+    }
+  }
 };
 
 // Graceful process lifecycle handlers

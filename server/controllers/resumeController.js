@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import Resume from '../models/Resume.js';
 import { parseResumeFile } from '../services/resumeParser.js';
 import { generateLLMJson } from '../services/llmService.js';
@@ -68,10 +69,15 @@ export const uploadResume = async (req, res) => {
       source: parsedData._meta?.source || 'unknown'
     });
 
+    const userId = req.user?._id || req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ message: 'User not authorized.' });
+    }
+
     let newResume;
     try {
       newResume = await Resume.create({
-        user: req.user._id,
+        user: userId,
         fileName: req.file.originalname,
         fileType,
         rawText,
@@ -81,7 +87,7 @@ export const uploadResume = async (req, res) => {
       console.log('[Resume DB Notice] Creating mock resume record:', dbErr.message);
       newResume = {
         _id: 'resume-' + Date.now(),
-        user: req.user._id,
+        user: userId,
         fileName: req.file.originalname,
         fileType,
         rawText,
@@ -112,16 +118,21 @@ export const uploadResume = async (req, res) => {
 // @route GET /api/resumes
 export const getUserResumes = async (req, res) => {
   try {
+    const userId = req.user?._id || req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ message: 'User not authorized.' });
+    }
+
     let resumes = null;
     if (mongoose.connection.readyState === 1) {
       try {
-        resumes = await Resume.find({ user: req.user._id }).sort({ createdAt: -1 }).lean();
+        resumes = await Resume.find({ user: userId }).sort({ createdAt: -1 }).lean();
       } catch (e) {
         console.log('[Resume DB Notice] User resumes fallback:', e.message);
       }
     }
     if (resumes === null) {
-      resumes = memoryResumes.filter((r) => String(r.user) === String(req.user._id));
+      resumes = memoryResumes.filter((r) => String(r.user) === String(userId));
     }
     res.json(resumes || []);
   } catch (error) {

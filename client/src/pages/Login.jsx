@@ -61,7 +61,15 @@ export default function Login() {
       const serverMessage = typeof err.response?.data === 'string'
         ? err.response.data
         : err.response?.data?.message;
-      setError(serverMessage || err.message || 'Invalid credentials or server unavailable.');
+      let displayError = serverMessage;
+      if (!displayError) {
+        if (err.message === 'Network Error' || !err.response) {
+          displayError = 'Server unreachable. Please verify the backend server is running on port 5000.';
+        } else {
+          displayError = err.message || 'Invalid credentials or server unavailable.';
+        }
+      }
+      setError(displayError);
       setLoading(false);
     }
   };
